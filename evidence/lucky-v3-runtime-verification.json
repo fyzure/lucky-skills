@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "verified_at": "2026-08-13T15:10:39Z",
+  "verified_at": "2026-08-24T08:12:25Z",
   "target": {
     "product": "Lucky",
     "version": "3.0.0"
@@ -50,6 +50,30 @@
         "/api/user"
       ],
       "description": "Unauthenticated GET/POST/PUT/DELETE/PATCH all returned route-not-found semantics on Lucky 3.0.0."
+    }
+  },
+  "model_evidence": {
+    "webservice_sni_routing": {
+      "confidence": "runtime-verified",
+      "frontend_evidence": "Lucky 3.0.0 frontend service-type options expose the exact value SNIRouting; the SNI editor labels Locations as the SNI routing target address and requires parent-rule TLS.",
+      "model": {
+        "WebServiceType": "SNIRouting",
+        "Domains": "array of SNI hostname strings",
+        "Locations": "array of raw TCP target strings in host:port form",
+        "OtherParams.ProxyProtocolV2": "boolean"
+      },
+      "verification": "On an authorized production instance, a preserved WebService rule was updated with one new SNIRouting subrule, re-read successfully, and external TLS traffic matched by SNI was forwarded bidirectionally to a local TLS service. The target service presented the hostname certificate and completed an authenticated HTTPS CONNECT tunnel plus a read-only Git smart-HTTP ls-remote request. Unauthenticated proxy access returned 407 and an authenticated CONNECT to a non-allowlisted target returned 403. Live domain names, rule identifiers, addresses, ports and credentials are intentionally omitted.",
+      "limits": "Current Lucky 3.0.0 frontend reports a maximum of six SNI routing rules per WebService rule. SNI routing is TLS passthrough, so the target service must terminate TLS and present a certificate valid for the SNI hostname."
+    },
+    "ssl_certificate_mapping": {
+      "confidence": "runtime-verified",
+      "model": {
+        "MappingToPath": "boolean",
+        "MappingPath": "string writable directory",
+        "MappingChangeScript": "string command executed after mapped certificate content changes"
+      },
+      "verification": "On an authorized Lucky 3.0.0 certificate managed by ACME, enabling MappingToPath created certificate/key files named from the certificate Remark, including <Remark>.key and <Remark>.pem, in the configured writable directory. Certificate metadata/fingerprint matched the managed certificate. The private key was parseable but the initial mapped key mode was 0644; it was reduced to 0600 and MappingChangeScript was configured to re-apply the restrictive mode after future changes. Certificate bodies, private keys, DNS API credentials, ACME account data and filesystem paths are intentionally omitted.",
+      "security": "GET /api/ssl/{param} can return CertBase64 and KeyBase64. Do not print or persist raw responses; use redaction or root-only temporary files, and remove temporary secret-bearing payloads immediately after a reviewed update."
     }
   },
   "routes": [

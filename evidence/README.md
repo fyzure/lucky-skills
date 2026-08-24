@@ -12,3 +12,5 @@
 - `confidence`：`frontend-call` 或 `route-literal-only`。
 
 该文件由 [extract_lucky_frontend.py](../tools/extract_lucky_frontend.py) 生成。
+
+`lucky-v3-runtime-verification.json` 另外记录获授权 Lucky 3.0.0 实例上的脱敏运行时证据。除路由/风险/schema 外，`model_evidence` 可记录无法仅从单个 API 路由表达的跨模块对象语义，例如 WebService `SNIRouting` 子规则与 SSL 证书映射行为。此类条目只能保存通用字段、类型和验证结论；真实域名、RuleKey、IP/端口、证书/私钥及凭据不得持久化到仓库。

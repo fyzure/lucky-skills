@@ -20,11 +20,15 @@
 | 只读验证 | `/api/status`、`/api/info`、`/api/modules/list` |
 | WebService 写入 | 已验证创建 → 回读 → 删除，测试后基线恢复 |
 | 308 重定向 | 已验证 `RedirectType="308"`，GET / POST 均返回 308 |
+| WebService SNI 分流 | 已验证 `WebServiceType="SNIRouting"`、`Domains` + `Locations`，公网 TLS 流量经 SNI 路由进入本地 TLS 服务 |
+| SSL 证书映射 | 已验证 `MappingToPath` / `MappingPath` / `MappingChangeScript`，并确认映射文件随证书对象生成 |
 | `UNKNOWN` 路由 | 当前默认合并目录为 0 |
 | OpenToken 鉴权 | 安全入口 + `openToken` 请求头 |
 | 状态接口限流 | 当前实例约 20 请求/秒 |
 
 真实 OpenToken、安全入口、域名和业务配置不会写入仓库。
+
+SNI/证书映射验证同样只保留通用字段语义和脱敏后的行为结论，不保存真实域名、规则 Key、后端地址、证书正文、私钥或 ACME 凭据。SNI 流量验证包含真实外部 TLS/HTTP CONNECT 与 Git smart-HTTP 只读操作，以确认四层双向转发，而不是只依据 Lucky 的 `ret: 0`。
 
 ## 证据如何合并
 

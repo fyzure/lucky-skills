@@ -79,6 +79,14 @@ For domain migration or reverse-proxy changes, inspect `/api/webservice/rules` (
 
 For Lucky v3 Web-service redirects, the redirect status is stored at `DefaultProxy.OtherParams.RedirectType` (and equivalently on redirect subrules). Lucky 3.0.0 has been API-verified to accept `"308"`; a rule with `WebServiceType: "redirect"`, `Locations: ["https://{host}{path}{args}"]`, and `RedirectType: "308"` returned HTTP 308 for both GET and POST. Create a new listener with `POST /api/webservice/rules`; update an existing listener by GETting its full object and PUTting the preserved object to `/api/webservice/rule/{RuleKey}`.
 
+Lucky 3.0.0 also has runtime-verified WebService SNI routing. The current frontend exposes the exact service type value `WebServiceType: "SNIRouting"`; for an SNI subrule, `Domains` contains the SNI hostname and `Locations` contains the raw TCP target in `host:port` form. SNI routing requires the parent WebService rule to have TLS enabled, but Lucky does **not** terminate TLS for the matching SNI stream: it forwards the ClientHello/TLS connection to the target. Therefore the target service must present a certificate valid for that hostname. `OtherParams.ProxyProtocolV2` may be kept `false` unless the target explicitly accepts Proxy Protocol v2. Lucky 3.0.0 currently limits SNI routing subrules to six per WebService rule. After a write, verify both the returned rule object and an external TLS/application request; `ret: 0` alone is not sufficient.
+
+## SSL certificate mapping
+
+Lucky 3.0.0 certificate objects support `MappingToPath`, `MappingPath`, and `MappingChangeScript`. When mapping is enabled, Lucky writes certificate material into the configured writable directory using the certificate `Remark` as the filename prefix; the observed files include `<Remark>.key` and `<Remark>.pem` (plus certificate/issuer files). This is suitable for a local TLS service behind SNI routing because Lucky will refresh the mapped files when the managed certificate changes.
+
+Treat mapped private keys as secrets. The observed default mapping created the private key with mode `0644`, so explicitly reduce it to `0600` and, when appropriate, use `MappingChangeScript` to re-apply the permission after future certificate updates and/or reload the consuming service. Keep mapping paths inside an intentionally writable Lucky mount; do not expose mapped certificate directories through file-serving rules. Never print `CertBase64`, `KeyBase64`, ACME credentials, or the raw response from `GET /api/ssl/{key}` into chat/logs; use the client's redacted output or write sensitive responses to a root-only temporary file and delete it immediately after constructing a reviewed update payload.
+
 ## Report results
 
 Summarize what was read or changed, identify any remaining non-Lucky dependency (DNS, CDN, origin application, firewall, certificate issuance), and avoid reproducing secrets returned by Lucky responses.
