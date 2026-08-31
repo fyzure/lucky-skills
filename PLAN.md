@@ -1,0 +1,372 @@
+# Lucky Skills 实践覆盖计划
+
+> 目标：让 `lucky-skills` 不只“知道接口”，还能够明确区分哪些能力已经在 Lucky 3.0.0 上完成真实闭环实践，哪些仍停留在静态分析、schema 恢复、parser probe 或只读验证阶段。
+
+## 总原则
+
+- 所有真实实践默认使用唯一 `TEST-lucky-skills-*` 资源。
+- 不拿现有业务资源做 destructive probe；需要参考业务配置时只读复制必要字段。
+- 每个 probe 都要记录：基线 → 创建/修改 → 真实行为 → 回读验证 → 清理 → 基线恢复。
+- 清理只删除本 probe 创建的 TEST 资源，不恢复旧快照覆盖并发修改。
+- 遇到 Lucky 写频控时进行有限退避，不重复盲写。
+- 密钥、Token、证书私钥、真实 IP/域名、用户身份等敏感值不进入 evidence。
+- 本地不跑测试/构建；仓库校验、测试、文档构建统一走 GitHub Actions。
+- Docker `prune` 继续只使用 mock Docker API，不对生产 Docker daemon 执行真实 prune。
+
+## 证据等级
+
+- `static-only`：只有前端 bundle / 历史资料 / 路由字面量证据。
+- `parser-verified`：请求已到 JSON/参数解析层，但未执行真实业务 handler。
+- `read-runtime`：授权 GET/只读请求已在真实 Lucky 实例验证。
+- `crud-runtime`：真实创建、回读、更新、删除过一次性资源，并恢复基线。
+- `behavior-runtime`：真实数据流、认证、网络连接、文件操作、DNS/ACME 等核心行为已完成 E2E。
+
+最终目标不是让所有路由都变成 `behavior-runtime`，而是让每个模块的**核心业务能力**至少有一条真实闭环证据。
+
+---
+
+## P0 — 优先补齐
+
+### DDNS
+
+当前：schema 很完整，已有只读业务任务，但 POST/PUT 和真实同步从未执行。
+
+- [ ] 创建独立 `TEST-lucky-skills-ddns-*` 任务
+- [ ] 使用测试子域名，不修改现有业务记录
+- [ ] 验证 `POST /api/ddns`
+- [ ] 验证 `PUT /api/ddns`
+- [ ] 验证 enable/disable 状态切换
+- [ ] 验证 `manualSync`
+- [ ] 验证真实 DNS A/AAAA 更新
+- [ ] 验证取 IP 流程至少一种：URL / interface
+- [ ] 验证 webhook test，使用本地或专用回显端点
+- [ ] 删除 TEST 任务及测试 DNS 记录
+- [ ] 验证 DDNS 任务列表与 Cloudflare DNS 回到基线
+- [ ] 固化为可重复 probe
+- [ ] 更新 runtime evidence / docs
+
+### Security Groups + WebService Auth
+
+当前：group / local user / OAuth user / grant schema 已恢复，但当前列表为空，尚未真实创建；WebService 的 BasicAuth/WebAuth/SecurityGroup 联动未做 E2E。
+
+- [ ] 创建 TEST Security Group
+- [ ] 创建 TEST local user
+- [ ] 创建 TEST OAuth user mapping（不使用真实第三方 token）
+- [ ] 创建/验证 grants
+- [ ] 创建临时 WebService 子规则并绑定 Security Group
+- [ ] 验证未认证访问被拒绝
+- [ ] 验证正确 local user 可访问
+- [ ] 验证错误密码/无权限用户不可访问
+- [ ] 验证 BasicAuth
+- [ ] 验证 WebAuth session
+- [ ] 验证 SecurityGroup + WebService 联动
+- [ ] 清理所有 TEST user/group/grant/webservice 资源
+- [ ] 验证列表和业务 WebService 回到基线
+- [ ] 固化为 probe / evidence / docs
+
+### SSL / ACME
+
+当前：证书映射到文件已经真实实践；证书 CRUD、ACME 新签发、renew/manual sync、sync-client 尚不完整。
+
+- [ ] 为测试子域名创建独立 TEST 证书对象
+- [ ] 验证 `POST /api/ssl`
+- [ ] 验证 `PUT /api/ssl`
+- [ ] 使用 DNS-01 + 测试子域名真实签发 ACME 证书
+- [ ] 验证证书内容/域名/有效期元数据
+- [ ] 验证 MappingToPath
+- [ ] 验证 `manualsync`
+- [ ] 验证 `flush` / renew 语义（不强制提前续签生产证书）
+- [ ] 研究并验证 sync-client 的最小安全闭环
+- [ ] 删除 TEST 证书和测试 DNS 记录
+- [ ] 验证现有业务证书未变化
+- [ ] 固化 probe / evidence / docs
+
+### IPDB
+
+当前：GET/schema/parser 为主，没有真实 item CRUD、数据库下载更新和查询闭环。
+
+- [ ] 创建独立 TEST IPDB item
+- [ ] 验证 POST / PUT / DELETE
+- [ ] 使用隔离测试数据库文件验证加载
+- [ ] 验证 query 返回结构
+- [ ] 验证关键词查询
+- [ ] 验证数据库文件下载/更新流程，不覆盖系统现用数据库
+- [ ] 清理 TEST item / db file
+- [ ] 验证 item / file 基线恢复
+- [ ] 固化 probe / evidence / docs
+
+### WebService WAF / OAuth 认证联动
+
+当前：reverse proxy、NginxConf、路径、Header、SNI 已较完整；认证/WAF 仍缺业务闭环。
+
+- [ ] 临时 WebService 绑定 Coraza TEST instance
+- [ ] 正常请求应通过
+- [ ] 构造安全的 WAF test payload，确认被拦截
+- [ ] 验证 WAF event / statistics
+- [ ] 验证 WebAuth
+- [ ] 验证 BasicAuth
+- [ ] 验证 Security Group 联动
+- [ ] 验证第三方 OAuth 登录流程（使用独立测试 client）
+- [ ] 清理 TEST WebService / Coraza / auth 资源
+- [ ] 验证业务 WebService byte-level/对象级基线未变化
+
+---
+
+## P1 — 网络能力真实数据流
+
+### PortForward
+
+当前：disabled rule CRUD 已真实实践，但 TCP/UDP 数据流没有穿过 Lucky。
+
+- [ ] 启动本机临时 TCP echo server
+- [ ] 创建 TEST TCP PortForward
+- [ ] 从独立客户端实际连接并验证双向数据
+- [ ] 启动本机临时 UDP echo server
+- [ ] 创建 TEST UDP PortForward
+- [ ] 验证 UDP 双向数据
+- [ ] 验证日志/统计
+- [ ] 删除 TEST 规则
+- [ ] 验证监听端口关闭、规则基线恢复
+
+### STUN / NAT Mapping
+
+当前：disabled rule CRUD 已实践；PortForward、UPnP、NAT-PMP、Webhook、脚本都刻意关闭。
+
+- [ ] 创建隔离 TEST STUN rule
+- [ ] 真实执行 STUN 地址探测
+- [ ] 验证 NAT 类型/公网映射结果
+- [ ] 在安全条件下验证一个临时端口映射
+- [ ] 优先测试 NAT-PMP / UPnP 中当前网络实际支持的方式
+- [ ] 验证地址变化/状态日志
+- [ ] 清理 TEST rule 和映射
+- [ ] 验证没有残留防火墙/端口映射
+
+### NAT Detect WebSocket
+
+当前：只证明 `/api/natdetect/ws` handler 存在。
+
+- [ ] 建立真实 WebSocket
+- [ ] 记录握手和消息类型，不保留公网 IP 原值
+- [ ] 完成一次 NAT detect job
+- [ ] 验证正常结束/关闭语义
+- [ ] 固化 WebSocket message schema
+
+### FRP
+
+当前：disabled client CRUD 已实践，未真正连接 frps。
+
+- [ ] 使用本机/测试 VPS 启动隔离 frps
+- [ ] 创建 TEST frpc client
+- [ ] 验证连接状态变为 running/connected
+- [ ] 创建 TCP proxy
+- [ ] 实际发送 TCP 数据
+- [ ] 如可行，补 visitor 流程
+- [ ] 验证 logs/status/proxies/visitors
+- [ ] 清理 frpc/frps TEST 资源
+
+### Cloudflared
+
+当前：disabled access instance CRUD 已实践，未真正建立 Cloudflare tunnel/access 链路。
+
+- [ ] 使用 DevSpace 中 Cloudflare API Token 创建隔离测试 DNS/资源
+- [ ] 创建 TEST Cloudflared instance
+- [ ] 真实连接 Cloudflare
+- [ ] 验证 CNAME create/check/delete
+- [ ] 验证 ingress CRUD
+- [ ] 实际通过 Cloudflare 请求临时本地服务
+- [ ] 验证 status/logs
+- [ ] 清理 Cloudflare 与 Lucky TEST 资源
+- [ ] 验证 Cloudflare zone 无残留测试记录
+
+---
+
+## P2 — WebTerminal / 文件服务
+
+### WebTerminal
+
+当前：local connection CRUD 和 quickAccess 已实践；真实 terminal WebSocket / SSH/Telnet / SFTP 未执行。
+
+- [ ] 建立本机 local terminal WebSocket session
+- [ ] 验证输入/输出/resize/heartbeat/close
+- [ ] 验证 session list / remark
+- [ ] 创建 localhost SSH 测试连接
+- [ ] 验证 SSH host-key 流程
+- [ ] 验证 connection test
+- [ ] 在 `/tmp/TEST-lucky-skills-*` 隔离目录验证 SFTP：mkdir/touch/write/read/rename/copy/chmod
+- [ ] 验证 multipart upload
+- [ ] 验证 streaming upload
+- [ ] 验证 compress/decompress
+- [ ] 删除隔离目录和 TEST connection/session
+- [ ] 固化 WebSocket/SFTP schema
+
+### StorageManagement
+
+当前：parser 验证 + 空列表 reorder no-op，未成功创建 storage。
+
+- [ ] 使用 `/tmp/TEST-lucky-skills-storage-*` 创建 local storage
+- [ ] 验证 POST / PUT / DELETE
+- [ ] 验证 writable/read-only 行为
+- [ ] 验证 list/litelist
+- [ ] 验证 SystemMount 最小闭环（仅在可安全卸载的临时目录）
+- [ ] 清理 TEST storage / mount
+
+### FTP / WebDAV / SMB / DLNA / FileBrowser
+
+- [ ] 为每个服务建立独立临时 root 目录
+- [ ] 保存并启用 TEST 配置
+- [ ] 创建 TEST 用户（适用时）
+- [ ] localhost 实际连接
+- [ ] 验证读/写/列目录
+- [ ] 验证 status/logs
+- [ ] 停止服务并恢复原配置
+- [ ] 删除临时目录、用户和测试文件
+
+---
+
+## P3 — 已有 CRUD，补核心行为
+
+### Rclone
+
+当前：remote / sync task CRUD 已实践，任务 disabled / DryRun。
+
+- [ ] local → local 实际 copy
+- [ ] local → local sync
+- [ ] DryRun 与真实运行结果对比
+- [ ] 验证 task run / stop
+- [ ] 如安全，验证临时 mount/unmount
+- [ ] 清理目标目录和 TEST remote/task
+
+### Cron
+
+当前：task/group CRUD 已实践，但 Jobs 为空。
+
+- [ ] 创建只写 `/tmp/TEST-*` 的安全 shell job
+- [ ] 手动 trigger
+- [ ] 验证执行结果/log
+- [ ] 验证一次定时触发
+- [ ] 验证失败 job 状态
+- [ ] 清理 task/group/temp file
+
+### WOL
+
+当前：device CRUD 已实践，未发送 wake/shutdown。
+
+- [ ] 仅在明确可控测试设备上发送一次 Wake-on-LAN
+- [ ] 验证在线状态变化
+- [ ] shutdown 保持可选，不为覆盖率强测
+
+### ThirdPartyAuthManager
+
+当前：disabled GitHub-type mapping CRUD 已实践，没有真实 OAuth 登录。
+
+- [ ] 创建隔离 OAuth test client
+- [ ] 完成一次实际 OAuth login
+- [ ] 验证 callback/user mapping
+- [ ] 验证 refresh / disable / revoke 行为
+- [ ] 清理 test client 和 mapping
+
+---
+
+## P4 — Docker 剩余覆盖
+
+当前 Docker 已有较深的 disposable BusyBox 生命周期实践，但 Compose 和少数 image handler 仍不完整。
+
+### Compose
+
+- [ ] 使用最小 BusyBox/hello-world 风格 Compose 项目
+- [ ] 验证 compose config
+- [ ] 验证 `up`
+- [ ] 验证 `ps`
+- [ ] 验证 stop/start/restart
+- [ ] 验证 logs
+- [ ] 验证 down
+- [ ] 验证 async up/down/status（如有）
+- [ ] 清理 project/container/network
+
+### Image load/import/build
+
+- [ ] 使用隔离、极小 tar 镜像验证 image load
+- [ ] 验证 import
+- [ ] 验证本地 context build
+- [ ] ZIP/Git build 只在完全隔离上下文验证
+- [ ] 删除所有 TEST image/tag
+
+### Prune
+
+- [x] 使用 temporary Lucky + mock Docker API 验证 handler
+- [ ] **禁止**为了覆盖率对生产 Docker daemon 执行真实 prune
+
+---
+
+## P5 — 高风险核心管理操作
+
+以下能力默认不以“全覆盖”为目标，除非有明确业务需求和独立可恢复测试环境：
+
+- [ ] Lucky 自更新
+- [ ] 全局配置 restore/import
+- [ ] reboot_program
+- [ ] 主密码修改
+- [ ] 2FA reset/disable
+- [ ] 生产证书强制 renew/delete
+- [ ] 真实 Docker prune
+
+这类操作应优先使用 mock、临时 Lucky 实例、验证失败路径或专用测试机，而不是生产实例。
+
+---
+
+## 已完成的高价值实践
+
+- [x] WebService 普通 reverse proxy
+- [x] `NginxConf` 自定义 header / response header / proxy_redirect
+- [x] WebService path / location / frontend-prefix strip / backend-base-path join
+- [x] `UseTargetHost`
+- [x] `AutoProxyLocation`
+- [x] WebService SNI Routing TLS passthrough
+- [x] WebService disposable CRUD / discovery
+- [x] SSL MappingToPath + MappingChangeScript
+- [x] Cloudflared disabled instance CRUD
+- [x] FRP disabled client CRUD
+- [x] STUN disabled rule CRUD
+- [x] PortForward disabled rule CRUD
+- [x] Rclone local remote / disabled sync task CRUD
+- [x] Cron task/group CRUD
+- [x] WOL device CRUD
+- [x] Coraza disabled unattached instance CRUD
+- [x] IPFilter disposable subrule CRUD
+- [x] WebTerminal local connection CRUD
+- [x] ThirdPartyAuthManager disabled mapping CRUD
+- [x] Docker disposable BusyBox 生命周期相关覆盖
+
+---
+
+## 每项完成后的仓库动作
+
+每完成一个核心能力闭环：
+
+1. 更新 `evidence/lucky-v3-runtime-verification.json`。
+2. 如属于跨路由业务语义，增加/更新 `model_evidence`。
+3. 将可重复流程做成 `tools/lucky_*_probe.py`。
+4. 在 `tools/verify_repository.py` 中增加 evidence 完整性校验。
+5. 更新对应 docs 页面与 `skills/lucky/SKILL.md`。
+6. 不在本机执行测试/构建。
+7. Commit + push，使用 GitHub Actions 验证。
+8. CI 全绿后验证线上文档页面。
+9. 在本文件中勾选完成项，并记录对应 commit / evidence 名称。
+
+## 近期执行顺序
+
+建议按以下顺序推进：
+
+1. DDNS
+2. Security Groups + WebService Auth
+3. SSL / ACME
+4. PortForward TCP/UDP
+5. STUN / NAT Detect
+6. Coraza + WebService WAF
+7. Cloudflared
+8. FRP
+9. IPDB
+10. WebTerminal WebSocket + SFTP
+11. Docker Compose / image load-import-build
+12. Storage / FTP / WebDAV / SMB / DLNA / FileBrowser
+
