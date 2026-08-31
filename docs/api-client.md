@@ -135,6 +135,27 @@ python3 tools/lucky_credentials.py run -- \
 
 当前 Lucky 3.0.0 实例已实际通过该流程。实测后规则数量和原有 RuleKey 集合恢复，测试名称无残留，16666 未监听，iptables/nftables 未出现 16666 规则。此结果只证明禁用规则的创建、读取和删除链路，不证明启用监听、TLS、域名匹配或反向代理流量链路。
 
+## WebService 反向代理语义探针
+
+`tools/lucky_web_reverseproxy_probe.py` 用于继续验证上一节没有覆盖的**真实 reverseproxy 行为**。它要求实例所有者明确授权，并复用一个已经存在的 TLS WebService 父规则；不会新开监听端口或自动修改防火墙。
+
+探针把多个唯一 `TEST-lucky-skills-websem-*` 子规则合并到**一次 setup PUT** 中，验证完成后重新读取最新父对象，再用**一次 cleanup PUT** 只移除自己的 TEST 子规则。这样既符合 Lucky 前端“完整父规则 → 修改 `ProxyList` → PUT 父规则”的保存模型，也显著降低连续写入触发 429 的概率。清理遇到 429 时会有限退避；它不会把启动时保存的旧父规则快照直接覆盖回去。
+
+验证范围包括 `NginxConf` 的任意请求头写入/删除、响应头隐藏与追加、`Location` / `Refresh` 改写、`location` / `path` 匹配、前端路径剥离和后端基础路径拼接，以及 `UseTargetHost`、协议/IP Header helper 和自动反代重定向。完整行为表见 [WebService 反向代理语义](./webservice-reverse-proxy.md)。
+
+示例：
+
+```bash
+python3 tools/lucky_web_reverseproxy_probe.py \
+  --confirm PROBE-AND-CLEAN-WEB-REVERSE-PROXY \
+  --rule-key '<reviewed-rule-key>' \
+  --domain-suffix 'rs.example.com'
+```
+
+`--domain-suffix` 必须已经由该 WebService 的证书和 DNS 覆盖。默认使用 `https://httpbin.org` 作为专门的 echo/redirect 测试后端；不要把业务 Cookie、Authorization 或私密 Header 带入探针。需要自有测试后端时可通过 `--echo-origin` 替换。
+
+该工具输出布尔验证项、脱敏后的路径/重定向分类和清理计数，不主动打印 OpenToken、临时 Host、客户端 IP 或 Lucky 自动生成的真实重定向 token。
+
 ## Web 服务 307 / 308 重定向
 
 Lucky v3 的重定向状态码位于 Web 服务对象的嵌套字段：

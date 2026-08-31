@@ -111,6 +111,7 @@ export default defineConfig({
         items: [
           { text: 'API 客户端与 CLI', link: '/api-client' },
           { text: '接口约定', link: '/conventions' },
+          { text: 'WebService 反向代理语义', link: '/webservice-reverse-proxy' },
           { text: '模块指南', link: '/modules' }
         ]
       },

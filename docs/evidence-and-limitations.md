@@ -19,6 +19,7 @@
 | 目标版本 | Lucky 3.0.0 wanji / Linux x86_64 |
 | 只读验证 | `/api/status`、`/api/info`、`/api/modules/list` |
 | WebService 写入 | 已验证创建 → 回读 → 删除，测试后基线恢复 |
+| WebService reverseproxy 语义 | 已验证完整父规则 `ProxyList` 写入模型、`NginxConf` Header/路径/重定向、Host/helper 字段与自动反代重定向 |
 | 308 重定向 | 已验证 `RedirectType="308"`，GET / POST 均返回 308 |
 | WebService SNI 分流 | 已验证 `WebServiceType="SNIRouting"`、`Domains` + `Locations`，公网 TLS 流量经 SNI 路由进入本地 TLS 服务 |
 | SSL 证书映射 | 已验证 `MappingToPath` / `MappingPath` / `MappingChangeScript`，并确认映射文件随证书对象生成 |
@@ -28,7 +29,7 @@
 
 真实 OpenToken、安全入口、域名和业务配置不会写入仓库。
 
-SNI/证书映射验证同样只保留通用字段语义和脱敏后的行为结论，不保存真实域名、规则 Key、后端地址、证书正文、私钥或 ACME 凭据。SNI 流量验证包含真实外部 TLS/HTTP CONNECT 与 Git smart-HTTP 只读操作，以确认四层双向转发，而不是只依据 Lucky 的 `ret: 0`。
+reverseproxy / SNI / 证书映射验证同样只保留通用字段语义和脱敏后的行为结论，不保存真实域名、规则 Key、后端地址、客户端地址、证书正文、私钥或 ACME 凭据。reverseproxy 探针通过唯一 TEST 子规则验证真实 HTTPS 回源、路径拼接、Header 和重定向行为，并在结束后只从最新父对象中删除自己的 TEST 子规则；SNI 流量验证包含真实外部 TLS/HTTP CONNECT 与 Git smart-HTTP 只读操作，以确认四层双向转发，而不是只依据 Lucky 的 `ret: 0`。
 
 ## 证据如何合并
 

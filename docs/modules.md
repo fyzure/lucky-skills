@@ -26,6 +26,8 @@
 
 规则对象层级复杂，更新时必须保留未知字段。Web 重定向的状态码位于 `DefaultProxy.OtherParams.RedirectType`（子规则则在自身 `OtherParams`）；Lucky 3.0.0 已通过 API 验证 `"308"` 可用于 80 → HTTPS 永久跳转。更新已有监听器时先 GET 完整规则对象，再只修改目标字段并 PUT 回 `/api/webservice/rule/{RuleKey}`；不要用局部 JSON 覆盖复杂规则。统计导入、地理数据重建、IP 信息刷新和会话清理均会修改状态。文件服务与 CGI 还可能直接读写宿主机挂载目录。
 
+普通 `reverseproxy` 的路径、Header 和重定向语义也已完成专项验证。`NginxConf` 并不是一个无语义的字符串：当前 3.0.0 前端与运行时均确认它支持 `proxy_set_header`、`proxy_hide_header`、`add_header`、`proxy_redirect`、`location` 和 Lucky 的 `path` 简写，可用于固定 Header 注入、响应头控制和路径级规则。`Domains` 带前端路径时，`location` / `path` 按移除该前缀后的请求路径匹配；`Locations` 自带的后端基础路径随后再与剩余路径拼接。`UseTargetHost`、自动反代重定向和专用协议/IP Header 开关的精确行为见 [WebService 反向代理语义](./webservice-reverse-proxy.md)。
+
 Lucky 3.0.0 的 SNI 分流也已完成真实实例验证。子规则类型值为 `WebServiceType: "SNIRouting"`，`Domains` 保存要匹配的 SNI 域名，`Locations` 保存 `host:port` 形式的四层目标。父规则必须开启 TLS，但匹配到 SNI 子规则后 Lucky 会原样转发 TLS 流，而不是在 Lucky 上终止 TLS，因此后端本身仍需提供该域名的有效证书。`OtherParams.ProxyProtocolV2` 仅在后端明确支持 Proxy Protocol v2 时开启；当前 3.0.0 前端还提示单个 WebService 规则最多 6 条 SNI 分流。修改后应同时检查规则回读、SNI 日志和外部 TLS/业务请求。
 
 ## 端口转发与 STUN

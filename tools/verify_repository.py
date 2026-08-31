@@ -405,6 +405,79 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
     if not isinstance(prefix_count, int) or prefix_count + len(no_route_paths) != len(suppress):
         fail("runtime suppression evidence counts do not cover suppress_literals")
 
+    model_evidence = runtime.get("model_evidence")
+    if not isinstance(model_evidence, dict):
+        fail("runtime model_evidence must be an object")
+    reverse_proxy_evidence = model_evidence.get("webservice_reverseproxy_semantics")
+    if not isinstance(reverse_proxy_evidence, dict):
+        fail("WebService reverse-proxy model evidence is missing")
+    if reverse_proxy_evidence.get("confidence") != "runtime-verified":
+        fail("WebService reverse-proxy model evidence must remain runtime-verified")
+    reverse_proxy_model = reverse_proxy_evidence.get("model")
+    if not isinstance(reverse_proxy_model, dict):
+        fail("WebService reverse-proxy model is malformed")
+    nginx_model = reverse_proxy_model.get("NginxConf")
+    if not isinstance(nginx_model, dict) or nginx_model.get("type") != "string":
+        fail("WebService NginxConf model must remain a string configuration field")
+    if nginx_model.get("directives") != [
+        "proxy_set_header",
+        "proxy_hide_header",
+        "add_header",
+        "proxy_redirect",
+        "location",
+        "path",
+    ]:
+        fail("WebService NginxConf directive evidence regressed")
+    variables = nginx_model.get("variables")
+    required_variables = {
+        "$host",
+        "$http_host",
+        "$scheme",
+        "$request",
+        "$request_method",
+        "$request_uri",
+        "$uri",
+        "$document_uri",
+        "$args",
+        "$query_string",
+        "$is_args",
+        "$remote_addr",
+        "$remote_port",
+        "$server_port",
+        "$http_upgrade",
+        "$connection_upgrade",
+        "$proxy_add_x_forwarded_for",
+        "$http_<request-header-name>",
+    }
+    if not isinstance(variables, list) or set(variables) != required_variables:
+        fail("WebService NginxConf variable evidence regressed")
+    for field in (
+        "write_model",
+        "UseTargetHost",
+        "AutoProxyLocation",
+        "AutoProxyLocationWithoutSameHost",
+        "AddProtoToHeader",
+        "AddRemoteIPToHeader",
+        "path_matching",
+    ):
+        value = reverse_proxy_model.get(field)
+        if not isinstance(value, str) or not value.strip():
+            fail(f"WebService reverse-proxy model field is missing: {field}")
+    observations = reverse_proxy_evidence.get("observations")
+    if not isinstance(observations, dict) or set(observations) != {
+        "add_header",
+        "proxy_redirect",
+        "auto_proxy_location",
+        "connection_upgrade",
+    }:
+        fail("WebService reverse-proxy runtime observations regressed")
+    for field in ("frontend_evidence", "verification", "security"):
+        value = reverse_proxy_evidence.get(field)
+        if not isinstance(value, str) or not value.strip():
+            fail(f"WebService reverse-proxy evidence field is missing: {field}")
+    if not (ROOT / "tools" / "lucky_web_reverseproxy_probe.py").is_file():
+        fail("WebService reverse-proxy runtime probe tool is missing")
+
     verified = runtime.get("routes")
     if not isinstance(verified, list):
         fail("runtime verified routes must be an array")

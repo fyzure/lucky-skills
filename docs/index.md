@@ -45,6 +45,7 @@ features:
 | 安全保存 OpenToken | [凭据管理](./credentials.md) |
 | 理解安全入口与鉴权 | [鉴权与安全](./authentication.md) |
 | 使用 Python 客户端 / CLI | [API 客户端与 CLI](./api-client.md) |
+| 配置 WebService 路径 / Header / 重定向 | [WebService 反向代理语义](./webservice-reverse-proxy.md) |
 | 找具体接口 | [完整 API 路由](./generated/api-routes.md) |
 | 导入接口定义 | [OpenAPI 3.1](https://github.com/fyzure/lucky-skills/blob/main/openapi/lucky-v3.openapi.json) |
 
