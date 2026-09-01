@@ -420,7 +420,10 @@ class NatPmpGateway:
 
 def rule_options() -> dict[str, Any]:
     return {
-        "DisableSelfForwardingCheck": False,
+        # The fake NAT-PMP gateway deliberately relays back into the same
+        # isolated Docker bridge. Disable Lucky's self-forwarding guard for
+        # this owned TEST rule so that topology is not mistaken for a loop.
+        "DisableSelfForwardingCheck": True,
         "SingleProxyMaxTCPConnections": 64,
         "SingleProxyMaxUDPReadTargetDatagoroutineCount": 16,
         "UDPShortMode": False,
