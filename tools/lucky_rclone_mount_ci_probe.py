@@ -247,19 +247,38 @@ def wait_mount_ready(
     mount_path: str,
     marker_name: str,
     timeout: float = 30.0,
-) -> tuple[bool, str]:
+) -> tuple[bool, str, dict[str, Any]]:
     deadline = time.monotonic() + timeout
     last_msg = ""
+    diagnostic: dict[str, Any] = {}
     while time.monotonic() < deadline:
         detail = remote_detail(base_url, token, remote_key)
         last_msg = str(detail.get("MountMsg") or "")
+        system_mount = detail.get("SystemMount")
+        if not isinstance(system_mount, dict):
+            system_mount = {}
+        diagnostic = {
+            "remote_enable": detail.get("Enable"),
+            "remote_type": detail.get("Type"),
+            "remote_fields": sorted(str(key) for key in detail),
+            "params_fields": sorted(str(key) for key in detail.get("Params", {}))
+            if isinstance(detail.get("Params"), dict)
+            else [],
+            "system_mount": {
+                key: system_mount.get(key)
+                for key in ("Enable", "ReadOnly", "MountType", "OnleyCreateVFS")
+                if key in system_mount
+            },
+            "system_mount_fields": sorted(str(key) for key in system_mount),
+            "mount_point_present": bool(system_mount.get("MountPoint")),
+        }
         try:
             if path_has(base_url, token, mount_path, marker_name):
-                return True, last_msg
+                return True, last_msg, diagnostic
         except Exception:
             pass
         time.sleep(0.5)
-    return False, last_msg
+    return False, last_msg, diagnostic
 
 
 def wait_unmounted(base_url: str, token: str, mount_path: str, marker_name: str, timeout: float = 20.0) -> bool:
@@ -482,7 +501,7 @@ def main() -> int:
                 lambda rows: find_by_remark(rows, remark),
             )
             remote_key = key_of(remote)
-            mounted, mount_msg = wait_mount_ready(
+            mounted, mount_msg, mount_diagnostic = wait_mount_ready(
                 base_url,
                 token,
                 remote_key,
@@ -492,7 +511,11 @@ def main() -> int:
             report["mount_visible"] = mounted
             report["mount_msg_empty"] = not mount_msg
             if not mounted:
-                raise ProbeError(f"Rclone SystemMount did not become visible; MountMsg={mount_msg[:240]!r}")
+                raise ProbeError(
+                    "Rclone SystemMount did not become visible; "
+                    f"MountMsg={mount_msg[:240]!r}; "
+                    f"readback={json.dumps(mount_diagnostic, ensure_ascii=False, sort_keys=True)}"
+                )
 
             if helper is None:
                 raise ProbeError("Cron helper payload missing")
