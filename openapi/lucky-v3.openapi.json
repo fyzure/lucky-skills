@@ -26039,7 +26039,7 @@
           "lucky_index-DND3_xvE.js"
         ],
         "x-lucky-risk": "mutating",
-        "x-schema-evidence": "frontend first GETs /api/login/challenge (runtime-verified challengeId string), encrypts the OAuth provider/code/timestamp payload locally to string cipherText, and POSTs only {challengeId,cipherText}; no OAuth login attempt was sent",
+        "x-schema-evidence": "frontend first GETs /api/login/challenge, RSA-encrypts {type,token,twoFA,challengeId,nonce} into string cipherText using <=120-byte UTF-8 chunks, and POSTs only {challengeId,cipherText}. GitHub Actions run 33517965844 reproduced that request with the frontend '_' anti-replay query and received ret=0 plus a non-empty OAuth backend-login token on a disposable Lucky 3.0.0 instance",
         "requestBody": {
           "required": true,
           "content": {
