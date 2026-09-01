@@ -36,7 +36,6 @@ from lucky_docker_build_ci_probe import (
     ProbeError,
     cleanup_root_owned_conf,
     docker,
-    enable_open_token,
     json_request,
     login_default_admin,
     pull_pinned_image,
@@ -58,7 +57,7 @@ def choose_loopback_port() -> int:
 
 def api(
     base_url: str,
-    token: str,
+    admin_token: str,
     method: str,
     path: str,
     *,
@@ -72,7 +71,7 @@ def api(
         path,
         method=method,
         payload=payload,
-        open_token=token,
+        admin_token=admin_token,
     )
     return require_ret_zero(status, response, label)
 
@@ -284,7 +283,6 @@ def main() -> int:
     nonce = secrets.token_hex(5)
     container_name = f"lucky-rclone-mount-{nonce}"
     host_port = choose_loopback_port()
-    open_token = secrets.token_urlsafe(32)
     root = f"/tmp/{TEST_PREFIX}{nonce}"
     source = root + "/source"
     mount_path = root + "/mount"
@@ -365,8 +363,12 @@ def main() -> int:
 
             wait_for_lucky(base_url, container_name)
             admin_token = login_default_admin(base_url, tmp)
-            enable_open_token(base_url, admin_token, open_token)
-            token = open_token
+            # This disposable CI instance uses its in-memory administrator
+            # session token for the API calls below.  There is no need to
+            # mutate global OpenToken configuration merely to exercise
+            # SystemMount, and every Lucky operation still goes through HTTP
+            # APIs rather than container-side config edits.
+            token = admin_token
 
             info = api(base_url, token, "GET", "/api/info", label="Lucky info")
             info_obj = info.get("info")
