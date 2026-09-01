@@ -301,6 +301,7 @@ def frontend_mount_snippets(base_url: str) -> dict[str, str]:
     # chunk hash.
     queue = [f"/static/js/{RCLONE_CHUNK_NAME}", "/"]
     seen: set[str] = set()
+    rclone_candidates: set[str] = set()
     fetched = 0
     max_bytes = 24 * 1024 * 1024
     needles = ("MountType", "OnleyCreateVFS", "MountPoint", "SystemMount", "AllowOther")
@@ -320,16 +321,20 @@ def frontend_mount_snippets(base_url: str) -> dict[str, str]:
             continue
         fetched += len(raw)
         text = raw.decode("utf-8", errors="replace")
-        for needle in needles:
-            positions = [match.start() for match in re.finditer(needle, text)]
-            if not positions:
-                continue
-            chunks = []
-            for position in positions[:4]:
-                start = max(0, position - 1000)
-                end = min(len(text), position + 1800)
-                chunks.append(" ".join(text[start:end].split()))
-            snippets[f"{path}:{needle}"] = " || ".join(chunks)[:9000]
+        rclone_candidates.update(
+            re.findall(r"[A-Za-z0-9_./-]*lucky_rclone-[A-Za-z0-9_.-]+\.js", text)
+        )
+        if "lucky_rclone" in path:
+            for needle in needles:
+                positions = [match.start() for match in re.finditer(needle, text)]
+                if not positions:
+                    continue
+                chunks = []
+                for position in positions[:4]:
+                    start = max(0, position - 1000)
+                    end = min(len(text), position + 1800)
+                    chunks.append(" ".join(text[start:end].split()))
+                snippets[f"{path}:{needle}"] = " || ".join(chunks)[:9000]
 
         candidates = set(
             re.findall(r"(?:src=|href=)?[\"']([^\"']+\.js(?:\?[^\"']*)?)[\"']", text)
@@ -351,6 +356,11 @@ def frontend_mount_snippets(base_url: str) -> dict[str, str]:
                     queue.append(candidate_path)
     if not snippets:
         snippets["crawl"] = f"no mount markers found; files={len(seen)} bytes={fetched}"
+    snippets["_rclone_candidates"] = json.dumps(sorted(rclone_candidates))
+    snippets["_seen_rclone_paths"] = json.dumps(
+        sorted(path for path in seen if "lucky_rclone" in path)
+    )
+    snippets["_crawl_summary"] = f"files={len(seen)} bytes={fetched}"
     return snippets
 
 
@@ -595,7 +605,7 @@ def main() -> int:
                 "SystemMount": {
                     "Enable": True,
                     "ReadOnly": False,
-                    "MountType": "network",
+                    "MountType": "local",
                     "MountPoint": mount_path,
                     "Label": "",
                     "OnleyCreateVFS": False,
