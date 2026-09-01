@@ -185,6 +185,7 @@ def ftp_roundtrip(
     username: str,
     password: str,
     host_root: Path,
+    seed_name: str,
     marker: bytes,
 ) -> dict[str, bool]:
     results = {
@@ -217,8 +218,7 @@ def ftp_roundtrip(
         results["login"] = True
 
         entries = ftp.nlst()
-        results["list"] = "root" in {entry.rstrip("/") for entry in entries}
-        ftp.cwd("root")
+        results["list"] = seed_name in {entry.rstrip("/") for entry in entries}
 
         filename = "probe.bin"
         ftp.storbinary(f"STOR {filename}", io.BytesIO(marker))
@@ -285,6 +285,8 @@ def main() -> int:
         ftp_root = temp_dir / "ftp-root"
         conf_dir.mkdir()
         ftp_root.mkdir()
+        seed_name = "seed.bin"
+        (ftp_root / seed_name).write_bytes(secrets.token_bytes(32))
 
         pull_pinned_image()
         baseline_config: dict[str, Any] | None = None
@@ -403,7 +405,9 @@ def main() -> int:
             if not report["configure_readback"]:
                 raise ProbeError("FTP TEST configuration readback ownership mismatch")
 
-            rounds = ftp_roundtrip(control_port, username, password, ftp_root, marker)
+            rounds = ftp_roundtrip(
+                control_port, username, password, ftp_root, seed_name, marker
+            )
             report["wrong_password_rejected"] = rounds["wrong_password_rejected"]
             report["ftp_login"] = rounds["login"]
             report["ftp_list"] = rounds["list"]
