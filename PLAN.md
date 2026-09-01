@@ -236,7 +236,7 @@ WebDAV 与 FileBrowser 已完成 localhost 完整闭环；FTP 当前配置没有
 - [x] local → local sync（`CreateEmptyDirs=true` 的源空目录真实传播到目标）
 - [x] DryRun 与真实运行结果对比
 - [x] 验证 task run / State / logs
-- [ ] 验证运行中 task stop（当前任务完成过快，没有为了覆盖率制造大任务）
+- [x] 验证运行中 task stop：1 MiB TEST 文件 + `BandwidthLimit=32K` / `Transfers=1`，观察 running 后立即 stop；当前 3.0.0 stop 后状态记为 `success`，但目标文件未完成
 - [ ] 如安全，验证临时 mount/unmount
 - [x] 清理源/目标目录、TEST sync task、Cron helper task/group，并恢复 Rclone/Cron Key 基线
 - [x] 固化 probe / evidence / docs：`tools/lucky_rclone_sync_probe.py`

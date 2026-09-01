@@ -632,6 +632,7 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         "task_model",
         "real_sync",
         "file_copy",
+        "stop",
         "dry_run",
         "state",
         "scope",
@@ -641,6 +642,7 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
     if not isinstance(rclone_observations, dict) or set(rclone_observations) != {
         "real_run",
         "file_copy",
+        "stop",
         "dry_run",
         "detail_vs_list",
         "cleanup",
@@ -654,6 +656,10 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         fail("Rclone file-copy evidence must remain tied to the verified sync mode")
     if "Cron" not in str(rclone_model.get("file_copy")):
         fail("Rclone file-copy evidence must retain the owned Cron helper boundary")
+    if "State.Status=success" not in str(rclone_model.get("stop")):
+        fail("Rclone stop evidence must preserve the post-stop success-state caveat")
+    if not (ROOT / "tools" / "lucky_rclone_stop_probe.py").is_file():
+        fail("Rclone stop runtime probe tool is missing")
     if not (ROOT / "tools" / "lucky_rclone_sync_probe.py").is_file():
         fail("Rclone local sync runtime probe tool is missing")
 
@@ -1278,6 +1284,17 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
             fail(f"Rclone enable/disable GET must remain mutating for {route_key}")
         if route.response_schema != rclone_ret_only:
             fail(f"Rclone enable/disable GET response schema regressed for {route_key}")
+
+    rclone_run = merged_by_key[("POST", "/api/rclone/sync/run/{param}")]
+    if rclone_run.response_schema != rclone_ret_only:
+        fail("Rclone runtime run response schema regressed")
+    if "resync" not in rclone_run.query_keys:
+        fail("Rclone runtime run must retain the resync query parameter")
+    rclone_stop = merged_by_key[("POST", "/api/rclone/sync/stop/{param}")]
+    if rclone_stop.response_schema != rclone_ret_only:
+        fail("Rclone runtime stop response schema regressed")
+    if rclone_stop.risk is not OperationRisk.DANGEROUS:
+        fail("Rclone runtime stop must remain dangerous")
 
     rclone_remote_detail = merged_by_key[("GET", "/api/rclone/remote/{param}")].response_schema
     rclone_remote_props = (
@@ -3164,8 +3181,8 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         fail("Local Path Browser delete must remain classified dangerous")
 
     response_schema_count = sum(route.response_schema is not None for route in patched_merged.routes)
-    if response_schema_count < 343:
-        fail(f"response-schema coverage regressed below 343 routes: {response_schema_count}")
+    if response_schema_count < 345:
+        fail(f"response-schema coverage regressed below 345 routes: {response_schema_count}")
 
     icon_response = merged_by_key[("GET", "/api/iconlib/icon")]
     if icon_response.response_type != "blob" or icon_response.response_content_type != "image/png":

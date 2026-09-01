@@ -28575,11 +28575,16 @@
         ],
         "responses": {
           "200": {
-            "description": "Lucky JSON response; envelope shape varies by endpoint.",
+            "description": "Response schema observed from runtime evidence; see x-schema-evidence for provenance.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LuckyEnvelope"
+                  "type": "object",
+                  "properties": {
+                    "ret": {
+                      "type": "integer"
+                    }
+                  }
                 }
               }
             }
@@ -28600,6 +28605,7 @@
           "lucky_rclone-sFF3mpk8.js"
         ],
         "x-lucky-risk": "mutating",
+        "x-schema-evidence": "bounded local-to-local TEST probes called POST /api/rclone/sync/run/{Key}?resync=false on owned tasks only. The handler returned ret=0 and the task entered State.Status=running before later reaching success or being explicitly stopped; no remote, credential, schedule or system mount was involved",
         "parameters": [
           {
             "name": "param",
@@ -28633,11 +28639,16 @@
         ],
         "responses": {
           "200": {
-            "description": "Lucky JSON response; envelope shape varies by endpoint.",
+            "description": "Response schema observed from runtime evidence; see x-schema-evidence for provenance.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LuckyEnvelope"
+                  "type": "object",
+                  "properties": {
+                    "ret": {
+                      "type": "integer"
+                    }
+                  }
                 }
               }
             }
@@ -28658,6 +28669,7 @@
           "lucky_rclone-sFF3mpk8.js"
         ],
         "x-lucky-risk": "dangerous",
+        "x-schema-evidence": "bounded stop probe used one 1 MiB owned local file with Transfers=1 and BandwidthLimit=32K so State.Status=running was observable, then POSTed stop for that TEST task. The handler returned ret=0 and the task left running state. On current Lucky 3.0.0 the post-stop State.Status became success with empty LastError even though the destination file had not completed, so success must not be interpreted as proof of full transfer completion",
         "parameters": [
           {
             "name": "param",
