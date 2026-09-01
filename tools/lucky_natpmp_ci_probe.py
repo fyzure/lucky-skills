@@ -27,6 +27,7 @@ import copy
 import ipaddress
 import json
 import secrets
+import select
 import shutil
 import socket
 import struct
@@ -255,9 +256,17 @@ class UdpMappingForwarder:
         self.external_port = external_port
         self.lucky_ip = lucky_ip
         self.internal_port = internal_port
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.socket.bind((gateway_ip, external_port))
-        self.socket.settimeout(0.2)
+        # public_socket owns the mapped external port. lan_socket is a
+        # separate translated-side socket so packets delivered to Lucky do
+        # not incorrectly appear to originate from the mapped destination
+        # port. That more closely models destination NAT: the public port is
+        # the destination, while the client's source port remains independent.
+        self.public_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.public_socket.bind((gateway_ip, external_port))
+        self.public_socket.setblocking(False)
+        self.lan_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.lan_socket.bind((gateway_ip, 0))
+        self.lan_socket.setblocking(False)
         self.stop_event = threading.Event()
         self.external_peer: tuple[str, int] | None = None
         self.forward_count = 0
@@ -270,26 +279,38 @@ class UdpMappingForwarder:
     def _serve(self) -> None:
         while not self.stop_event.is_set():
             try:
-                payload, address = self.socket.recvfrom(65535)
-            except socket.timeout:
+                readable, _writable, _errors = select.select(
+                    [self.public_socket, self.lan_socket],
+                    [],
+                    [],
+                    0.2,
+                )
+            except (OSError, ValueError):
+                break
+            if not readable:
                 continue
-            except OSError:
-                break
-            try:
-                if address[0] == self.lucky_ip:
-                    if self.external_peer is not None:
-                        self.socket.sendto(payload, self.external_peer)
-                        self.return_count += 1
-                else:
-                    self.external_peer = (str(address[0]), int(address[1]))
-                    self.socket.sendto(payload, (self.lucky_ip, self.internal_port))
-                    self.forward_count += 1
-            except OSError:
-                break
+            for ready in readable:
+                try:
+                    payload, address = ready.recvfrom(65535)
+                except (BlockingIOError, OSError):
+                    continue
+                try:
+                    if ready is self.lan_socket:
+                        if self.external_peer is not None:
+                            self.public_socket.sendto(payload, self.external_peer)
+                            self.return_count += 1
+                    else:
+                        self.external_peer = (str(address[0]), int(address[1]))
+                        self.lan_socket.sendto(payload, (self.lucky_ip, self.internal_port))
+                        self.forward_count += 1
+                except OSError:
+                    self.stop_event.set()
+                    break
 
     def close(self) -> None:
         self.stop_event.set()
-        self.socket.close()
+        self.public_socket.close()
+        self.lan_socket.close()
         self.thread.join(timeout=2)
 
 
