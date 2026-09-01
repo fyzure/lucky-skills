@@ -1,0 +1,32 @@
+name: lucky-ftp-ci
+
+on:
+  push:
+    paths:
+      - ".github/workflows/lucky-ftp-ci.yml"
+      - "tools/lucky_ftp_ci_probe.py"
+      - "tools/lucky_docker_build_ci_probe.py"
+  pull_request:
+    paths:
+      - ".github/workflows/lucky-ftp-ci.yml"
+      - "tools/lucky_ftp_ci_probe.py"
+      - "tools/lucky_docker_build_ci_probe.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ftp-behavior:
+    name: Lucky isolated FTP behavior
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Show Docker runtime
+        run: docker version
+
+      - name: Run isolated Lucky FTP probe
+        run: python3 tools/lucky_ftp_ci_probe.py
