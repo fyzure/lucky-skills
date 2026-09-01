@@ -19,6 +19,7 @@ import json
 import secrets
 import shutil
 import socket
+import sys
 import tempfile
 import time
 import urllib.parse
@@ -47,12 +48,6 @@ from lucky_docker_build_ci_probe import (
 TEST_PREFIX = "TEST-lucky-skills-wol-ci-"
 
 
-def choose_loopback_port() -> int:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind(("127.0.0.1", 0))
-        return int(sock.getsockname()[1])
-
-
 def choose_udp_port(bind_ip: str) -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.bind((bind_ip, 0))
@@ -77,6 +72,23 @@ def network_gateway(network_name: str) -> str:
             if packed[0] in {10, 172, 192}:
                 return gateway
     raise ProbeError("Docker internal bridge did not expose an IPv4 gateway")
+
+
+def container_ipv4(container_name: str, network_name: str) -> str:
+    raw = docker("inspect", container_name, timeout=30)
+    rows = json.loads(raw)
+    if not isinstance(rows, list) or len(rows) != 1:
+        raise ProbeError("unexpected Docker container inspect response")
+    networks = rows[0].get("NetworkSettings", {}).get("Networks", {})
+    item = networks.get(network_name) if isinstance(networks, dict) else None
+    value = item.get("IPAddress") if isinstance(item, dict) else None
+    if not isinstance(value, str) or not value:
+        raise ProbeError("temporary Lucky container has no internal-network IPv4")
+    try:
+        socket.inet_aton(value)
+    except OSError as exc:
+        raise ProbeError("temporary Lucky internal address is not IPv4") from exc
+    return value
 
 
 def api_json(
@@ -130,8 +142,6 @@ def main() -> int:
     nonce = secrets.token_hex(5)
     container_name = f"lucky-wol-ci-{nonce}"
     network_name = f"lucky-wol-ci-{nonce}"
-    admin_host_port = choose_loopback_port()
-    base_url = f"http://127.0.0.1:{admin_host_port}"
     open_token = secrets.token_hex(16)
     device_name = TEST_PREFIX + nonce
     mac_text, mac_bytes = test_mac()
@@ -141,7 +151,8 @@ def main() -> int:
         "lucky_version": "",
         "api_only_lucky_operations": True,
         "network_internal": False,
-        "admin_loopback_only": False,
+        "admin_port_unpublished": False,
+        "admin_reachable_on_internal_bridge": False,
         "baseline_empty": False,
         "device_created": False,
         "broadcast_ip_item_is_string": False,
@@ -179,22 +190,19 @@ def main() -> int:
                 container_name,
                 "--network",
                 network_name,
-                "-p",
-                f"127.0.0.1:{admin_host_port}:{ADMIN_PORT}",
                 "-v",
                 f"{conf_dir}:/app/conf",
                 PINNED_LUCKY_IMAGE,
                 timeout=90,
             )
+            lucky_ip = container_ipv4(container_name, network_name)
+            base_url = f"http://{lucky_ip}:{ADMIN_PORT}"
             wait_for_lucky(base_url, container_name)
             published = docker("port", container_name, f"{ADMIN_PORT}/tcp", timeout=30)
-            report["admin_loopback_only"] = bool(published.strip()) and all(
-                line.strip().startswith("127.0.0.1:")
-                for line in published.splitlines()
-                if line.strip()
-            )
-            if not report["admin_loopback_only"]:
-                raise ProbeError("temporary Lucky admin port is not loopback-only")
+            report["admin_port_unpublished"] = not published.strip()
+            report["admin_reachable_on_internal_bridge"] = True
+            if not report["admin_port_unpublished"]:
+                raise ProbeError("temporary Lucky admin port was unexpectedly published")
 
             admin_token = login_default_admin(base_url, temp_dir)
             enable_open_token(base_url, admin_token, open_token)
@@ -285,7 +293,8 @@ def main() -> int:
     required_true = (
         "api_only_lucky_operations",
         "network_internal",
-        "admin_loopback_only",
+        "admin_port_unpublished",
+        "admin_reachable_on_internal_bridge",
         "baseline_empty",
         "device_created",
         "broadcast_ip_item_is_string",
