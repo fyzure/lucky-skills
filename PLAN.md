@@ -230,15 +230,15 @@ WebDAV 与 FileBrowser 已完成 localhost 完整闭环；FTP 当前配置没有
 
 ### Rclone
 
-当前：remote / sync task CRUD 已实践；local → local `sync` 已真实运行，空目录同步成功，随后切换 `DryRun=true` 再运行并确认目标不落盘。
+当前：remote / sync task CRUD 已实践；local → local `sync` 已真实运行，既验证了空目录传播，也用短命 TEST Cron helper 创建随机 marker 文件并确认目标文件内容一致。当前 UI 只提供 `sync` / `bisync`，没有独立 `copy` mode；这里的 actual copy 指 `SyncMode=sync` 中的真实文件复制。随后切换 `DryRun=true` 再运行，确认新增目录和 post-sync marker 都不会落到目标。
 
-- [ ] local → local 实际 copy
+- [x] local → local 实际 file copy（`SyncMode=sync`：真实文件出现且内容一致）
 - [x] local → local sync（`CreateEmptyDirs=true` 的源空目录真实传播到目标）
 - [x] DryRun 与真实运行结果对比
 - [x] 验证 task run / State / logs
 - [ ] 验证运行中 task stop（当前任务完成过快，没有为了覆盖率制造大任务）
 - [ ] 如安全，验证临时 mount/unmount
-- [x] 清理源/目标目录和 TEST task，sync Key 基线恢复
+- [x] 清理源/目标目录、TEST sync task、Cron helper task/group，并恢复 Rclone/Cron Key 基线
 - [x] 固化 probe / evidence / docs：`tools/lucky_rclone_sync_probe.py`
 
 ### Cron

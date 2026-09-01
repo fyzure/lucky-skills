@@ -631,6 +631,7 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
     if not isinstance(rclone_model, dict) or set(rclone_model) != {
         "task_model",
         "real_sync",
+        "file_copy",
         "dry_run",
         "state",
         "scope",
@@ -639,6 +640,7 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
     rclone_observations = rclone_evidence.get("observations")
     if not isinstance(rclone_observations, dict) or set(rclone_observations) != {
         "real_run",
+        "file_copy",
         "dry_run",
         "detail_vs_list",
         "cleanup",
@@ -648,6 +650,10 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         value = rclone_evidence.get(field)
         if not isinstance(value, str) or not value.strip():
             fail(f"Rclone local sync evidence field is missing: {field}")
+    if "SyncMode=sync" not in str(rclone_model.get("file_copy")):
+        fail("Rclone file-copy evidence must remain tied to the verified sync mode")
+    if "Cron" not in str(rclone_model.get("file_copy")):
+        fail("Rclone file-copy evidence must retain the owned Cron helper boundary")
     if not (ROOT / "tools" / "lucky_rclone_sync_probe.py").is_file():
         fail("Rclone local sync runtime probe tool is missing")
 

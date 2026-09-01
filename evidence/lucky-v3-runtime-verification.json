@@ -256,18 +256,20 @@
       "model": {
         "task_model": "A sync task supports local SourceType/DestType, SourcePath/DestPath, SyncMode=sync, DryRun and CreateEmptyDirs among the full detail fields returned by GET /api/rclone/sync/{Key}",
         "real_sync": "POST /api/rclone/sync/run/{Key} executed a real local-to-local sync and propagated a source-only empty directory to the destination when CreateEmptyDirs=true",
-        "dry_run": "After PUT-updating the same task to DryRun=true, a second successful run did not create a newly added source-only directory on the destination",
+        "file_copy": "The same SyncMode=sync run copied a real TEST file from source to destination. A short-lived owned Cron shell helper created a random marker file before the run and, after the run, verified that source and destination contents were byte-equivalent before deleting its own task/group. The current Lucky 3.0.0 UI exposes sync and bisync modes, not a separate copy mode",
+        "dry_run": "After PUT-updating the same task to DryRun=true, a second successful run did not create a newly added source-only directory or the post-sync verification marker on the destination",
         "state": "The compact sync list exposes State with Status/Progress/counters, while GET /api/rclone/sync/{Key} exposes the full execution options",
         "scope": "No Rclone remote, cloud credential, network service or system mount is required for the verified local-to-local behavior"
       },
-      "verification": "Starting from an empty Rclone sync-task baseline, a bounded Lucky 3.0.0 probe created unique Lucky-visible source and destination directories and one enabled TEST sync task using SourceType=local, DestType=local, SyncMode=sync and CreateEmptyDirs=true. A real run completed with State.Status=success and created the source empty directory at the destination. The probe then created a second source-only directory, PUT-updated the task to DryRun=true, ran it again to success, and verified that second directory was not created at the destination. Logs were read, the TEST task was deleted, both TEST trees were removed and the sync Key baseline returned to empty.",
+      "verification": "Starting from the current Rclone and Cron baselines, a bounded Lucky 3.0.0 probe created unique Lucky-visible source/destination directories, one enabled TEST sync task using SourceType=local, DestType=local, SyncMode=sync and CreateEmptyDirs=true, plus one temporary TEST Cron helper task/group. The helper wrote only a random marker file inside the source tree. A real Rclone run completed with State.Status=success, copied that file and propagated the source empty directory. The helper was PUT-updated to compare source/destination marker contents and wrote an owned verification marker only when both matched, then its task/group were disabled/deleted. The Rclone task was then PUT-updated to DryRun=true; a second successful run did not create either the new source-only directory or verification marker on the destination. Logs were read, the TEST sync task and both trees were removed, and Rclone plus Cron task/group Key baselines were restored.",
       "observations": {
         "real_run": "State.Status reached success and the destination contained the propagated empty directory",
-        "dry_run": "State.Status reached success but the new destination path remained absent",
+        "file_copy": "The destination contained the copied TEST file, and the post-run Cron helper created its verification marker only after both source and destination file contents matched the random in-memory marker",
+        "dry_run": "State.Status reached success but the new destination directory and post-sync verification marker remained absent",
         "detail_vs_list": "The compact list omits DryRun/CreateEmptyDirs, while GET /api/rclone/sync/{Key} returned the complete task options including those fields",
-        "cleanup": "No TEST sync task remained and both Lucky-visible source/destination trees were removed"
+        "cleanup": "No TEST sync task, Cron helper task/group or TEST path remained; Rclone and Cron task/group Key baselines were restored"
       },
-      "security": "The probe uses only unique /tmp TEST directories and one TEST sync task. It does not configure remotes, credentials, schedules, bisync, system mounts or network listeners, and cleanup deletes only resources bearing the unique TEST marker."
+      "security": "The probe uses only unique /tmp TEST directories, one TEST sync task and one short-lived manual-only Cron helper task/group. The helper script writes/reads only paths under the owned source/destination trees and never calls the network or business services. The probe does not configure remotes, credentials, schedules, bisync, system mounts or network listeners, and cleanup deletes only resources bearing the unique TEST marker."
     },
     "cron_shell_behavior": {
       "confidence": "runtime-verified",
