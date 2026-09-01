@@ -139,14 +139,22 @@ def json_shape(value: Any) -> Any:
     return "string"
 
 
-def frontend_oauth_snippet(base_url: str) -> str:
-    """Read Lucky's own served frontend and return only the tmpcode call vicinity."""
+def frontend_runtime_snippets(base_url: str) -> dict[str, str]:
+    """Read Lucky's own served frontend and return selected runtime call vicinities."""
 
     origin = urllib.parse.urlsplit(base_url)
     opener = urllib.request.build_opener()
     queue = ["/"]
     seen: set[str] = set()
     fetched = 0
+    targets = (
+        "/api/oauth/tmpcode",
+        "interceptors.request.use",
+        "Authorization",
+        "Lucky-Admin-Token",
+        "openToken",
+    )
+    snippets: dict[str, str] = {}
     while queue and len(seen) < 100 and fetched < 24 * 1024 * 1024:
         path = queue.pop(0)
         if path in seen:
@@ -163,12 +171,14 @@ def frontend_oauth_snippet(base_url: str) -> str:
             continue
         fetched += len(raw)
         text = raw.decode("utf-8", errors="replace")
-        needle = "/api/oauth/tmpcode"
-        index = text.find(needle)
-        if index >= 0:
-            start = max(0, index - 1400)
-            end = min(len(text), index + 2200)
-            return re.sub(r"\s+", " ", text[start:end])[:3600]
+        for needle in targets:
+            if needle in snippets:
+                continue
+            index = text.find(needle)
+            if index >= 0:
+                start = max(0, index - 1200)
+                end = min(len(text), index + 1800)
+                snippets[needle] = re.sub(r"\s+", " ", text[start:end])[:3000]
         candidates = set(re.findall(r"(?:src=|href=)?[\"']([^\"']+\.js(?:\?[^\"']*)?)[\"']", text))
         candidates.update(re.findall(r"(?:\.\/)?(assets/[A-Za-z0-9_./-]+\.js)", text))
         for candidate in candidates:
@@ -180,7 +190,45 @@ def frontend_oauth_snippet(base_url: str) -> str:
                 candidate_path = "/" + candidate_path.lstrip("./")
             if candidate_path not in seen and candidate_path.endswith(".js"):
                 queue.append(candidate_path)
-    return ""
+    return snippets
+
+
+def tmpcode_browser_attempt(
+    base_url: str,
+    admin_token: str,
+    opener: urllib.request.OpenerDirector,
+    *,
+    include_origin: bool,
+    include_referer: bool,
+    include_xrw: bool,
+) -> dict[str, Any]:
+    headers = {
+        "Accept": "application/json, text/plain, */*",
+        "Authorization": f"Bearer {admin_token}",
+        "Lucky-Admin-Token": admin_token,
+        "User-Agent": "Mozilla/5.0 lucky-skills-oauth-ci",
+    }
+    if include_origin:
+        headers["Origin"] = base_url
+    if include_referer:
+        headers["Referer"] = base_url + "/#/thirdPartyAuthManager"
+    if include_xrw:
+        headers["X-Requested-With"] = "XMLHttpRequest"
+    request = urllib.request.Request(base_url + "/api/oauth/tmpcode?type=oidc", headers=headers)
+    try:
+        with opener.open(request, timeout=10) as response:
+            raw = response.read(1024 * 1024)
+            status = int(response.status)
+    except urllib.error.HTTPError as error:
+        raw = error.read(1024 * 1024)
+        status = int(error.code)
+    try:
+        decoded = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise ProbeError(f"browser-style tmpcode returned non-JSON HTTP {status}") from None
+    if not isinstance(decoded, dict):
+        raise ProbeError("browser-style tmpcode returned non-object JSON")
+    return decoded
 
 
 class FakeOidcProvider:
@@ -375,7 +423,8 @@ def main() -> int:
         "tmpcode_ret": None,
         "tmpcode_msg": "",
         "tmpcode_response_shape": {},
-        "frontend_tmpcode_snippet": "",
+        "frontend_runtime_snippets": {},
+        "tmpcode_attempts": [],
         "tmpcode_available": False,
         "auth_url_owned": False,
         "auth_server_shape": "",
@@ -454,7 +503,7 @@ def main() -> int:
             report["lucky_version"] = str(info.get("Version") or "")
             if report["lucky_version"] != EXPECTED_LUCKY_VERSION:
                 raise ProbeError(f"unexpected Lucky version: {report['lucky_version']!r}")
-            report["frontend_tmpcode_snippet"] = frontend_oauth_snippet(base_url)
+            report["frontend_runtime_snippets"] = frontend_runtime_snippets(base_url)
 
             config_response = admin_json(
                 base_url, admin_token, "/api/thirdPartyAuthManager/config", opener=browser_opener
@@ -507,6 +556,28 @@ def main() -> int:
                 require_zero=False,
                 opener=browser_opener,
             )
+            attempts: list[dict[str, Any]] = [
+                {"mode": "admin-token", "ret": tmpcode.get("ret")}
+            ]
+            if tmpcode.get("ret") != 0:
+                for mode, values in (
+                    ("origin", (True, False, False)),
+                    ("origin-referer", (True, True, False)),
+                    ("origin-referer-xrw", (True, True, True)),
+                ):
+                    candidate = tmpcode_browser_attempt(
+                        base_url,
+                        admin_token,
+                        browser_opener,
+                        include_origin=values[0],
+                        include_referer=values[1],
+                        include_xrw=values[2],
+                    )
+                    attempts.append({"mode": mode, "ret": candidate.get("ret")})
+                    if candidate.get("ret") == 0:
+                        tmpcode = candidate
+                        break
+            report["tmpcode_attempts"] = attempts
             report["tmpcode_ret"] = tmpcode.get("ret")
             report["tmpcode_msg"] = str(tmpcode.get("msg") or tmpcode.get("message") or "")[:240]
             report["tmpcode_response_shape"] = json_shape(tmpcode)
