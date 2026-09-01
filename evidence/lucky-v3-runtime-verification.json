@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "verified_at": "2026-09-01T05:16:15Z",
+  "verified_at": "2026-09-01T05:23:54Z",
   "target": {
     "product": "Lucky",
     "version": "3.0.0"
@@ -193,6 +193,25 @@
         "cleanup": "No TEST WebTerminal connection/session, temporary SSH authorization, key directory or TEST file tree remained after the final probes"
       },
       "security": "WebTerminal probes are intentionally high-risk and therefore constrained to localhost, unique TEST resources and /tmp. The SSH key is ephemeral and forwarding/X11/agent use is disabled; terminal output, host-key material, private keys and file contents are not persisted in evidence."
+    },
+    "storagemanagement_local_behavior": {
+      "confidence": "runtime-verified",
+      "model": {
+        "list_model": "GET /api/storagemanagement/list is a current Lucky 3.0.0 frontend call and returns the storage list plus OS and Aliyun authorization-list envelope fields",
+        "lifecycle": "POST /api/storagemanagement/list creates, PUT /api/storagemanagement/list updates, and DELETE /api/storagemanagement/list?key=<Key> removes a storage item",
+        "enable_route": "GET /api/storagemanagement/enable?key=<Key>&enable=<bool> mutates the persisted Enable state despite using GET",
+        "create_normalization": "A newly created local item was persisted with Enable=true even though the POST candidate explicitly contained Enable=false; callers must explicitly disable after creation when a disabled initial state is required",
+        "litelist": "GET /api/storagemanagement/litelist contains enabled items only in the verified local-storage flow: the TEST item disappeared after disable and reappeared after enable",
+        "system_mount": "SystemMount remained disabled throughout this probe; no OS mount behavior is claimed"
+      },
+      "verification": "Starting from empty list and litelist baselines on an authorized Lucky 3.0.0 Linux instance, a bounded probe created one Lucky-visible /tmp/TEST-* directory through local-path-browser and POSTed one TEST local storage item. Runtime readback confirmed Type=local, the TEST LocalPath and disabled SystemMount, while also revealing that creation normalized Enable to true. The probe explicitly disabled the item, verified its absence from litelist, PUT-updated Remark and Writable while disabled, enabled it and verified litelist exposure, disabled it again, read module logs, deleted the storage item and TEST path, and confirmed both storage and litelist Key baselines were restored.",
+      "observations": {
+        "create_forces_enable_true": "The final probe sent Enable=false in the create body but the first persisted readback was Enable=true",
+        "readback_shape": "The full item readback exposed Enable, Info, Key, Log, MountMsg, Params, Remark, SystemMount, Type and Writable; local Params retained LocalPath and SystemMount remained disabled",
+        "litelist_filter": "The disabled TEST item was absent from litelist and the enabled TEST item appeared with Detail, Key, Remark and Writable fields",
+        "cleanup": "Zero TEST storage items remained, the Lucky-visible TEST path was removed, and both full-list and litelist Key baselines were restored"
+      },
+      "security": "The probe creates only a unique Lucky-visible /tmp directory and one TEST local storage item. It never enables SystemMount, never changes existing storage items, and deletes only its own TEST item/path. Actual consumer read/write enforcement and OS mounting remain separate unverified behaviors."
     }
   },
   "routes": [
@@ -2281,11 +2300,20 @@
     },
     {
       "path": "/api/storagemanagement/list",
+      "method": "GET",
+      "risk": "read-only",
+      "response_type": "json",
+      "confidence": "runtime-verified",
+      "verification": "Current Lucky 3.0.0 frontend explicitly calls GET /api/storagemanagement/list. An authorized GET on the verified Linux instance returned ret=0 with os plus list and aliyunpanAuthorizationList envelope fields; both lists were null at the pre-probe baseline. No storage mutation occurred."
+    },
+    {
+      "path": "/api/storagemanagement/list",
       "method": "POST",
       "risk": "mutating",
       "body_keys": ["Type", "Enable", "Key", "Remark", "Writable", "Log", "Params", "SystemMount"],
       "request_body_schema": {"type":"object","properties":{"Type":{"type":"string"},"Enable":{"type":"boolean"},"Key":{"type":"string"},"Remark":{"type":"string"},"Writable":{"type":"boolean"},"Log":{"type":"boolean"},"Params":{"type":"object","additionalProperties":{}},"SystemMount":{"type":"object"}}},
-      "schema_evidence": "frontend storage editor initializes {Type,Enable,Key,Remark,Writable,Log,Params,SystemMount} and passes the normalized model directly to POST; paced parser-only probes verified StorageItem string/bool fields, Params as map[string]interface{} and SystemMount as common.SystemMount object before handler execution, with storage baseline remaining zero"
+      "response_schema": {"type":"object","properties":{"ret":{"type":"integer"}}},
+      "schema_evidence": "frontend storage editor initializes {Type,Enable,Key,Remark,Writable,Log,Params,SystemMount} and passes the normalized model directly to POST; an authorized bounded TEST local-storage create returned ret=0 and persisted a generated Key. Runtime readback also showed Lucky normalizes a new local item to Enable=true even when the create candidate explicitly contains Enable=false"
     },
     {
       "path": "/api/storagemanagement/list",
@@ -2293,7 +2321,8 @@
       "risk": "mutating",
       "body_keys": ["Type", "Enable", "Key", "Remark", "Writable", "Log", "Params", "SystemMount"],
       "request_body_schema": {"type":"object","properties":{"Type":{"type":"string"},"Enable":{"type":"boolean"},"Key":{"type":"string"},"Remark":{"type":"string"},"Writable":{"type":"boolean"},"Log":{"type":"boolean"},"Params":{"type":"object","additionalProperties":{}},"SystemMount":{"type":"object"}}},
-      "schema_evidence": "frontend storage editor deep-merges the existing resource into the same normalized model and passes it directly to PUT; request types reuse the parser-verified StorageItem struct and no successful storage create/update handler was executed"
+      "response_schema": {"type":"object","properties":{"ret":{"type":"integer"}}},
+      "schema_evidence": "frontend storage editor deep-merges the existing resource into the same normalized model and passes it directly to PUT; an authorized bounded TEST local-storage update changed Remark and Writable while the item remained explicitly disabled, returned ret=0, and the updated values were observed on subsequent GET /api/storagemanagement/list readback"
     },
     {
       "path": "/api/thirdPartyAuthManager/config",

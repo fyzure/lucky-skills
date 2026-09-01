@@ -111,6 +111,12 @@ WebTerminal is a high-risk capability. Runtime probes are allowed only against l
 
 Two Lucky 3.0.0 upload routes are currently verified **failures**, not supported-success claims: browser-equivalent multipart `POST /api/webterminal/sftp/{SessionId}/upload` reproducibly returns `ret=5 SSH_FX_FAILURE`, while `upload-streaming` reproducibly returns closed-pipe/BrokenPipe behavior. Preserve these as runtime defects until a later Lucky version is re-verified.
 
+## StorageManagement local behavior
+
+Lucky 3.0.0 local StorageManagement has a bounded runtime probe at `tools/lucky_storage_probe.py`. The verified registry lifecycle is `GET /api/storagemanagement/list`, POST/PUT/DELETE on `/api/storagemanagement/list`, the mutating GET `/api/storagemanagement/enable`, and read-only `litelist`. A newly POSTed local item was normalized to `Enable=true` even when the candidate explicitly requested `Enable=false`; if a disabled initial state is required, explicitly disable the generated item after creation. Disabled items are absent from `litelist` and reappear after enable.
+
+The storage probe uses only a unique Lucky-visible `/tmp/TEST-*` directory created through `local-path-browser`, keeps `SystemMount.Enable=false`, and removes the TEST item/path before checking list/litelist baselines. `Writable` persistence is verified, but actual consumer-side read/write enforcement is not; do not infer FTP/WebDAV/SMB permissions from the storage flag alone. Likewise, do not claim `SystemMount` behavior until a separate safely unmounted TEST mount is practiced.
+
 ## Report results
 
 Summarize what was read or changed, identify any remaining non-Lucky dependency (DNS, CDN, origin application, firewall, certificate issuance), and avoid reproducing secrets returned by Lucky responses.

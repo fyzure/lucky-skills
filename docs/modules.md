@@ -70,6 +70,8 @@ IPDB 在 Lucky 3.0.0 上已经完成 `behavior-runtime` 闭环。`tools/lucky_ip
 
 这些接口可暴露或修改宿主机数据。路径参数应由服务端白名单约束，不能直接接受最终用户输入。网盘授权 URL、refresh token 和挂载配置都应脱敏。
 
+StorageManagement 的 local storage 注册生命周期已在 Lucky 3.0.0 上完成隔离实践。`tools/lucky_storage_probe.py` 先通过 Lucky 自己的 `local-path-browser` 创建唯一 `/tmp/TEST-*` 目录，再验证 `GET /api/storagemanagement/list`、POST / PUT / DELETE、`GET /api/storagemanagement/enable` 和 `litelist`。一个重要实测语义是：POST 请求即使显式带 `Enable=false`，新建 local item 首次回读仍会被 Lucky 规范化为 `Enable=true`；如需初始禁用，创建后必须再显式 disable。disabled item 会从 `litelist` 消失，重新 enable 后再次出现。当前 probe 只验证 `Writable` 字段可持久化，尚未通过 FTP/WebDAV/SMB 等 consumer 验证真实读写权限执行；`SystemMount` 也始终保持关闭，不能据此宣称系统挂载已经实践。
+
 ## Docker
 
 `docker` 是最大的接口族之一，覆盖：

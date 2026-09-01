@@ -532,6 +532,36 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         if not (ROOT / "tools" / probe_name).is_file():
             fail(f"WebTerminal runtime probe tool is missing: {probe_name}")
 
+    storage_evidence = model_evidence.get("storagemanagement_local_behavior")
+    if not isinstance(storage_evidence, dict):
+        fail("StorageManagement local behavior evidence is missing")
+    if storage_evidence.get("confidence") != "runtime-verified":
+        fail("StorageManagement local behavior evidence must remain runtime-verified")
+    storage_model = storage_evidence.get("model")
+    if not isinstance(storage_model, dict) or set(storage_model) != {
+        "list_model",
+        "lifecycle",
+        "enable_route",
+        "create_normalization",
+        "litelist",
+        "system_mount",
+    }:
+        fail("StorageManagement local behavior model regressed")
+    storage_observations = storage_evidence.get("observations")
+    if not isinstance(storage_observations, dict) or set(storage_observations) != {
+        "create_forces_enable_true",
+        "readback_shape",
+        "litelist_filter",
+        "cleanup",
+    }:
+        fail("StorageManagement runtime observations regressed")
+    for field in ("verification", "security"):
+        value = storage_evidence.get(field)
+        if not isinstance(value, str) or not value.strip():
+            fail(f"StorageManagement evidence field is missing: {field}")
+    if not (ROOT / "tools" / "lucky_storage_probe.py").is_file():
+        fail("StorageManagement runtime probe tool is missing")
+
     ddns_evidence = model_evidence.get("ddns_cloudflare_behavior")
     if not isinstance(ddns_evidence, dict):
         fail("DDNS Cloudflare behavior evidence is missing")

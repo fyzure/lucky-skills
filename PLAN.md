@@ -201,14 +201,15 @@
 
 ### StorageManagement
 
-当前：parser 验证 + 空列表 reorder no-op，未成功创建 storage。
+当前：local storage 注册生命周期已经真实闭环；POST 会把新建 item 规范化为 `Enable=true`，显式 disable 后会从 `litelist` 消失，重新 enable 后恢复。实际 consumer 的读写权限执行与 `SystemMount` 仍未实践。
 
-- [ ] 使用 `/tmp/TEST-lucky-skills-storage-*` 创建 local storage
-- [ ] 验证 POST / PUT / DELETE
-- [ ] 验证 writable/read-only 行为
-- [ ] 验证 list/litelist
+- [x] 使用 `/tmp/TEST-lucky-skills-storage-*` 创建 local storage
+- [x] 验证 POST / PUT / DELETE
+- [ ] 验证 writable/read-only 的实际 consumer 执行行为（当前仅验证 `Writable` 持久化）
+- [x] 验证 list/litelist 与 enable/disable 联动
 - [ ] 验证 SystemMount 最小闭环（仅在可安全卸载的临时目录）
-- [ ] 清理 TEST storage / mount
+- [x] 清理 TEST storage / TEST path，并验证完整列表/litelist 基线恢复
+- [x] 固化 probe / evidence / docs：`tools/lucky_storage_probe.py`
 
 ### FTP / WebDAV / SMB / DLNA / FileBrowser
 
