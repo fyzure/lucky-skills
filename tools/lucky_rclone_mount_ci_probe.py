@@ -372,7 +372,7 @@ def main() -> int:
 
             info = api(base_url, token, "GET", "/api/info", label="Lucky info")
             info_obj = info.get("info")
-            report["lucky_version"] = str(info_obj.get("version") or "") if isinstance(info_obj, dict) else ""
+            report["lucky_version"] = str(info_obj.get("Version") or "") if isinstance(info_obj, dict) else ""
             if report["lucky_version"] != EXPECTED_LUCKY_VERSION:
                 raise ProbeError(f"unexpected Lucky version {report['lucky_version']!r}")
 
