@@ -200,12 +200,11 @@ def frontend_runtime_snippets(base_url: str) -> dict[str, str]:
         candidates = set(re.findall(r"(?:src=|href=)?[\"']([^\"']+\.js(?:\?[^\"']*)?)[\"']", text))
         candidates.update(re.findall(r"(?:\.\/)?(assets/[A-Za-z0-9_./-]+\.js)", text))
         for candidate in candidates:
-            parsed = urllib.parse.urlsplit(candidate)
-            if parsed.scheme and (parsed.scheme != origin.scheme or parsed.netloc != origin.netloc):
+            resolved = urllib.parse.urljoin(base_url + path, candidate)
+            parsed = urllib.parse.urlsplit(resolved)
+            if parsed.scheme != origin.scheme or parsed.netloc != origin.netloc:
                 continue
             candidate_path = parsed.path
-            if not candidate_path.startswith("/"):
-                candidate_path = "/" + candidate_path.lstrip("./")
             if candidate_path not in seen and candidate_path.endswith(".js"):
                 queue.append(candidate_path)
     return snippets
