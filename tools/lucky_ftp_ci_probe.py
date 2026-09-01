@@ -63,26 +63,31 @@ def choose_loopback_port(exclude: set[int] | None = None) -> int:
 
 
 def choose_passive_range(exclude: set[int]) -> tuple[int, int]:
-    """Pick two consecutive high TCP ports that are free on runner loopback."""
+    """Pick ten consecutive high TCP ports that are free on runner loopback.
+
+    Lucky 3.0.0 rejects a smaller range with
+    ``TheDifferenceBetweenPassiveModeStartPortAndEndPortCannotBeLessThan9``.
+    """
 
     for _ in range(200):
-        start = 20000 + secrets.randbelow(30000)
-        if start in exclude or start + 1 in exclude:
+        start = 20000 + secrets.randbelow(29991)
+        ports = tuple(range(start, start + 10))
+        if any(port in exclude for port in ports):
             continue
         sockets: list[socket.socket] = []
         try:
-            for port in (start, start + 1):
+            for port in ports:
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 sock.bind(("127.0.0.1", port))
                 sockets.append(sock)
-            return start, start + 1
+            return start, start + 9
         except OSError:
             pass
         finally:
             for sock in sockets:
                 sock.close()
-    raise ProbeError("unable to choose a free two-port FTP passive range")
+    raise ProbeError("unable to choose a free ten-port FTP passive range")
 
 
 def get_ftp_config(base_url: str, token: str) -> dict[str, Any]:
@@ -309,7 +314,11 @@ def main() -> int:
             wait_for_lucky(base_url, container_name)
             report["runner_loopback_only"] = all(
                 docker_port_is_loopback(container_name, port)
-                for port in (ADMIN_PORT, control_port, passive_start, passive_end)
+                for port in (
+                    ADMIN_PORT,
+                    control_port,
+                    *range(passive_start, passive_end + 1),
+                )
             )
             if not report["runner_loopback_only"]:
                 raise ProbeError("disposable Lucky published a probe port outside runner loopback")
