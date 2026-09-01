@@ -1180,31 +1180,81 @@ def main() -> int:
                                     and refreshed_detail.get("Type") == "oidc"
                                 )
 
-                                oauth_login = oauth_login_with_tmpcode(base_url, second_code, tmp)
-                                report["oauth_login_ret"] = oauth_login.get("ret")
-                                report["oauth_login_shape"] = json_shape(oauth_login)
-                                report["oauth_login_msg"] = str(oauth_login.get("msg") or "")[:240]
-                                report["oauth_login_error"] = str(oauth_login.get("error") or "")[:400]
-                                report["oauth_login_need_2fa"] = bool(
-                                    oauth_login.get("need2FA")
+                                # A tmpCode is a one-time authorization ticket.
+                                # The second one above has been consumed by
+                                # /api/oauth/userinfo for mapping refresh, so obtain
+                                # a third fresh authorization and hand it directly
+                                # to /api/oauth/login exactly as the login page does.
+                                time.sleep(0.025)
+                                login_tmpcode = admin_json(
+                                    base_url,
+                                    admin_token,
+                                    "/api/oauth/tmpcode?"
+                                    + urllib.parse.urlencode(
+                                        {"type": "oidc", "_": lucky_frontend_timestamp()}
+                                    ),
+                                    require_zero=False,
+                                    opener=browser_opener,
                                 )
-                                login_token = oauth_login.get("token")
-                                report["oauth_login_token_present"] = (
-                                    oauth_login.get("ret") == 0
-                                    and isinstance(login_token, str)
-                                    and bool(login_token.strip())
-                                )
-                                if report["oauth_login_token_present"]:
-                                    # Lucky switches the active backend auth context
-                                    # after a successful OAuth login. Re-authenticate
-                                    # the disposable administrator before lifecycle
-                                    # cleanup instead of reusing the pre-OAuth token.
-                                    admin_token, browser_opener, _ = login_browser_admin(
-                                        base_url,
-                                        tmp,
-                                        disposable_admin_password,
-                                        disposable_admin_account,
+                                login_code = login_tmpcode.get("tmpCode")
+                                login_auth_url = login_tmpcode.get("authUrl")
+                                if (
+                                    login_tmpcode.get("ret") == 0
+                                    and isinstance(login_code, str)
+                                    and login_code
+                                    and isinstance(login_auth_url, str)
+                                    and login_auth_url
+                                ):
+                                    follow_authorization(login_auth_url, gateway_ip, provider.port)
+                                    deadline = time.time() + 12
+                                    while time.time() < deadline:
+                                        login_status = admin_json(
+                                            base_url,
+                                            admin_token,
+                                            "/api/oauth/status?"
+                                            + urllib.parse.urlencode(
+                                                {
+                                                    "code": login_code,
+                                                    "type": "oidc",
+                                                    "_": lucky_frontend_timestamp(),
+                                                }
+                                            ),
+                                            require_zero=False,
+                                            opener=browser_opener,
+                                        )
+                                        if login_status.get("ret") == 0:
+                                            break
+                                        time.sleep(0.5)
+                                    oauth_login = oauth_login_with_tmpcode(
+                                        base_url, login_code, tmp
                                     )
+                                    report["oauth_login_ret"] = oauth_login.get("ret")
+                                    report["oauth_login_shape"] = json_shape(oauth_login)
+                                    report["oauth_login_msg"] = str(
+                                        oauth_login.get("msg") or ""
+                                    )[:240]
+                                    report["oauth_login_error"] = str(
+                                        oauth_login.get("error") or ""
+                                    )[:400]
+                                    report["oauth_login_need_2fa"] = bool(
+                                        oauth_login.get("need2FA")
+                                    )
+                                    login_token = oauth_login.get("token")
+                                    report["oauth_login_token_present"] = (
+                                        oauth_login.get("ret") == 0
+                                        and isinstance(login_token, str)
+                                        and bool(login_token.strip())
+                                    )
+                                    if report["oauth_login_token_present"]:
+                                        # Lucky switches the active backend auth
+                                        # context after OAuth login. Re-authenticate
+                                        # the disposable administrator for cleanup.
+                                        admin_token, browser_opener, _ = login_browser_admin(
+                                            base_url,
+                                            tmp,
+                                            disposable_admin_password,
+                                            disposable_admin_account,
+                                        )
 
                         admin_json(
                             base_url,
