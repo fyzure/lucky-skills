@@ -18,7 +18,6 @@ image pull/build dependency work beyond Lucky itself.
 from __future__ import annotations
 
 import base64
-import http.cookiejar
 import json
 import os
 import secrets
@@ -167,11 +166,15 @@ def json_request(
     *,
     method: str = "GET",
     payload: Any | None = None,
+    admin_token: str = "",
     open_token: str = "",
     timeout: int = 30,
 ) -> tuple[int, dict[str, Any]]:
     body = None
     headers = {"Accept": "application/json", "User-Agent": "lucky-skills-ci-probe/1"}
+    if admin_token:
+        headers["Lucky-Admin-Token"] = admin_token
+        headers["Authorization"] = f"Bearer {admin_token}"
     if open_token:
         headers["openToken"] = open_token
     if payload is not None:
@@ -216,9 +219,8 @@ def wait_for_lucky(base_url: str, container_name: str, timeout: int = 45) -> Non
     raise ProbeError(f"Lucky did not become ready; tail length={len(logs)}")
 
 
-def login_default_admin(base_url: str, workdir: Path) -> urllib.request.OpenerDirector:
-    cookie_jar = http.cookiejar.CookieJar()
-    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cookie_jar))
+def login_default_admin(base_url: str, workdir: Path) -> str:
+    opener = urllib.request.build_opener()
     status, challenge = json_request(opener, base_url, "/api/login/challenge")
     require_ret_zero(status, challenge, "login challenge")
     required = ("challengeId", "nonce", "publicKey")
@@ -244,21 +246,28 @@ def login_default_admin(base_url: str, workdir: Path) -> urllib.request.OpenerDi
         payload={"challengeId": challenge["challengeId"], "cipherText": cipher},
     )
     require_ret_zero(status, response, "default admin login")
-    if not list(cookie_jar):
-        raise ProbeError("default admin login returned no session cookie")
-    return opener
+    admin_token = response.get("token")
+    if not isinstance(admin_token, str) or not admin_token.strip():
+        raise ProbeError("default admin login returned no admin token")
+    return admin_token
 
 
 def enable_open_token(
-    session: urllib.request.OpenerDirector,
     base_url: str,
+    admin_token: str,
     token: str,
 ) -> None:
-    status, response = json_request(session, base_url, "/api/baseconfigure")
+    opener = urllib.request.build_opener()
+    status, response = json_request(
+        opener,
+        base_url,
+        "/api/baseconfigure",
+        admin_token=admin_token,
+    )
     require_ret_zero(status, response, "read baseconfigure")
-    config = response.get("configure")
+    config = response.get("baseconfigure")
     if not isinstance(config, dict):
-        raise ProbeError("baseconfigure response missing configure object")
+        raise ProbeError("baseconfigure response missing baseconfigure object")
     updated = dict(config)
     updated["EnableOpenToken"] = True
     updated["OpenToken"] = token
@@ -268,7 +277,14 @@ def enable_open_token(
     # from blocking OpenToken setup; they never touch a persistent instance.
     updated["IgnoreSafeURLCheck"] = True
     updated["IgnoreAuthInfoCheck"] = True
-    status, result = json_request(session, base_url, "/api/baseconfigure", method="PUT", payload=updated)
+    status, result = json_request(
+        opener,
+        base_url,
+        "/api/baseconfigure",
+        method="PUT",
+        payload=updated,
+        admin_token=admin_token,
+    )
     require_ret_zero(status, result, "enable OpenToken")
 
     token_opener = urllib.request.build_opener()
@@ -420,6 +436,36 @@ def select_built_image(before: set[str], label_key: str, label_value: str) -> tu
     return matches[0], new_ids
 
 
+def cleanup_root_owned_conf(conf_dir: Path) -> None:
+    """Remove disposable Lucky DB/config files using the already-pulled image.
+
+    Lucky creates some LMDB/status-history paths as root inside the bind mount.
+    GitHub's runner user therefore cannot always remove them directly when the
+    Python TemporaryDirectory exits. The helper container has no network and
+    sees only this owned temporary config directory.
+    """
+
+    if not conf_dir.exists():
+        return
+    run(
+        [
+            "docker",
+            "run",
+            "--rm",
+            "--network",
+            "none",
+            "-v",
+            f"{conf_dir}:/cleanup",
+            "--entrypoint",
+            "/bin/sh",
+            PINNED_LUCKY_IMAGE,
+            "-c",
+            "find /cleanup -mindepth 1 -maxdepth 1 -exec rm -rf {} +",
+        ],
+        timeout=60,
+    )
+
+
 def main() -> int:
     runner_temp = require_github_hosted_runner()
     if shutil.which("docker") is None or shutil.which("openssl") is None:
@@ -494,8 +540,8 @@ def main() -> int:
             if version != EXPECTED_LUCKY_VERSION:
                 raise ProbeError(f"unexpected Lucky version: {version!r}")
 
-            session = login_default_admin(base_url, temp_dir)
-            enable_open_token(session, base_url, open_token)
+            admin_token = login_default_admin(base_url, temp_dir)
+            enable_open_token(base_url, admin_token, open_token)
             docker("exec", container_name, "mkdir", "-p", "/tmp/lucky-skills-docker-build-ci", timeout=30)
             configure_docker_temp_path(base_url, open_token, "/tmp/lucky-skills-docker-build-ci")
 
@@ -529,6 +575,7 @@ def main() -> int:
             for image_id in sorted(cleanup_targets):
                 run(["docker", "image", "rm", "-f", image_id], check=False, timeout=45)
             report["cleanup"] = image_ids() == baseline_images
+            cleanup_root_owned_conf(conf_dir)
 
     failed = [key for key in ("zip_build", "git_build", "cleanup") if report.get(key) is not True]
     if report.get("lucky_version") != EXPECTED_LUCKY_VERSION:
