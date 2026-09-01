@@ -1036,6 +1036,7 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         },
     }
     merged_by_key = {(route.method, route.path): route for route in merged.routes}
+    patched_by_key = {(route.method, route.path): route for route in patched_merged.routes}
 
     conservative_get_risks = {
         ("GET", "/api/docker/volumes/export"): OperationRisk.DANGEROUS,
@@ -2451,7 +2452,7 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
 
     filebrowser_put_route = merged_by_key[("PUT", "/api/third/filebrowser/configure")]
     filebrowser_put = filebrowser_put_route.request_body_schema
-    filebrowser_get_route = merged_by_key[("GET", "/api/third/filebrowser/configure")]
+    filebrowser_get_route = patched_by_key[("GET", "/api/third/filebrowser/configure")]
     filebrowser_get = filebrowser_get_route.response_schema
     filebrowser_get_props = (
         filebrowser_get.get("properties", {}).get("configure", {}).get("properties", {})
