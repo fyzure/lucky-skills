@@ -265,6 +265,7 @@ class KernelNatMapping:
         bridge_name: str,
         public_ip: str,
         client_ip: str,
+        lan_gateway_ip: str,
         external_port: int,
         lucky_ip: str,
         internal_port: int,
@@ -273,6 +274,7 @@ class KernelNatMapping:
         self.bridge_name = bridge_name
         self.public_ip = public_ip
         self.client_ip = client_ip
+        self.lan_gateway_ip = lan_gateway_ip
         self.external_port = external_port
         self.lucky_ip = lucky_ip
         self.internal_port = internal_port
@@ -286,6 +288,16 @@ class KernelNatMapping:
             "--dport", str(self.external_port),
             "-j", "DNAT",
             "--to-destination", f"{self.lucky_ip}:{self.internal_port}",
+        ]
+        self.snat_rule = [
+            "iptables", "-t", "nat", "-I", "POSTROUTING", "1",
+            "-o", self.bridge_name,
+            "-p", "udp",
+            "-s", self.client_ip,
+            "-d", self.lucky_ip,
+            "--dport", str(self.internal_port),
+            "-j", "SNAT",
+            "--to-source", self.lan_gateway_ip,
         ]
         self.forward_in_rule = [
             "iptables", "-I", "FORWARD", "1",
@@ -313,6 +325,7 @@ class KernelNatMapping:
         self.cleanup_verified = False
         run(self.nat_rule, timeout=20)
         try:
+            run(self.snat_rule, timeout=20)
             run(self.forward_in_rule, timeout=20)
             run(self.forward_out_rule, timeout=20)
         except Exception:
@@ -322,7 +335,12 @@ class KernelNatMapping:
 
     def close(self) -> None:
         # Convert the exact insertion commands into matching delete commands.
-        for command in (self.forward_out_rule, self.forward_in_rule, self.nat_rule):
+        for command in (
+            self.forward_out_rule,
+            self.forward_in_rule,
+            self.snat_rule,
+            self.nat_rule,
+        ):
             delete = list(command)
             insert_at = delete.index("-I")
             delete[insert_at] = "-D"
@@ -333,7 +351,12 @@ class KernelNatMapping:
         self.installed = False
         self.cleanup_verified = all(
             self._absent(command)
-            for command in (self.forward_out_rule, self.forward_in_rule, self.nat_rule)
+            for command in (
+                self.forward_out_rule,
+                self.forward_in_rule,
+                self.snat_rule,
+                self.nat_rule,
+            )
         )
 
     @staticmethod
@@ -409,6 +432,7 @@ class NatPmpGateway:
             bridge_name=self.bridge_name,
             public_ip=str(self.public_ip),
             client_ip=self.client_ip,
+            lan_gateway_ip=self.gateway_ip,
             external_port=external_port,
             lucky_ip=self.lucky_ip,
             internal_port=internal_port,
