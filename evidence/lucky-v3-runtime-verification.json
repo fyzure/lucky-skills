@@ -2570,6 +2570,7 @@
       "method": "GET",
       "risk": "mutating",
       "query_keys": ["key"],
+      "confidence": "runtime-verified",
       "response_schema": {"type":"object","properties":{"ret":{"type":"integer"}}},
       "schema_evidence": "a GitHub-hosted isolated Lucky 3.0.0 probe called wakeup with the generated string Key of its owned TEST device. The route returned ret=0 and the TEST bridge capture observed the exact 102-byte WOL magic packet on UDP/9; the configured random device Port was not used. The TEST device and service configuration were fully restored and shutdown was not called"
     },
