@@ -1,0 +1,32 @@
+name: lucky-wol-ci
+
+on:
+  push:
+    paths:
+      - ".github/workflows/lucky-wol-ci.yml"
+      - "tools/lucky_wol_ci_probe.py"
+      - "tools/lucky_docker_build_ci_probe.py"
+  pull_request:
+    paths:
+      - ".github/workflows/lucky-wol-ci.yml"
+      - "tools/lucky_wol_ci_probe.py"
+      - "tools/lucky_docker_build_ci_probe.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  wol-behavior:
+    name: Lucky isolated WOL behavior
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Show Docker runtime
+        run: docker version
+
+      - name: Run isolated Lucky WOL probe
+        run: python3 tools/lucky_wol_ci_probe.py
