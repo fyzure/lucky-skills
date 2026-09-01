@@ -2,23 +2,26 @@
 """Runtime-verify Lucky 3.0.0 NAT-PMP mapping on an isolated CI bridge.
 
 The probe is intentionally GitHub-Actions-only. It starts a fresh pinned Lucky
-container on a Docker ``--internal`` bridge and runs three tiny stdlib UDP
-fixtures bound only to that bridge's host gateway address:
+container on a Docker ``--internal`` bridge, creates a second isolated veth/
+network-namespace "WAN", and runs three tiny stdlib UDP fixtures on the Docker
+bridge host gateway address:
 
 * a STUN Binding responder;
 * a NAT-PMP gateway on the standard UDP/5351 port;
 * a UDP echo target behind the Lucky STUN rule.
 
 Lucky is configured exclusively through its HTTP API. A temporary UDP STUN
-rule must ask the fake gateway for a NAT-PMP mapping, and the fake gateway
-installs an in-process UDP relay for the returned external port. A client bound
-to the same isolated bridge gateway then sends a random marker through the
-mapped port; the bytes must travel gateway -> Lucky -> echo target -> Lucky ->
-gateway and return exactly. Disabling/deleting the TEST rule must also produce
-the NAT-PMP lifetime=0 deletion request.
+rule must ask the fake gateway for a NAT-PMP mapping. The fake gateway then
+installs one exact, reversible runner-local iptables DNAT/FORWARD mapping from
+the isolated WAN address into Lucky's private listener. A client in the WAN
+namespace sends a random marker through the mapped port; the bytes must travel
+WAN -> DNAT -> Lucky -> echo target -> Lucky -> reverse NAT -> WAN and return
+exactly. Disabling/deleting the TEST rule must also produce the NAT-PMP
+lifetime=0 deletion request and remove the exact runner-local mapping rules.
 
-No production Lucky instance, physical interface, firewall, router, public
-STUN server, UPnP device or Internet route is involved.
+No production Lucky instance, physical interface, router, public STUN server,
+UPnP device or Internet route is involved. The only firewall mutations are the
+owned ephemeral-runner rules above, which are checked for removal before exit.
 """
 
 from __future__ import annotations
@@ -26,8 +29,8 @@ from __future__ import annotations
 import copy
 import ipaddress
 import json
+import os
 import secrets
-import select
 import shutil
 import socket
 import struct
@@ -61,7 +64,9 @@ from lucky_docker_build_ci_probe import (
 TEST_PREFIX = "TEST-lucky-skills-natpmp-ci-"
 STUN_COOKIE = 0x2112A442
 NATPMP_PORT = 5351
-TEST_PUBLIC_IP = "198.51.100.42"
+TEST_WAN_GATEWAY = "192.0.2.1"
+TEST_WAN_CLIENT = "192.0.2.2"
+TEST_WAN_PREFIX = "30"
 
 
 def docker_network_values(network_name: str) -> tuple[str, str]:
@@ -205,7 +210,7 @@ class UdpEchoServer:
 
 
 class StunBindingServer:
-    def __init__(self, bind_ip: str) -> None:
+    def __init__(self, bind_ip: str, public_ip: str) -> None:
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.socket.bind((bind_ip, 0))
         self.socket.settimeout(0.2)
@@ -213,7 +218,7 @@ class StunBindingServer:
         self.stop_event = threading.Event()
         self.request_count = 0
         self.thread = threading.Thread(target=self._serve, daemon=True)
-        self.public_ip = ipaddress.IPv4Address(TEST_PUBLIC_IP)
+        self.public_ip = ipaddress.IPv4Address(public_ip)
 
     def start(self) -> None:
         self.thread.start()
@@ -250,72 +255,108 @@ class StunBindingServer:
         self.thread.join(timeout=2)
 
 
-class UdpMappingForwarder:
-    def __init__(self, gateway_ip: str, external_port: int, lucky_ip: str, internal_port: int) -> None:
-        self.gateway_ip = gateway_ip
+class KernelNatMapping:
+    """One exact runner-local DNAT mapping with reversible filter rules."""
+
+    def __init__(
+        self,
+        *,
+        wan_interface: str,
+        bridge_name: str,
+        public_ip: str,
+        client_ip: str,
+        external_port: int,
+        lucky_ip: str,
+        internal_port: int,
+    ) -> None:
+        self.wan_interface = wan_interface
+        self.bridge_name = bridge_name
+        self.public_ip = public_ip
+        self.client_ip = client_ip
         self.external_port = external_port
         self.lucky_ip = lucky_ip
         self.internal_port = internal_port
-        # public_socket owns the mapped external port. lan_socket is a
-        # separate translated-side socket so packets delivered to Lucky do
-        # not incorrectly appear to originate from the mapped destination
-        # port. That more closely models destination NAT: the public port is
-        # the destination, while the client's source port remains independent.
-        self.public_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.public_socket.bind((gateway_ip, external_port))
-        self.public_socket.setblocking(False)
-        self.lan_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.lan_socket.bind((gateway_ip, 0))
-        self.lan_socket.setblocking(False)
-        self.stop_event = threading.Event()
-        self.external_peer: tuple[str, int] | None = None
-        self.forward_count = 0
-        self.return_count = 0
-        self.thread = threading.Thread(target=self._serve, daemon=True)
+        self.installed = False
+        self.cleanup_verified = True
+        self.nat_rule = [
+            "iptables", "-t", "nat", "-I", "PREROUTING", "1",
+            "-i", self.wan_interface,
+            "-p", "udp",
+            "-d", self.public_ip,
+            "--dport", str(self.external_port),
+            "-j", "DNAT",
+            "--to-destination", f"{self.lucky_ip}:{self.internal_port}",
+        ]
+        self.forward_in_rule = [
+            "iptables", "-I", "FORWARD", "1",
+            "-i", self.wan_interface,
+            "-o", self.bridge_name,
+            "-p", "udp",
+            "-s", self.client_ip,
+            "-d", self.lucky_ip,
+            "--dport", str(self.internal_port),
+            "-j", "ACCEPT",
+        ]
+        self.forward_out_rule = [
+            "iptables", "-I", "FORWARD", "1",
+            "-i", self.bridge_name,
+            "-o", self.wan_interface,
+            "-p", "udp",
+            "-s", self.lucky_ip,
+            "-d", self.client_ip,
+            "-j", "ACCEPT",
+        ]
 
-    def start(self) -> None:
-        self.thread.start()
-
-    def _serve(self) -> None:
-        while not self.stop_event.is_set():
-            try:
-                readable, _writable, _errors = select.select(
-                    [self.public_socket, self.lan_socket],
-                    [],
-                    [],
-                    0.2,
-                )
-            except (OSError, ValueError):
-                break
-            if not readable:
-                continue
-            for ready in readable:
-                try:
-                    payload, address = ready.recvfrom(65535)
-                except (BlockingIOError, OSError):
-                    continue
-                try:
-                    if ready is self.lan_socket:
-                        if self.external_peer is not None:
-                            self.public_socket.sendto(payload, self.external_peer)
-                            self.return_count += 1
-                    else:
-                        self.external_peer = (str(address[0]), int(address[1]))
-                        self.lan_socket.sendto(payload, (self.lucky_ip, self.internal_port))
-                        self.forward_count += 1
-                except OSError:
-                    self.stop_event.set()
-                    break
+    def install(self) -> None:
+        if self.installed:
+            return
+        self.cleanup_verified = False
+        run(self.nat_rule, timeout=20)
+        try:
+            run(self.forward_in_rule, timeout=20)
+            run(self.forward_out_rule, timeout=20)
+        except Exception:
+            self.close()
+            raise
+        self.installed = True
 
     def close(self) -> None:
-        self.stop_event.set()
-        self.public_socket.close()
-        self.lan_socket.close()
-        self.thread.join(timeout=2)
+        # Convert the exact insertion commands into matching delete commands.
+        for command in (self.forward_out_rule, self.forward_in_rule, self.nat_rule):
+            delete = list(command)
+            insert_at = delete.index("-I")
+            delete[insert_at] = "-D"
+            # Delete syntax does not accept the insertion position argument.
+            if insert_at + 2 < len(delete) and delete[insert_at + 2] == "1":
+                del delete[insert_at + 2]
+            run(delete, check=False, timeout=20)
+        self.installed = False
+        self.cleanup_verified = all(
+            self._absent(command)
+            for command in (self.forward_out_rule, self.forward_in_rule, self.nat_rule)
+        )
+
+    @staticmethod
+    def _absent(command: list[str]) -> bool:
+        check = list(command)
+        insert_at = check.index("-I")
+        check[insert_at] = "-C"
+        if insert_at + 2 < len(check) and check[insert_at + 2] == "1":
+            del check[insert_at + 2]
+        return run(check, check=False, timeout=20).returncode != 0
 
 
 class NatPmpGateway:
-    def __init__(self, gateway_ip: str, lucky_ip: str) -> None:
+    def __init__(
+        self,
+        gateway_ip: str,
+        lucky_ip: str,
+        *,
+        bridge_name: str,
+        wan_interface: str,
+        public_ip: str,
+        client_ip: str,
+    ) -> None:
         self.gateway_ip = gateway_ip
         self.lucky_ip = lucky_ip
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -323,7 +364,10 @@ class NatPmpGateway:
         self.socket.settimeout(0.2)
         self.stop_event = threading.Event()
         self.thread = threading.Thread(target=self._serve, daemon=True)
-        self.public_ip = ipaddress.IPv4Address(TEST_PUBLIC_IP)
+        self.bridge_name = bridge_name
+        self.wan_interface = wan_interface
+        self.client_ip = client_ip
+        self.public_ip = ipaddress.IPv4Address(public_ip)
         self.started_at = time.monotonic()
         self.public_address_requests = 0
         self.add_requests = 0
@@ -334,7 +378,8 @@ class NatPmpGateway:
         self.last_protocol_opcode = 0
         self.add_event = threading.Event()
         self.delete_event = threading.Event()
-        self.forwarder: UdpMappingForwarder | None = None
+        self.mapping: KernelNatMapping | None = None
+        self.mapping_cleanup_verified = True
         self.lock = threading.Lock()
 
     def start(self) -> None:
@@ -349,23 +394,28 @@ class NatPmpGateway:
                 continue
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
                 try:
-                    probe.bind((self.gateway_ip, candidate))
+                    probe.bind((str(self.public_ip), candidate))
                 except OSError:
                     continue
             return candidate
-        return choose_udp_port(self.gateway_ip)
+        return choose_udp_port(str(self.public_ip))
 
-    def _replace_forwarder(self, external_port: int, internal_port: int) -> None:
-        if self.forwarder is not None:
-            self.forwarder.close()
-        forwarder = UdpMappingForwarder(
-            self.gateway_ip,
-            external_port,
-            self.lucky_ip,
-            internal_port,
+    def _replace_mapping(self, external_port: int, internal_port: int) -> None:
+        if self.mapping is not None:
+            self.mapping.close()
+            self.mapping_cleanup_verified = self.mapping.cleanup_verified
+        mapping = KernelNatMapping(
+            wan_interface=self.wan_interface,
+            bridge_name=self.bridge_name,
+            public_ip=str(self.public_ip),
+            client_ip=self.client_ip,
+            external_port=external_port,
+            lucky_ip=self.lucky_ip,
+            internal_port=internal_port,
         )
-        forwarder.start()
-        self.forwarder = forwarder
+        mapping.install()
+        self.mapping = mapping
+        self.mapping_cleanup_verified = False
 
     def _serve(self) -> None:
         while not self.stop_event.is_set():
@@ -405,14 +455,15 @@ class NatPmpGateway:
                 if lifetime == 0:
                     self.delete_requests += 1
                     external_port = self.last_external_port or requested_external or internal_port
-                    if self.forwarder is not None:
-                        self.forwarder.close()
-                        self.forwarder = None
+                    if self.mapping is not None:
+                        self.mapping.close()
+                        self.mapping_cleanup_verified = self.mapping.cleanup_verified
+                        self.mapping = None
                     self.delete_event.set()
                 else:
                     self.add_requests += 1
                     external_port = self._choose_external_port(requested_external, internal_port)
-                    self._replace_forwarder(external_port, internal_port)
+                    self._replace_mapping(external_port, internal_port)
                     self.last_external_port = external_port
                     self.add_event.set()
             response = struct.pack(
@@ -435,16 +486,17 @@ class NatPmpGateway:
         self.socket.close()
         self.thread.join(timeout=2)
         with self.lock:
-            if self.forwarder is not None:
-                self.forwarder.close()
-                self.forwarder = None
+            if self.mapping is not None:
+                self.mapping.close()
+                self.mapping_cleanup_verified = self.mapping.cleanup_verified
+                self.mapping = None
 
 
 def rule_options() -> dict[str, Any]:
     return {
-        # The fake NAT-PMP gateway deliberately relays back into the same
-        # isolated Docker bridge. Disable Lucky's self-forwarding guard for
-        # this owned TEST rule so that topology is not mistaken for a loop.
+        # The TEST target lives on the Docker-bridge gateway itself. Disable
+        # Lucky's self-forwarding guard for this owned isolated rule so that
+        # the synthetic topology is not mistaken for an unsafe loop.
         "DisableSelfForwardingCheck": True,
         "SingleProxyMaxTCPConnections": 64,
         "SingleProxyMaxUDPReadTargetDatagoroutineCount": 16,
@@ -565,6 +617,7 @@ def wait_runtime_stun_endpoint(
     base_url: str,
     token: str,
     key: str,
+    public_ip: str,
     *,
     timeout: float = 12.0,
 ) -> bool:
@@ -577,25 +630,73 @@ def wait_runtime_stun_endpoint(
             for row in rows
             if isinstance(row, dict) and rule_key(row) == key
         ]
-        if contains_string(owned, TEST_PUBLIC_IP):
+        if contains_string(owned, public_ip):
             return True
         logs = api_json(base_url, token, f"/api/stun/{key}/lastlogs")
-        if contains_string(logs, TEST_PUBLIC_IP):
+        if contains_string(logs, public_ip):
             return True
         time.sleep(0.4)
     return False
 
 
-def mapped_udp_roundtrip(gateway_ip: str, external_port: int, marker: bytes) -> bool:
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as client:
-        client.bind((gateway_ip, 0))
-        client.settimeout(8)
-        client.sendto(marker, (gateway_ip, external_port))
-        try:
-            response, _address = client.recvfrom(65535)
-        except socket.timeout:
-            return False
-    return response == marker
+def setup_wan_namespace(namespace: str, host_veth: str, ns_veth: str) -> None:
+    run(["ip", "netns", "add", namespace], timeout=20)
+    try:
+        run(
+            ["ip", "link", "add", host_veth, "type", "veth", "peer", "name", ns_veth],
+            timeout=20,
+        )
+        run(["ip", "link", "set", ns_veth, "netns", namespace], timeout=20)
+        run(
+            ["ip", "addr", "add", f"{TEST_WAN_GATEWAY}/{TEST_WAN_PREFIX}", "dev", host_veth],
+            timeout=20,
+        )
+        run(["ip", "link", "set", host_veth, "up"], timeout=20)
+        run(["ip", "-n", namespace, "link", "set", "lo", "up"], timeout=20)
+        run(
+            [
+                "ip", "-n", namespace, "addr", "add",
+                f"{TEST_WAN_CLIENT}/{TEST_WAN_PREFIX}", "dev", ns_veth,
+            ],
+            timeout=20,
+        )
+        run(["ip", "-n", namespace, "link", "set", ns_veth, "up"], timeout=20)
+        run(
+            ["ip", "-n", namespace, "route", "add", "default", "via", TEST_WAN_GATEWAY],
+            timeout=20,
+        )
+    except Exception:
+        run(["ip", "netns", "del", namespace], check=False, timeout=20)
+        run(["ip", "link", "del", host_veth], check=False, timeout=20)
+        raise
+
+
+def cleanup_wan_namespace(namespace: str, host_veth: str) -> None:
+    run(["ip", "netns", "del", namespace], check=False, timeout=20)
+    run(["ip", "link", "del", host_veth], check=False, timeout=20)
+
+
+def mapped_udp_roundtrip(namespace: str, external_port: int, marker: bytes) -> bool:
+    code = (
+        "import socket,sys;"
+        "m=bytes.fromhex(sys.argv[1]);"
+        "s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);"
+        "s.settimeout(8);"
+        "s.connect((sys.argv[2],int(sys.argv[3])));"
+        "s.send(m);"
+        "d=s.recv(65535);"
+        "sys.exit(0 if d==m else 7)"
+    )
+    result = run(
+        [
+            "ip", "netns", "exec", namespace,
+            sys.executable, "-c", code,
+            marker.hex(), TEST_WAN_GATEWAY, str(external_port),
+        ],
+        check=False,
+        timeout=15,
+    )
+    return result.returncode == 0
 
 
 def direct_udp_roundtrip(
@@ -615,7 +716,7 @@ def direct_udp_roundtrip(
     return response == marker
 
 
-def safe_log_samples(payload: Any, limit: int = 8) -> list[str]:
+def safe_log_samples(payload: Any, public_ip: str, limit: int = 8) -> list[str]:
     samples: list[str] = []
 
     def visit(value: Any) -> None:
@@ -631,7 +732,7 @@ def safe_log_samples(payload: Any, limit: int = 8) -> list[str]:
                 for keyword in ("stun", "nat", "forward", "listen", "target", "udp", "error", "fail")
             ):
                 return
-            text = text.replace(TEST_PUBLIC_IP, "<test-public-ip>")
+            text = text.replace(public_ip, "<test-public-ip>")
             text = text[:240]
             if text not in samples:
                 samples.append(text)
@@ -649,13 +750,20 @@ def safe_log_samples(payload: Any, limit: int = 8) -> list[str]:
 
 def main() -> int:
     runner_temp = require_github_hosted_runner()
-    if shutil.which("docker") is None or shutil.which("openssl") is None:
-        raise ProbeError("docker and openssl are required on the GitHub runner")
+    if os.geteuid() != 0:
+        raise ProbeError("isolated NAT-PMP probe requires sudo/root on the ephemeral GitHub runner")
+    required_commands = ("docker", "openssl", "ip", "iptables")
+    missing = [command for command in required_commands if shutil.which(command) is None]
+    if missing:
+        raise ProbeError(f"missing required GitHub-runner commands: {', '.join(missing)}")
 
     nonce = secrets.token_hex(5)
     container_name = f"lucky-natpmp-ci-{nonce}"
     network_name = f"lucky-natpmp-ci-{nonce}"
     bridge_name = f"lnat-{nonce[:8]}"
+    wan_namespace = f"lnat-wan-{nonce}"
+    wan_host_veth = f"lnh{nonce[:8]}"
+    wan_ns_veth = f"lnn{nonce[:8]}"
     rule_name = TEST_PREFIX + nonce
     open_token = secrets.token_hex(16)
     marker = secrets.token_bytes(32)
@@ -663,7 +771,10 @@ def main() -> int:
     report: dict[str, Any] = {
         "lucky_version": "",
         "api_only_lucky_operations": True,
+        "runner_root": True,
         "network_internal": False,
+        "wan_namespace_isolated": False,
+        "ip_forwarding_available": False,
         "admin_port_unpublished": False,
         "admin_reachable_on_internal_bridge": False,
         "baseline_empty": False,
@@ -681,6 +792,7 @@ def main() -> int:
         "natpmp_udp_add_seen": False,
         "natpmp_internal_port_matches_listener": False,
         "natpmp_mapping_installed": False,
+        "kernel_mapping_cleanup_verified": False,
         "direct_listener_roundtrip": False,
         "mapped_data_roundtrip": False,
         "echo_target_used": False,
@@ -712,6 +824,24 @@ def main() -> int:
             ],
             timeout=45,
         )
+        try:
+            setup_wan_namespace(wan_namespace, wan_host_veth, wan_ns_veth)
+            report["wan_namespace_isolated"] = True
+        except Exception:
+            run(["docker", "network", "rm", network_name], check=False, timeout=45)
+            raise
+        try:
+            report["ip_forwarding_available"] = (
+                Path("/proc/sys/net/ipv4/ip_forward").read_text(encoding="utf-8").strip() == "1"
+            )
+        except OSError as exc:
+            cleanup_wan_namespace(wan_namespace, wan_host_veth)
+            run(["docker", "network", "rm", network_name], check=False, timeout=45)
+            raise ProbeError("unable to read runner IPv4 forwarding state") from exc
+        if not report["ip_forwarding_available"]:
+            cleanup_wan_namespace(wan_namespace, wan_host_veth)
+            run(["docker", "network", "rm", network_name], check=False, timeout=45)
+            raise ProbeError("runner IPv4 forwarding is disabled; refusing to mutate global sysctl state")
 
         stun_server: StunBindingServer | None = None
         echo_server: UdpEchoServer | None = None
@@ -745,9 +875,16 @@ def main() -> int:
             if not report["admin_port_unpublished"]:
                 raise ProbeError("temporary Lucky admin port was unexpectedly published")
 
-            stun_server = StunBindingServer(gateway_ip)
+            stun_server = StunBindingServer(gateway_ip, TEST_WAN_GATEWAY)
             echo_server = UdpEchoServer(gateway_ip)
-            natpmp = NatPmpGateway(gateway_ip, lucky_ip)
+            natpmp = NatPmpGateway(
+                gateway_ip,
+                lucky_ip,
+                bridge_name=bridge_name,
+                wan_interface=wan_host_veth,
+                public_ip=TEST_WAN_GATEWAY,
+                client_ip=TEST_WAN_CLIENT,
+            )
             stun_server.start()
             echo_server.start()
             natpmp.start()
@@ -870,7 +1007,9 @@ def main() -> int:
             report["natpmp_internal_port_matches_listener"] = natpmp.last_internal_port == listen_port
             external_port = natpmp.last_external_port
             report["natpmp_mapping_installed"] = (
-                external_port > 0 and natpmp.forwarder is not None
+                external_port > 0
+                and natpmp.mapping is not None
+                and natpmp.mapping.installed
             )
             if not report["natpmp_mapping_installed"]:
                 raise ProbeError("fake NAT-PMP gateway did not install the UDP mapping")
@@ -879,6 +1018,7 @@ def main() -> int:
                 base_url,
                 open_token,
                 created_key,
+                TEST_WAN_GATEWAY,
             )
 
             report["direct_listener_roundtrip"] = direct_udp_roundtrip(
@@ -889,7 +1029,7 @@ def main() -> int:
             )
 
             report["mapped_data_roundtrip"] = mapped_udp_roundtrip(
-                gateway_ip,
+                wan_namespace,
                 external_port,
                 marker,
             )
@@ -897,7 +1037,7 @@ def main() -> int:
 
             logs = api_json(base_url, open_token, f"/api/stun/{created_key}/lastlogs")
             report["rule_log_surface_read"] = logs.get("ret") == 0
-            report["rule_log_samples"] = safe_log_samples(logs)
+            report["rule_log_samples"] = safe_log_samples(logs, TEST_WAN_GATEWAY)
 
             query = urllib.parse.urlencode({"key": created_key, "enable": "false"})
             api_json(base_url, open_token, f"/api/stunrule/enable?{query}")
@@ -909,7 +1049,8 @@ def main() -> int:
                 report["rule_deleted"] = True
                 natpmp.delete_event.wait(5)
             report["natpmp_delete_seen"] = natpmp.delete_requests > 0
-            report["mapping_removed"] = natpmp.forwarder is None
+            report["mapping_removed"] = natpmp.mapping is None
+            report["kernel_mapping_cleanup_verified"] = natpmp.mapping_cleanup_verified
 
             if created_key:
                 delete_query = urllib.parse.urlencode({"key": created_key})
@@ -977,13 +1118,17 @@ def main() -> int:
                 stun_server.close()
             if echo_server is not None:
                 echo_server.close()
+            cleanup_wan_namespace(wan_namespace, wan_host_veth)
             run(["docker", "rm", "-f", container_name], check=False, timeout=45)
             run(["docker", "network", "rm", network_name], check=False, timeout=45)
             cleanup_root_owned_conf(conf_dir)
 
     required_true = (
         "api_only_lucky_operations",
+        "runner_root",
         "network_internal",
+        "wan_namespace_isolated",
+        "ip_forwarding_available",
         "admin_port_unpublished",
         "admin_reachable_on_internal_bridge",
         "baseline_empty",
@@ -999,12 +1144,14 @@ def main() -> int:
         "natpmp_udp_add_seen",
         "natpmp_internal_port_matches_listener",
         "natpmp_mapping_installed",
+        "direct_listener_roundtrip",
         "mapped_data_roundtrip",
         "echo_target_used",
         "rule_log_surface_read",
         "rule_disabled",
         "natpmp_delete_seen",
         "mapping_removed",
+        "kernel_mapping_cleanup_verified",
         "rule_deleted",
         "baseline_restored",
     )
