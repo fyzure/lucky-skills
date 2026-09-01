@@ -213,10 +213,11 @@ def oauth_login_with_tmpcode(
     base_url: str,
     tmp_code: str,
     workdir: Path,
+    opener: urllib.request.OpenerDirector | None = None,
 ) -> dict[str, Any]:
     """Replay Lucky 3.0.0 frontend OAuth-login challenge/RSA flow."""
 
-    opener = urllib.request.build_opener()
+    opener = opener or urllib.request.build_opener()
     status, challenge = json_request(opener, base_url, "/api/login/challenge")
     require_ret_zero(status, challenge, "OAuth login challenge")
     required = ("challengeId", "nonce", "publicKey")
@@ -1224,7 +1225,10 @@ def main() -> int:
                                 # third authorization on a separate anonymous opener;
                                 # authenticated tmpcodes are management-flow tickets
                                 # and are not accepted by /api/oauth/login.
-                                login_opener = urllib.request.build_opener()
+                                login_cookie_jar = http.cookiejar.CookieJar()
+                                login_opener = urllib.request.build_opener(
+                                    urllib.request.HTTPCookieProcessor(login_cookie_jar)
+                                )
                                 login_tmpcode_status, login_tmpcode = json_request(
                                     login_opener,
                                     base_url,
@@ -1267,7 +1271,7 @@ def main() -> int:
                                             break
                                         time.sleep(0.5)
                                     oauth_login = oauth_login_with_tmpcode(
-                                        base_url, login_code, tmp
+                                        base_url, login_code, tmp, login_opener
                                     )
                                     report["oauth_login_ret"] = oauth_login.get("ret")
                                     report["oauth_login_shape"] = json_shape(oauth_login)
