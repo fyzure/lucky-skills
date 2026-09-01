@@ -3133,6 +3133,7 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
             fail(f"read-model-derived PUT schema must not invent required fields for {path}")
 
     smb_get_route = patched_by_key[("GET", "/api/smb/configure")]
+    smb_unpatched_get_route = merged_by_key[("GET", "/api/smb/configure")]
     smb_put_route = merged_by_key[("PUT", "/api/smb/configure")]
     smb_get_props = (
         smb_get_route.response_schema.get("properties", {})
@@ -3163,7 +3164,14 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
     )
     if smb_put_props.get("PublicMountList") != expected_smb_mount:
         fail("SMB PUT PublicMountList editable model regressed")
-    if smb_put_props.get("Users") != smb_get_props.get("Users"):
+    smb_unpatched_get_props = (
+        smb_unpatched_get_route.response_schema.get("properties", {})
+        .get("configure", {})
+        .get("properties", {})
+        if isinstance(smb_unpatched_get_route.response_schema, dict)
+        else {}
+    )
+    if smb_put_props.get("Users") != smb_unpatched_get_props.get("Users"):
         fail("SMB credential-bearing Users model must stay aligned and unspecified")
     if smb_get_route.confidence != "runtime-verified":
         fail("SMB GET configuration behavior must remain runtime-verified")
