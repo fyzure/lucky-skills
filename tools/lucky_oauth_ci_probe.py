@@ -669,6 +669,7 @@ def main() -> int:
     client_secret = secrets.token_urlsafe(24)
     disposable_admin_account = "ciadmin-" + nonce
     disposable_admin_password = "T!" + secrets.token_urlsafe(18)
+    disposable_safe_entry = "ci-" + secrets.token_urlsafe(12)
     report: dict[str, Any] = {
         "lucky_version": "",
         "api_only_lucky_operations": True,
@@ -812,6 +813,7 @@ def main() -> int:
             hardened_config["AdminPassword"] = disposable_admin_password
             hardened_config["EnableThirdAuthLogin"] = True
             hardened_config["AllowAllThirdAuthUsers"] = True
+            hardened_config["SafeURL"] = disposable_safe_entry
             hardened_config["IgnoreSafeURLCheck"] = True
             hardened_config["IgnoreAuthInfoCheck"] = True
             admin_json(
@@ -822,6 +824,7 @@ def main() -> int:
                 payload=hardened_config,
                 opener=browser_opener,
             )
+            base_url = base_url.rstrip("/") + "/" + disposable_safe_entry
             admin_token, browser_opener, _ = login_browser_admin(
                 base_url,
                 tmp,
