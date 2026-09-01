@@ -153,7 +153,10 @@ def frontend_runtime_snippets(base_url: str) -> dict[str, str]:
 
     origin = urllib.parse.urlsplit(base_url)
     opener = urllib.request.build_opener()
-    queue = ["/"]
+    queue = [
+        "/",
+        "/assets/lucky_thirdPartyAuthManager-C0VqZjAx.js",
+    ]
     seen: set[str] = set()
     fetched = 0
     targets = (
@@ -163,6 +166,9 @@ def frontend_runtime_snippets(base_url: str) -> dict[str, str]:
         "OIDCAuthorizationEndpoint",
         "tmpCode",
         "authUrl",
+        "window.open",
+        "oidc",
+        "FetchTmpCodeOrOpenAuthFailed",
         "interceptors.request.use",
         "Lucky-Admin-Token",
     )
