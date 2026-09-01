@@ -258,6 +258,16 @@ class FakeOidcProvider:
         self.state_seen = False
         self._code = "TEST-" + secrets.token_urlsafe(18)
         self._access_token = "TEST-" + secrets.token_urlsafe(22)
+        self._relay_code = "TEST-" + secrets.token_urlsafe(20)
+        self.relay_response_labels = [
+            "empty-200",
+            "json-ret0",
+            "json-code",
+            "json-tmpCode",
+            "json-ret0-code",
+            "plain-code",
+        ]
+        self.relay_responses_used: list[str] = []
         fixture = self
 
         class Handler(http.server.BaseHTTPRequestHandler):
@@ -268,11 +278,36 @@ class FakeOidcProvider:
 
             def _json(self, status: int, payload: dict[str, Any]) -> None:
                 body = json.dumps(payload, separators=(",", ":")).encode()
+                self._raw(status, body, "application/json")
+
+            def _raw(self, status: int, body: bytes, content_type: str = "") -> None:
                 self.send_response(status)
-                self.send_header("Content-Type", "application/json")
+                if content_type:
+                    self.send_header("Content-Type", content_type)
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)
+
+            def _relay_response(self) -> None:
+                index = len(fixture.relay_responses_used)
+                label = (
+                    fixture.relay_response_labels[index]
+                    if index < len(fixture.relay_response_labels)
+                    else "json-ret0-code"
+                )
+                fixture.relay_responses_used.append(label)
+                if label == "empty-200":
+                    self._raw(200, b"")
+                elif label == "json-ret0":
+                    self._json(200, {"ret": 0})
+                elif label == "json-code":
+                    self._json(200, {"code": fixture._relay_code})
+                elif label == "json-tmpCode":
+                    self._json(200, {"tmpCode": fixture._relay_code})
+                elif label == "plain-code":
+                    self._raw(200, fixture._relay_code.encode(), "text/plain")
+                else:
+                    self._json(200, {"ret": 0, "code": fixture._relay_code})
 
             def _record_other(
                 self,
@@ -408,6 +443,12 @@ class FakeOidcProvider:
                         },
                     )
                     return
+                if parsed.path.startswith("/callback"):
+                    fixture.callback_requests += 1
+                    fixture.callback_path = parsed.path
+                    self._record_other(parsed, "POST", body)
+                    self._relay_response()
+                    return
                 self._record_other(parsed, "POST", body)
                 self._json(404, {"error": "not_found"})
 
@@ -481,6 +522,7 @@ def main() -> int:
         "provider_token_requests": 0,
         "provider_userinfo_requests": 0,
         "provider_other_requests": [],
+        "relay_responses_used": [],
         "oauth_status_shape": {},
         "oauth_status_ret_values": [],
         "oauth_userinfo_shape": {},
@@ -592,37 +634,29 @@ def main() -> int:
                 and live_config.get("OIDCRedirectURI") == updated["OIDCRedirectURI"]
             )
 
-            tmpcode_query = urllib.parse.urlencode(
-                {"type": "oidc", "_": lucky_frontend_timestamp()}
-            )
-            tmpcode = admin_json(
-                base_url,
-                admin_token,
-                "/api/oauth/tmpcode?" + tmpcode_query,
-                require_zero=False,
-                opener=browser_opener,
-            )
-            attempts: list[dict[str, Any]] = [
-                {"mode": "admin-token", "ret": tmpcode.get("ret")}
-            ]
-            if tmpcode.get("ret") != 0:
-                for mode, values in (
-                    ("origin", (True, False, False)),
-                    ("origin-referer", (True, True, False)),
-                    ("origin-referer-xrw", (True, True, True)),
-                ):
-                    candidate = tmpcode_browser_attempt(
-                        base_url,
-                        admin_token,
-                        browser_opener,
-                        include_origin=values[0],
-                        include_referer=values[1],
-                        include_xrw=values[2],
-                    )
-                    attempts.append({"mode": mode, "ret": candidate.get("ret")})
-                    if candidate.get("ret") == 0:
-                        tmpcode = candidate
-                        break
+            tmpcode: dict[str, Any] = {}
+            attempts: list[dict[str, Any]] = []
+            for response_label in provider.relay_response_labels:
+                tmpcode_query = urllib.parse.urlencode(
+                    {"type": "oidc", "_": lucky_frontend_timestamp()}
+                )
+                candidate = admin_json(
+                    base_url,
+                    admin_token,
+                    "/api/oauth/tmpcode?" + tmpcode_query,
+                    require_zero=False,
+                    opener=browser_opener,
+                )
+                attempts.append(
+                    {
+                        "relay_response": response_label,
+                        "ret": candidate.get("ret"),
+                        "has_error": bool(candidate.get("error")),
+                    }
+                )
+                tmpcode = candidate
+                if candidate.get("ret") == 0:
+                    break
             report["tmpcode_attempts"] = attempts
             report["tmpcode_ret"] = tmpcode.get("ret")
             report["tmpcode_msg"] = str(tmpcode.get("msg") or tmpcode.get("message") or "")[:240]
@@ -701,6 +735,7 @@ def main() -> int:
             report["provider_token_requests"] = provider.token_requests
             report["provider_userinfo_requests"] = provider.userinfo_requests
             report["provider_other_requests"] = provider.other_requests
+            report["relay_responses_used"] = provider.relay_responses_used
 
             after_users = admin_json(
                 base_url, admin_token, "/api/thirdPartyAuthManager/list", opener=browser_opener
