@@ -55,9 +55,89 @@ from lucky_upnp_ci_probe import (
     container_ipv4,
     docker_network_values,
 )
+from lucky_web_rule_smoke import build_disabled_rule
 
 
 TEST_PREFIX = "TEST-lucky-skills-oauth-ci-"
+
+
+def webservice_rules(
+    base_url: str,
+    admin_token: str,
+    opener: urllib.request.OpenerDirector,
+) -> list[dict[str, Any]]:
+    payload = admin_json(base_url, admin_token, "/api/webservice/rules", opener=opener)
+    rows = payload.get("ruleList") or []
+    if not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):
+        raise ProbeError("WebService rule list has unexpected shape")
+    return rows
+
+
+def create_oauth_relay_rule(
+    base_url: str,
+    admin_token: str,
+    opener: urllib.request.OpenerDirector,
+    *,
+    name: str,
+    listen_port: int,
+    client_id: str,
+    client_secret: str,
+    provider_origin: str,
+    callback_url: str,
+) -> str:
+    baseline = webservice_rules(base_url, admin_token, opener)
+    baseline_keys = {
+        str(row.get("RuleKey") or "") for row in baseline if str(row.get("RuleKey") or "")
+    }
+    rule = build_disabled_rule(name)
+    rule["Enable"] = True
+    rule["ListenIP"] = "0.0.0.0"
+    rule["ListenPort"] = listen_port
+    default_proxy = rule["DefaultProxy"]
+    default_proxy["Enable"] = True
+    default_proxy["WebServiceType"] = "oauth"
+    params = default_proxy["OtherParams"]
+    params["OauthType"] = "oidc"
+    params["OauthClientID"] = client_id
+    params["OauthClientSecret"] = client_secret
+    params["OauthRedirectURI"] = callback_url
+    params["OauthServer"] = provider_origin + "/.well-known/openid-configuration"
+    admin_json(
+        base_url,
+        admin_token,
+        "/api/webservice/rules",
+        method="POST",
+        payload=rule,
+        opener=opener,
+    )
+    current = webservice_rules(base_url, admin_token, opener)
+    matches = [
+        row
+        for row in current
+        if row.get("RuleName") == name
+        and str(row.get("RuleKey") or "") not in baseline_keys
+    ]
+    if len(matches) != 1:
+        raise ProbeError("did not create exactly one TEST OAuth WebService relay")
+    key = str(matches[0].get("RuleKey") or "")
+    if not key:
+        raise ProbeError("TEST OAuth WebService relay has no RuleKey")
+    return key
+
+
+def delete_webservice_rule(
+    base_url: str,
+    admin_token: str,
+    opener: urllib.request.OpenerDirector,
+    key: str,
+) -> None:
+    admin_json(
+        base_url,
+        admin_token,
+        "/api/webservice/rule/" + urllib.parse.quote(key, safe=""),
+        method="DELETE",
+        opener=opener,
+    )
 
 
 def admin_json(
@@ -516,6 +596,9 @@ def main() -> int:
         "oauth_config_baseline_empty": False,
         "oauth_user_baseline_empty": False,
         "oauth_test_client_configured": False,
+        "oauth_relay_created": False,
+        "oauth_relay_port": 0,
+        "oauth_relay_baseline_restored": False,
         "tmpcode_ret": None,
         "tmpcode_msg": "",
         "tmpcode_error": "",
@@ -568,6 +651,8 @@ def main() -> int:
         admin_token = ""
         baseline_config: dict[str, Any] | None = None
         baseline_users: list[dict[str, Any]] = []
+        baseline_webservice_keys: set[str] = set()
+        oauth_relay_key = ""
         try:
             gateway_ip, _ = docker_network_values(network_name)
             report["network_internal"] = True
@@ -602,6 +687,11 @@ def main() -> int:
             if report["lucky_version"] != EXPECTED_LUCKY_VERSION:
                 raise ProbeError(f"unexpected Lucky version: {report['lucky_version']!r}")
             report["frontend_runtime_snippets"] = frontend_runtime_snippets(base_url)
+            baseline_webservice_keys = {
+                str(row.get("RuleKey") or "")
+                for row in webservice_rules(base_url, admin_token, browser_opener)
+                if str(row.get("RuleKey") or "")
+            }
 
             config_response = admin_json(
                 base_url, admin_token, "/api/thirdPartyAuthManager/config", opener=browser_opener
@@ -626,9 +716,25 @@ def main() -> int:
 
             updated = dict(baseline_config)
             provider_origin = f"http://{gateway_ip}:{provider.port}"
+            relay_port = 20000 + secrets.randbelow(20000)
+            relay_callback = f"http://{lucky_ip}:{relay_port}/"
+            oauth_relay_key = create_oauth_relay_rule(
+                base_url,
+                admin_token,
+                browser_opener,
+                name=TEST_PREFIX + nonce + "-relay",
+                listen_port=relay_port,
+                client_id=client_id,
+                client_secret=secrets.token_urlsafe(24),
+                provider_origin=provider_origin,
+                callback_url=relay_callback,
+            )
+            report["oauth_relay_created"] = bool(oauth_relay_key)
+            report["oauth_relay_port"] = relay_port
+            time.sleep(0.5)
             updated["OIDCAuthorizationEndpoint"] = provider_origin + "/authorize"
             updated["OIDCClientID"] = client_id
-            updated["OIDCRedirectURI"] = provider_origin + "/callback/oidc"
+            updated["OIDCRedirectURI"] = relay_callback
             admin_json(
                 base_url,
                 admin_token,
@@ -647,37 +753,26 @@ def main() -> int:
                 and live_config.get("OIDCRedirectURI") == updated["OIDCRedirectURI"]
             )
 
-            tmpcode: dict[str, Any] = {}
-            attempts: list[dict[str, Any]] = []
-            for attempt_index, response_label in enumerate(provider.relay_response_labels):
-                if attempt_index:
-                    # ao() truncates the millisecond clock to 10 ms before
-                    # appending its checksum. Lucky also rejects a reused `_`,
-                    # so keep each black-box probe in a distinct time bucket.
-                    time.sleep(0.025)
-                tmpcode_query = urllib.parse.urlencode(
-                    {"type": "oidc", "_": lucky_frontend_timestamp()}
-                )
-                candidate = admin_json(
-                    base_url,
-                    admin_token,
-                    "/api/oauth/tmpcode?" + tmpcode_query,
-                    require_zero=False,
-                    opener=browser_opener,
-                )
-                attempts.append(
-                    {
-                        "relay_response": response_label,
-                        "ret": candidate.get("ret"),
-                        "has_error": bool(candidate.get("error")),
-                        "msg": str(candidate.get("msg") or "")[:160],
-                        "error": str(candidate.get("error") or "")[:240],
-                    }
-                )
-                tmpcode = candidate
-                if candidate.get("ret") == 0:
-                    break
-            report["tmpcode_attempts"] = attempts
+            time.sleep(0.025)
+            tmpcode_query = urllib.parse.urlencode(
+                {"type": "oidc", "_": lucky_frontend_timestamp()}
+            )
+            tmpcode = admin_json(
+                base_url,
+                admin_token,
+                "/api/oauth/tmpcode?" + tmpcode_query,
+                require_zero=False,
+                opener=browser_opener,
+            )
+            report["tmpcode_attempts"] = [
+                {
+                    "relay_response": "lucky-webservice-oauth",
+                    "ret": tmpcode.get("ret"),
+                    "has_error": bool(tmpcode.get("error")),
+                    "msg": str(tmpcode.get("msg") or "")[:160],
+                    "error": str(tmpcode.get("error") or "")[:240],
+                }
+            ]
             report["tmpcode_ret"] = tmpcode.get("ret")
             report["tmpcode_msg"] = str(tmpcode.get("msg") or tmpcode.get("message") or "")[:240]
             report["tmpcode_error"] = str(tmpcode.get("error") or "")[:400]
@@ -763,6 +858,16 @@ def main() -> int:
             if isinstance(after_users, list):
                 report["third_party_user_created"] = len(after_users) > len(baseline_users)
         finally:
+            if base_url and admin_token and oauth_relay_key:
+                try:
+                    delete_webservice_rule(
+                        base_url,
+                        admin_token,
+                        browser_opener if "browser_opener" in locals() else urllib.request.build_opener(),
+                        oauth_relay_key,
+                    )
+                except Exception:  # noqa: BLE001 - cleanup must continue
+                    pass
             if base_url and admin_token and baseline_config is not None:
                 try:
                     admin_json(
@@ -789,6 +894,22 @@ def main() -> int:
                     report["user_baseline_restored"] = restored_users == baseline_users
                 except Exception:  # noqa: BLE001 - cleanup must continue
                     pass
+            if base_url and admin_token:
+                try:
+                    final_webservice_keys = {
+                        str(row.get("RuleKey") or "")
+                        for row in webservice_rules(
+                            base_url,
+                            admin_token,
+                            browser_opener if "browser_opener" in locals() else urllib.request.build_opener(),
+                        )
+                        if str(row.get("RuleKey") or "")
+                    }
+                    report["oauth_relay_baseline_restored"] = (
+                        final_webservice_keys == baseline_webservice_keys
+                    )
+                except Exception:  # noqa: BLE001 - final report records cleanup failure
+                    pass
             if provider is not None:
                 provider.close()
             run(["docker", "rm", "-f", container_name], check=False, timeout=45)
@@ -804,6 +925,8 @@ def main() -> int:
         "oauth_config_baseline_empty",
         "oauth_user_baseline_empty",
         "oauth_test_client_configured",
+        "oauth_relay_created",
+        "oauth_relay_baseline_restored",
         "tmpcode_available",
         "auth_url_owned",
         "authorization_followed",
