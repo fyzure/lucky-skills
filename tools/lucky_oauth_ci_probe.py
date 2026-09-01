@@ -158,10 +158,13 @@ def frontend_runtime_snippets(base_url: str) -> dict[str, str]:
     fetched = 0
     targets = (
         "/api/oauth/tmpcode",
+        "/api/oauth/login",
+        "OIDCRedirectURI",
+        "OIDCAuthorizationEndpoint",
+        "tmpCode",
+        "authUrl",
         "interceptors.request.use",
-        "Authorization",
         "Lucky-Admin-Token",
-        "openToken",
     )
     snippets: dict[str, str] = {}
     while queue and len(seen) < 100 and fetched < 24 * 1024 * 1024:
