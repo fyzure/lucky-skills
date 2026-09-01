@@ -313,6 +313,10 @@ def frontend_runtime_snippets(base_url: str) -> dict[str, str]:
             continue
         fetched += len(raw)
         text = raw.decode("utf-8", errors="replace")
+        if "xe(u.value,1)" in text:
+            snippets["login-helper-imports"] = re.sub(r"\s+", " ", text[:5000])[:5000]
+        if "$e(A,0)" in text:
+            snippets["mapping-helper-imports"] = re.sub(r"\s+", " ", text[:5000])[:5000]
         for needle in targets:
             index = text.find(needle)
             if index >= 0:
