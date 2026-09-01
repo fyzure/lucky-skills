@@ -170,7 +170,10 @@ def admin_json(
 
 
 def login_browser_admin(
-    base_url: str, workdir: Path, password: str = "666"
+    base_url: str,
+    workdir: Path,
+    password: str = "666",
+    account: str = "666",
 ) -> tuple[str, urllib.request.OpenerDirector, list[str]]:
     jar = http.cookiejar.CookieJar()
     opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
@@ -181,7 +184,7 @@ def login_browser_admin(
         raise ProbeError("login challenge missing required fields")
     plaintext = json.dumps(
         {
-            "account": "666",
+            "account": account,
             "password": password,
             "twoFA": "",
             "challengeId": challenge["challengeId"],
@@ -664,6 +667,7 @@ def main() -> int:
     container_name = f"lucky-oauth-ci-{nonce}"
     client_id = TEST_PREFIX + nonce
     client_secret = secrets.token_urlsafe(24)
+    disposable_admin_account = "ciadmin-" + nonce
     disposable_admin_password = "T!" + secrets.token_urlsafe(18)
     report: dict[str, Any] = {
         "lucky_version": "",
@@ -799,14 +803,17 @@ def main() -> int:
             base_config_response = admin_json(
                 base_url, admin_token, "/api/baseconfigure", opener=browser_opener
             )
-            base_config = base_config_response.get("config")
+            base_config = base_config_response.get("baseconfigure")
             if not isinstance(base_config, dict):
                 raise ProbeError("base config response missing config object")
             hardened_config = dict(base_config)
             hardened_config["OldPassword"] = "666"
+            hardened_config["AdminAccount"] = disposable_admin_account
             hardened_config["AdminPassword"] = disposable_admin_password
             hardened_config["EnableThirdAuthLogin"] = True
             hardened_config["AllowAllThirdAuthUsers"] = True
+            hardened_config["IgnoreSafeURLCheck"] = True
+            hardened_config["IgnoreAuthInfoCheck"] = True
             admin_json(
                 base_url,
                 admin_token,
@@ -816,7 +823,10 @@ def main() -> int:
                 opener=browser_opener,
             )
             admin_token, browser_opener, _ = login_browser_admin(
-                base_url, tmp, disposable_admin_password
+                base_url,
+                tmp,
+                disposable_admin_password,
+                disposable_admin_account,
             )
             report["disposable_admin_hardened"] = True
             login_config_status, login_config = json_request(
@@ -1188,7 +1198,10 @@ def main() -> int:
                                     # the disposable administrator before lifecycle
                                     # cleanup instead of reusing the pre-OAuth token.
                                     admin_token, browser_opener, _ = login_browser_admin(
-                                        base_url, tmp, disposable_admin_password
+                                        base_url,
+                                        tmp,
+                                        disposable_admin_password,
+                                        disposable_admin_account,
                                     )
 
                         admin_json(
