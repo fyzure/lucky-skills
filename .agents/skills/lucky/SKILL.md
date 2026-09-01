@@ -131,6 +131,12 @@ FTP is not equivalent from a safety perspective. The current FTP configuration e
 
 The compact `/api/rclone/sync/list` response intentionally omits many execution options. Use `GET /api/rclone/sync/{Key}` when validating `DryRun`, `CreateEmptyDirs`, filters, bandwidth or other detailed task fields. Do not add cloud remotes, schedules, bisync or system mounts to this probe solely for coverage.
 
+## Cron shell behavior
+
+`tools/lucky_cron_probe.py` verifies Cron execution without touching business tasks or external services. It requires clean TEST-prefixed ownership, creates one disposable group plus two TEST tasks, and writes only inside one Lucky-visible `/tmp/TEST-*` directory. The verified shell subtask shape is `{Type:"shell_option", Options:{shell_content:<script>}, Remark:<label>}`. `Type=8` is used for manual-only tasks, while `Type=4` with a numeric-seconds string in `TypeParams` is the current every-N-seconds schedule model.
+
+For a whole-task manual run, `GET /api/cron/dojobs?key=<CronKey>` is mutating despite using GET. For a selected subtask, `POST /api/cron/jobs/trigger` accepts `{cronKey,jobIndex}`. The bounded runtime probe verified a manual marker, then PUT-updated the same task to `Type=4` / `TypeParams="2"` and observed the scheduler create a second marker automatically. A separate `exit 7` shell subtask was dispatched through the single-job trigger and produced a Cron failure/error log entry. Disable scheduled TEST tasks before deletion and remove only uniquely prefixed TEST tasks/groups/paths; never use this probe to call the network, toggle production services, or execute arbitrary host paths.
+
 ## Report results
 
 Summarize what was read or changed, identify any remaining non-Lucky dependency (DNS, CDN, origin application, firewall, certificate issuance), and avoid reproducing secrets returned by Lucky responses.

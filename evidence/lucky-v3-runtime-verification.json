@@ -248,6 +248,26 @@
         "cleanup": "No TEST sync task remained and both Lucky-visible source/destination trees were removed"
       },
       "security": "The probe uses only unique /tmp TEST directories and one TEST sync task. It does not configure remotes, credentials, schedules, bisync, system mounts or network listeners, and cleanup deletes only resources bearing the unique TEST marker."
+    },
+    "cron_shell_behavior": {
+      "confidence": "runtime-verified",
+      "model": {
+        "job_model": "A Cron shell subtask uses {Type:'shell_option', Options:{shell_content:<script>}, Remark:<label>}; the task-level model uses Type=8 for manual-only execution and Type=4 with TypeParams=<seconds> for every-N-seconds scheduling",
+        "manual_task_trigger": "GET /api/cron/dojobs?key=<CronKey> executes the enabled task's subtasks; the verified shell job created its TEST marker in Lucky's own /tmp namespace",
+        "single_job_trigger": "POST /api/cron/jobs/trigger with {cronKey,jobIndex} executes one selected subtask and returns the normal ret envelope",
+        "scheduled_execution": "After PUT-updating the same TEST task to Type=4 and TypeParams=2 with a different shell marker, Lucky's scheduler executed it automatically within the bounded wait window",
+        "failure_logging": "A separate manual-only shell subtask containing exit 7 was triggered through /api/cron/jobs/trigger and produced an error/failure Cron log entry tied to the TEST task",
+        "scope": "No network request, service toggle, business task, external integration or path outside a unique Lucky-visible /tmp TEST directory is required for the verified behavior"
+      },
+      "verification": "Starting from zero Cron task/group baselines, a bounded Lucky 3.0.0 probe created one unique TEST group and one enabled manual-only TEST task containing a shell_option job that writes only a marker under /tmp/TEST-*. GET /api/cron/dojobs successfully executed the task and the marker appeared through Lucky's local-path-browser. The task was then PUT-updated to every-2-seconds scheduling with a different marker; the scheduler created that marker without a manual trigger, after which the task was disabled. A second manual-only TEST task with shell content 'exit 7' was triggered through POST /api/cron/jobs/trigger and a failure/error Cron log entry was observed. Both tasks, the TEST group and the TEST directory were removed, leaving zero TEST resources and restoring the original task/group key baselines.",
+      "observations": {
+        "manual_execution": "GET /api/cron/dojobs returned ret=0 and the manual marker appeared in the Lucky-visible TEST directory",
+        "scheduled_execution": "The PUT-updated Type=4/TypeParams=2 task created its scheduled marker automatically before it was explicitly disabled",
+        "failure_execution": "POST /api/cron/jobs/trigger returned ret=0 for dispatch and Cron logs later contained a failure/error entry for the exit-7 TEST task",
+        "shape": "Task readback exposed Jobs as objects with Type, Options and Remark; group readback exposed Key and Name; Cron logs exposed Level, LogContent, LogTime and ShowTime",
+        "cleanup": "Two TEST tasks, one TEST group and the TEST /tmp directory were removed; no TEST task/group remained and both key baselines were restored"
+      },
+      "security": "The probe executes shell code only inside a unique Lucky-visible /tmp TEST directory, never calls the network, never targets existing Cron resources, and refuses to mix ownership when a pre-existing TEST-prefixed task/group is present. Cleanup disables and deletes only uniquely prefixed TEST tasks before deleting the TEST group/path."
     }
   },
   "routes": [
@@ -2129,39 +2149,59 @@
       "method": "POST",
       "risk": "mutating",
       "request_body_schema": {"type":"object","properties":{"cronKey":{"type":"string"},"jobIndex":{"type":"integer"}}},
-      "schema_evidence": "authorized parser-only probes verified CronJobTriggerRequest.cronKey as string and jobIndex as int; both requests failed during JSON decoding before trigger handler execution and the cron-task baseline remained zero"
+      "response_schema": {"type":"object","properties":{"ret":{"type":"integer"}}},
+      "confidence": "runtime-verified",
+      "verification": "An authorized disposable manual-only TEST task containing a shell_option job with exit 7 was triggered at jobIndex=0; the endpoint returned ret=0 for dispatch and Cron logs subsequently recorded the TEST task failure before cleanup restored the zero-task baseline.",
+      "schema_evidence": "current frontend sends {cronKey,jobIndex}; an authorized TEST trigger used a generated Cron key plus integer jobIndex=0, returned ret=0, and produced the expected failure log from the selected shell subtask"
+    },
+    {
+      "path": "/api/cron/dojobs",
+      "method": "GET",
+      "risk": "mutating",
+      "response_schema": {"type":"object","properties":{"ret":{"type":"integer"}}},
+      "confidence": "runtime-verified",
+      "verification": "An authorized manual-only TEST task with one shell_option subtask was dispatched through GET /api/cron/dojobs?key=<TEST key>; ret=0 was returned and the Lucky-visible /tmp marker created by the shell job was observed before cleanup.",
+      "schema_evidence": "frontend manual-trigger flow passes the task key as query parameter; the bounded runtime probe confirmed ret-only success while executing only the uniquely prefixed TEST task"
     },
     {
       "path": "/api/cron/list",
       "method": "POST",
       "risk": "mutating",
       "body_keys": ["Key", "Name", "Enable", "OtherKey", "Type", "TypeParams", "GroupKey", "ExecSecond", "ExecMinute", "ExecHour", "Jobs", "Parallel", "IOT_DianDeng_Enable", "IOT_DianDeng_AUTHKEY", "IOT_DianDeng_InsecureSkipVerify", "IOT_DianDengVoiceAssistantTriggerCondition", "IOT_DianDengBindComponentEnable", "IOT_DianDengBindComponentTriggerCondition", "IOT_DianDengBindComponent", "IOT_DianDengBindComponentState", "IOT_DianDengBindComponentType", "IOT_Bemfa_Enable", "IOT_Bemfa_SecretKey", "IOT_Bemfa_Topic", "IOT_BemfaVoiceAssistantTriggerCondition", "IOT_Bemfa_InsecureSkipVerify"],
-      "request_body_schema": {"type":"object","properties":{"Key":{"type":"string"},"Name":{"type":"string"},"Enable":{"type":"boolean"},"OtherKey":{"type":"string"},"Type":{"type":"integer"},"TypeParams":{"type":"string"},"GroupKey":{"type":"string"},"ExecSecond":{"type":"integer"},"ExecMinute":{"type":"integer"},"ExecHour":{"type":"integer"},"Jobs":{"type":"array","items":{}},"Parallel":{"type":"boolean"},"IOT_DianDeng_Enable":{"type":"boolean"},"IOT_DianDeng_AUTHKEY":{"type":"string"},"IOT_DianDeng_InsecureSkipVerify":{"type":"boolean"},"IOT_DianDengVoiceAssistantTriggerCondition":{"type":"string"},"IOT_DianDengBindComponentEnable":{"type":"boolean"},"IOT_DianDengBindComponentTriggerCondition":{"type":"string"},"IOT_DianDengBindComponent":{"type":"string"},"IOT_DianDengBindComponentState":{"type":"string"},"IOT_DianDengBindComponentType":{"type":"string"},"IOT_Bemfa_Enable":{"type":"boolean"},"IOT_Bemfa_SecretKey":{"type":"string"},"IOT_Bemfa_Topic":{"type":"string"},"IOT_BemfaVoiceAssistantTriggerCondition":{"type":"string"},"IOT_Bemfa_InsecureSkipVerify":{"type":"boolean"}}},
+      "request_body_schema": {"type":"object","properties":{"Key":{"type":"string"},"Name":{"type":"string"},"Enable":{"type":"boolean"},"OtherKey":{"type":"string"},"Type":{"type":"integer"},"TypeParams":{"type":"string"},"GroupKey":{"type":"string"},"ExecSecond":{"type":"integer"},"ExecMinute":{"type":"integer"},"ExecHour":{"type":"integer"},"Jobs":{"type":"array","items":{"type":"object","properties":{"Type":{"type":"string"},"Options":{"type":"object","additionalProperties":{}},"Remark":{"type":"string"}}}},"Parallel":{"type":"boolean"},"IOT_DianDeng_Enable":{"type":"boolean"},"IOT_DianDeng_AUTHKEY":{"type":"string"},"IOT_DianDeng_InsecureSkipVerify":{"type":"boolean"},"IOT_DianDengVoiceAssistantTriggerCondition":{"type":"string"},"IOT_DianDengBindComponentEnable":{"type":"boolean"},"IOT_DianDengBindComponentTriggerCondition":{"type":"string"},"IOT_DianDengBindComponent":{"type":"string"},"IOT_DianDengBindComponentState":{"type":"string"},"IOT_DianDengBindComponentType":{"type":"string"},"IOT_Bemfa_Enable":{"type":"boolean"},"IOT_Bemfa_SecretKey":{"type":"string"},"IOT_Bemfa_Topic":{"type":"string"},"IOT_BemfaVoiceAssistantTriggerCondition":{"type":"string"},"IOT_Bemfa_InsecureSkipVerify":{"type":"boolean"}}},
       "response_schema": {"type":"object","properties":{"ret":{"type":"integer"}}},
-      "schema_evidence": "frontend scheduled-task form initializes this explicit model and passes it directly to POST; parser-only probes established primitive request types, then an authorized disposable task with Enable=false, empty Jobs, all external IoT integrations disabled and ExecSecond=59 returned ret-only success. Cleanup restored the exact zero-task baseline"
+      "confidence": "runtime-verified",
+      "verification": "An authorized bounded probe created enabled manual-only TEST tasks containing real shell_option Jobs, assigned one to a disposable TEST group, executed them, and later deleted them with all task/group baselines restored.",
+      "schema_evidence": "frontend scheduled-task form initializes this explicit model and passes it directly to POST; current Access/Cron job editor constructs each Jobs item as {Type,Options,Remark}, and runtime readback of the disposable shell task observed exactly those three job fields before successful execution and cleanup"
     },
     {
       "path": "/api/cron/list",
       "method": "PUT",
       "risk": "mutating",
       "body_keys": ["Key", "Name", "Enable", "OtherKey", "Type", "TypeParams", "GroupKey", "ExecSecond", "ExecMinute", "ExecHour", "Jobs", "Parallel", "IOT_DianDeng_Enable", "IOT_DianDeng_AUTHKEY", "IOT_DianDeng_InsecureSkipVerify", "IOT_DianDengVoiceAssistantTriggerCondition", "IOT_DianDengBindComponentEnable", "IOT_DianDengBindComponentTriggerCondition", "IOT_DianDengBindComponent", "IOT_DianDengBindComponentState", "IOT_DianDengBindComponentType", "IOT_Bemfa_Enable", "IOT_Bemfa_SecretKey", "IOT_Bemfa_Topic", "IOT_BemfaVoiceAssistantTriggerCondition", "IOT_Bemfa_InsecureSkipVerify"],
-      "request_body_schema": {"type":"object","properties":{"Key":{"type":"string"},"Name":{"type":"string"},"Enable":{"type":"boolean"},"OtherKey":{"type":"string"},"Type":{"type":"integer"},"TypeParams":{"type":"string"},"GroupKey":{"type":"string"},"ExecSecond":{"type":"integer"},"ExecMinute":{"type":"integer"},"ExecHour":{"type":"integer"},"Jobs":{"type":"array","items":{}},"Parallel":{"type":"boolean"},"IOT_DianDeng_Enable":{"type":"boolean"},"IOT_DianDeng_AUTHKEY":{"type":"string"},"IOT_DianDeng_InsecureSkipVerify":{"type":"boolean"},"IOT_DianDengVoiceAssistantTriggerCondition":{"type":"string"},"IOT_DianDengBindComponentEnable":{"type":"boolean"},"IOT_DianDengBindComponentTriggerCondition":{"type":"string"},"IOT_DianDengBindComponent":{"type":"string"},"IOT_DianDengBindComponentState":{"type":"string"},"IOT_DianDengBindComponentType":{"type":"string"},"IOT_Bemfa_Enable":{"type":"boolean"},"IOT_Bemfa_SecretKey":{"type":"string"},"IOT_Bemfa_Topic":{"type":"string"},"IOT_BemfaVoiceAssistantTriggerCondition":{"type":"string"},"IOT_Bemfa_InsecureSkipVerify":{"type":"boolean"}}},
+      "request_body_schema": {"type":"object","properties":{"Key":{"type":"string"},"Name":{"type":"string"},"Enable":{"type":"boolean"},"OtherKey":{"type":"string"},"Type":{"type":"integer"},"TypeParams":{"type":"string"},"GroupKey":{"type":"string"},"ExecSecond":{"type":"integer"},"ExecMinute":{"type":"integer"},"ExecHour":{"type":"integer"},"Jobs":{"type":"array","items":{"type":"object","properties":{"Type":{"type":"string"},"Options":{"type":"object","additionalProperties":{}},"Remark":{"type":"string"}}}},"Parallel":{"type":"boolean"},"IOT_DianDeng_Enable":{"type":"boolean"},"IOT_DianDeng_AUTHKEY":{"type":"string"},"IOT_DianDeng_InsecureSkipVerify":{"type":"boolean"},"IOT_DianDengVoiceAssistantTriggerCondition":{"type":"string"},"IOT_DianDengBindComponentEnable":{"type":"boolean"},"IOT_DianDengBindComponentTriggerCondition":{"type":"string"},"IOT_DianDengBindComponent":{"type":"string"},"IOT_DianDengBindComponentState":{"type":"string"},"IOT_DianDengBindComponentType":{"type":"string"},"IOT_Bemfa_Enable":{"type":"boolean"},"IOT_Bemfa_SecretKey":{"type":"string"},"IOT_Bemfa_Topic":{"type":"string"},"IOT_BemfaVoiceAssistantTriggerCondition":{"type":"string"},"IOT_Bemfa_InsecureSkipVerify":{"type":"boolean"}}},
       "response_schema": {"type":"object","properties":{"ret":{"type":"integer"}}},
-      "schema_evidence": "frontend scheduled-task editor loads and passes the same model directly to PUT; the authorized disabled disposable task accepted an identical update and returned ret-only success without executing any job before cleanup restored the zero-task baseline"
+      "confidence": "runtime-verified",
+      "verification": "The enabled manual TEST task was PUT-updated to Type=4, TypeParams=2 and a new shell marker; Lucky's scheduler executed the updated job automatically within the bounded wait, after which the task was disabled and removed.",
+      "schema_evidence": "frontend scheduled-task editor loads and passes the same model directly to PUT; the bounded runtime probe updated a real shell_option Jobs item and scheduling fields, returned ret=0, and the resulting scheduled job executed before cleanup"
     },
     {
       "path": "/api/cron/enable",
       "method": "GET",
       "risk": "mutating",
       "response_schema": {"type":"object","properties":{"ret":{"type":"integer"}}},
-      "schema_evidence": "authorized disposable-task probe called enable=false against an already disabled temporary task and observed ret-only success; the task remained disabled"
+      "confidence": "runtime-verified",
+      "verification": "After the every-2-seconds TEST task produced its scheduled marker, GET /api/cron/enable?enable=false&key=<TEST key> returned ret=0 and was used to stop further scheduled executions before cleanup.",
+      "schema_evidence": "authorized bounded scheduled-task probe called enable=false on an actively enabled TEST task and observed ret-only success before deletion"
     },
     {
       "path": "/api/cron/list",
       "method": "DELETE",
       "risk": "mutating",
       "response_schema": {"type":"object","properties":{"ret":{"type":"integer"}}},
-      "schema_evidence": "authorized cleanup deleted only the disabled disposable Cron task by its generated key and observed ret-only success; the exact pre-probe zero-task baseline hash was restored"
+      "confidence": "runtime-verified",
+      "verification": "Cleanup deleted the two uniquely prefixed TEST tasks after execution/disable and the task key set returned exactly to the pre-probe baseline.",
+      "schema_evidence": "authorized cleanup deleted only uniquely prefixed TEST Cron tasks by generated key, observed ret-only success, and restored the exact pre-probe task-key baseline"
     },
     {
       "path": "/api/cron/taskgrouporderupdate",

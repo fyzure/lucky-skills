@@ -75,8 +75,8 @@ pageClass: api-routes-page
 
 | 方法 | 路径 | 风险 | 查询字段 | 请求体 | 响应 | 证据等级 |
 |---|---|---|---|---|---|---|
-| `GET` | `/api/cron/dojobs` | `mutating` | `key` | — | `json` | `frontend-call` |
-| `GET` | `/api/cron/enable` | `mutating` | `enable`, `key` | — | `json` | `frontend-call` |
+| `GET` | `/api/cron/dojobs` | `mutating` | `key` | — | `json` | `runtime-verified` |
+| `GET` | `/api/cron/enable` | `mutating` | `enable`, `key` | — | `json` | `runtime-verified` |
 | `GET` | `/api/cron/expressioncheck` | `read-only` | `expression` | — | `json` | `frontend-call` |
 | `DELETE` | `/api/cron/groups` | `mutating` | `key` | — | `json` | `frontend-call` |
 | `GET` | `/api/cron/groups` | `read-only` | — | — | `json` | `frontend-call` |
@@ -86,12 +86,12 @@ pageClass: api-routes-page
 | `GET` | `/api/cron/groups/collapsed/states` | `read-only` | — | — | `json` | `frontend-call` |
 | `PUT` | `/api/cron/groups/orderadjustment` | `mutating` | — | `array<string>` | `json` | `frontend-call` |
 | `GET` | `/api/cron/groups/taskcount` | `read-only` | `groupKey` | — | `json` | `frontend-call` |
-| `POST` | `/api/cron/jobs/trigger` | `mutating` | — | `cronKey`, `jobIndex` | `json` | `frontend-call` |
+| `POST` | `/api/cron/jobs/trigger` | `mutating` | — | `cronKey`, `jobIndex` | `json` | `runtime-verified` |
 | `GET` | `/api/cron/lastlogs` | `read-only` | — | — | `json` | `frontend-call` |
-| `DELETE` | `/api/cron/list` | `mutating` | `key` | — | `json` | `frontend-call` |
+| `DELETE` | `/api/cron/list` | `mutating` | `key` | — | `json` | `runtime-verified` |
 | `GET` | `/api/cron/list` | `read-only` | — | — | `json` | `frontend-call` |
-| `POST` | `/api/cron/list` | `mutating` | — | `Key`, `Name`, `Enable`, `OtherKey`, `Type`, `TypeParams`, `GroupKey`, `ExecSecond`, `ExecMinute`, `ExecHour`, `Jobs`, `Parallel`, `IOT_DianDeng_Enable`, `IOT_DianDeng_AUTHKEY`, `IOT_DianDeng_InsecureSkipVerify`, `IOT_DianDengVoiceAssistantTriggerCondition`, `IOT_DianDengBindComponentEnable`, `IOT_DianDengBindComponentTriggerCondition`, `IOT_DianDengBindComponent`, `IOT_DianDengBindComponentState`, `IOT_DianDengBindComponentType`, `IOT_Bemfa_Enable`, `IOT_Bemfa_SecretKey`, `IOT_Bemfa_Topic`, `IOT_BemfaVoiceAssistantTriggerCondition`, `IOT_Bemfa_InsecureSkipVerify` | `json` | `frontend-call` |
-| `PUT` | `/api/cron/list` | `mutating` | — | `Key`, `Name`, `Enable`, `OtherKey`, `Type`, `TypeParams`, `GroupKey`, `ExecSecond`, `ExecMinute`, `ExecHour`, `Jobs`, `Parallel`, `IOT_DianDeng_Enable`, `IOT_DianDeng_AUTHKEY`, `IOT_DianDeng_InsecureSkipVerify`, `IOT_DianDengVoiceAssistantTriggerCondition`, `IOT_DianDengBindComponentEnable`, `IOT_DianDengBindComponentTriggerCondition`, `IOT_DianDengBindComponent`, `IOT_DianDengBindComponentState`, `IOT_DianDengBindComponentType`, `IOT_Bemfa_Enable`, `IOT_Bemfa_SecretKey`, `IOT_Bemfa_Topic`, `IOT_BemfaVoiceAssistantTriggerCondition`, `IOT_Bemfa_InsecureSkipVerify` | `json` | `frontend-call` |
+| `POST` | `/api/cron/list` | `mutating` | — | `Key`, `Name`, `Enable`, `OtherKey`, `Type`, `TypeParams`, `GroupKey`, `ExecSecond`, `ExecMinute`, `ExecHour`, `Jobs`, `Parallel`, `IOT_DianDeng_Enable`, `IOT_DianDeng_AUTHKEY`, `IOT_DianDeng_InsecureSkipVerify`, `IOT_DianDengVoiceAssistantTriggerCondition`, `IOT_DianDengBindComponentEnable`, `IOT_DianDengBindComponentTriggerCondition`, `IOT_DianDengBindComponent`, `IOT_DianDengBindComponentState`, `IOT_DianDengBindComponentType`, `IOT_Bemfa_Enable`, `IOT_Bemfa_SecretKey`, `IOT_Bemfa_Topic`, `IOT_BemfaVoiceAssistantTriggerCondition`, `IOT_Bemfa_InsecureSkipVerify` | `json` | `runtime-verified` |
+| `PUT` | `/api/cron/list` | `mutating` | — | `Key`, `Name`, `Enable`, `OtherKey`, `Type`, `TypeParams`, `GroupKey`, `ExecSecond`, `ExecMinute`, `ExecHour`, `Jobs`, `Parallel`, `IOT_DianDeng_Enable`, `IOT_DianDeng_AUTHKEY`, `IOT_DianDeng_InsecureSkipVerify`, `IOT_DianDengVoiceAssistantTriggerCondition`, `IOT_DianDengBindComponentEnable`, `IOT_DianDengBindComponentTriggerCondition`, `IOT_DianDengBindComponent`, `IOT_DianDengBindComponentState`, `IOT_DianDengBindComponentType`, `IOT_Bemfa_Enable`, `IOT_Bemfa_SecretKey`, `IOT_Bemfa_Topic`, `IOT_BemfaVoiceAssistantTriggerCondition`, `IOT_Bemfa_InsecureSkipVerify` | `json` | `runtime-verified` |
 | `GET` | `/api/cron/logs` | `read-only` | `page`, `pageSize` | — | `json` | `frontend-call` |
 | `PUT` | `/api/cron/taskgrouporderupdate` | `mutating` | — | `tasksMap`, `orderList` | `json` | `frontend-call` |
 
@@ -637,12 +637,12 @@ pageClass: api-routes-page
 |---|---|---|---|---|---|---|
 | `GET` | `/api/storagemanagement/aliyunpan_auth` | `read-only` | `cburl`, `lkurl` | — | `json` | `frontend-call` |
 | `GET` | `/api/storagemanagement/aliyunpan_auth_check/{param}` | `read-only` | — | — | `json` | `frontend-call` |
-| `GET` | `/api/storagemanagement/enable` | `mutating` | `enable`, `key` | — | `json` | `frontend-call` |
+| `GET` | `/api/storagemanagement/enable` | `mutating` | `enable`, `key` | — | `json` | `runtime-verified` |
 | `PUT` | `/api/storagemanagement/itemorderadjustment` | `mutating` | — | `array<string>` | `json` | `frontend-call` |
 | `GET` | `/api/storagemanagement/lastlogs` | `read-only` | — | — | `json` | `frontend-call` |
-| `DELETE` | `/api/storagemanagement/list` | `mutating` | `key` | — | `json` | `frontend-call` |
-| `POST` | `/api/storagemanagement/list` | `mutating` | — | `Type`, `Enable`, `Key`, `Remark`, `Writable`, `Log`, `Params`, `SystemMount` | `json` | `frontend-call` |
-| `PUT` | `/api/storagemanagement/list` | `mutating` | — | `Type`, `Enable`, `Key`, `Remark`, `Writable`, `Log`, `Params`, `SystemMount` | `json` | `frontend-call` |
+| `DELETE` | `/api/storagemanagement/list` | `mutating` | `key` | — | `json` | `runtime-verified` |
+| `POST` | `/api/storagemanagement/list` | `mutating` | — | `Type`, `Enable`, `Key`, `Remark`, `Writable`, `Log`, `Params`, `SystemMount` | `json` | `runtime-verified` |
+| `PUT` | `/api/storagemanagement/list` | `mutating` | — | `Type`, `Enable`, `Key`, `Remark`, `Writable`, `Log`, `Params`, `SystemMount` | `json` | `runtime-verified` |
 | `GET` | `/api/storagemanagement/litelist` | `read-only` | — | — | `json` | `frontend-call` |
 | `GET` | `/api/storagemanagement/logs` | `read-only` | `page`, `pageSize` | — | `json` | `frontend-call` |
 

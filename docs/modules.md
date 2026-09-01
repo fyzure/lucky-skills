@@ -76,6 +76,8 @@ StorageManagement 的 local storage 注册生命周期已在 Lucky 3.0.0 上完�
 
 Rclone 的 local → local sync 也已完成真实行为验证。`tools/lucky_rclone_sync_probe.py` 创建唯一源/目标 `/tmp/TEST-*` 目录和一个 sync task；`CreateEmptyDirs=true` 的真实 run 把源侧空目录传播到目标侧并以 `State.Status=success` 结束。随后同一 task 经 PUT 切换到 `DryRun=true`，新增第二个源目录再次运行成功，但目标侧没有生成对应目录。compact `sync/list` 只返回路径、状态等摘要，完整的 `DryRun`、`CreateEmptyDirs`、过滤/性能选项应从 `GET /api/rclone/sync/{Key}` detail 读取。该闭环没有配置 remote、云盘凭据、bisync、schedule、network listener 或 system mount。
 
+Cron 的 shell 子任务也已完成真实行为验证。`tools/lucky_cron_probe.py` 从空 task/group 基线创建唯一 TEST group 和两个 TEST task；当前前端/运行时确认一个 shell job 的最小结构为 `{Type:"shell_option", Options:{shell_content:<script>}, Remark:<label>}`。`Type=8` 的手动任务经 `GET /api/cron/dojobs` 实际在 Lucky 自己的 `/tmp/TEST-*` 写入 marker；同一任务经 PUT 改为 `Type=4`、`TypeParams="2"` 后，在不手动触发的情况下由调度器自动写入第二个 marker。另一个 `exit 7` 子任务经 `POST /api/cron/jobs/trigger` 单独触发后，Cron 日志出现对应失败记录。整个闭环不访问网络、不切换业务服务，最后删除 TEST task/group/path 并恢复原 Key 基线。
+
 FTP 当前仍保持未启动。Lucky 3.0.0 的 FTP 配置只有 `Network + Port + PassivePortStart/End`，没有 WebDAV 那样的 `ListenIP`；为了行为覆盖而临时启动会使随机控制/PASV 端口监听所选 network 的全部地址。因此当前实例不为测试启动 FTP，也不修改宿主防火墙来人为制造隔离；真实 FTP 登录/传输应放在 network namespace 或专用隔离环境中完成。
 
 ## Docker

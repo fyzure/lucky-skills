@@ -620,6 +620,37 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
     if not (ROOT / "tools" / "lucky_rclone_sync_probe.py").is_file():
         fail("Rclone local sync runtime probe tool is missing")
 
+    cron_evidence = model_evidence.get("cron_shell_behavior")
+    if not isinstance(cron_evidence, dict):
+        fail("Cron shell behavior evidence is missing")
+    if cron_evidence.get("confidence") != "runtime-verified":
+        fail("Cron shell behavior evidence must remain runtime-verified")
+    cron_model = cron_evidence.get("model")
+    if not isinstance(cron_model, dict) or set(cron_model) != {
+        "job_model",
+        "manual_task_trigger",
+        "single_job_trigger",
+        "scheduled_execution",
+        "failure_logging",
+        "scope",
+    }:
+        fail("Cron shell behavior model regressed")
+    cron_observations = cron_evidence.get("observations")
+    if not isinstance(cron_observations, dict) or set(cron_observations) != {
+        "manual_execution",
+        "scheduled_execution",
+        "failure_execution",
+        "shape",
+        "cleanup",
+    }:
+        fail("Cron shell runtime observations regressed")
+    for field in ("verification", "security"):
+        value = cron_evidence.get(field)
+        if not isinstance(value, str) or not value.strip():
+            fail(f"Cron shell evidence field is missing: {field}")
+    if not (ROOT / "tools" / "lucky_cron_probe.py").is_file():
+        fail("Cron shell runtime probe tool is missing")
+
     ddns_evidence = model_evidence.get("ddns_cloudflare_behavior")
     if not isinstance(ddns_evidence, dict):
         fail("DDNS Cloudflare behavior evidence is missing")
@@ -1186,7 +1217,18 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
             "OtherKey": {"type": "string"}, "Type": {"type": "integer"}, "TypeParams": {"type": "string"},
             "GroupKey": {"type": "string"}, "ExecSecond": {"type": "integer"},
             "ExecMinute": {"type": "integer"}, "ExecHour": {"type": "integer"},
-            "Jobs": {"type": "array", "items": {}}, "Parallel": {"type": "boolean"},
+            "Jobs": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "Type": {"type": "string"},
+                        "Options": {"type": "object", "additionalProperties": {}},
+                        "Remark": {"type": "string"},
+                    },
+                },
+            },
+            "Parallel": {"type": "boolean"},
             "IOT_DianDeng_Enable": {"type": "boolean"}, "IOT_DianDeng_AUTHKEY": {"type": "string"},
             "IOT_DianDeng_InsecureSkipVerify": {"type": "boolean"},
             "IOT_DianDengVoiceAssistantTriggerCondition": {"type": "string"},
@@ -1207,7 +1249,7 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
     }:
         route = merged_by_key[route_key]
         if route.request_body_schema != cron_item_request:
-            fail(f"Cron parser-verified task request schema regressed for {route_key}")
+            fail(f"Cron runtime task request schema regressed for {route_key}")
         if set(route.body_keys) != set(cron_item_request["properties"]):
             fail(f"Cron task request schema must cover exactly the frontend body fields for {route_key}")
         if isinstance(route.request_body_schema, dict) and "required" in route.request_body_schema:
@@ -1218,11 +1260,17 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
     if cron_trigger.request_body_schema != {
         "type": "object", "properties": {"cronKey": {"type": "string"}, "jobIndex": {"type": "integer"}}
     }:
-        fail("Cron parser-verified trigger request schema regressed")
+        fail("Cron runtime trigger request schema regressed")
     if isinstance(cron_trigger.request_body_schema, dict) and "required" in cron_trigger.request_body_schema:
         fail("Cron trigger request schema must not invent required fields")
-    if cron_trigger.response_schema is not None:
-        fail("Cron parser-only trigger evidence must not claim a success response")
+    cron_ret_only = {"type": "object", "properties": {"ret": {"type": "integer"}}}
+    if cron_trigger.response_schema != cron_ret_only:
+        fail("Cron runtime job-trigger response schema regressed")
+    cron_dojobs = merged_by_key[("GET", "/api/cron/dojobs")]
+    if cron_dojobs.risk is not OperationRisk.MUTATING:
+        fail("Cron dojobs GET must remain mutating")
+    if cron_dojobs.response_schema != cron_ret_only:
+        fail("Cron runtime dojobs response schema regressed")
 
     parser_only_small_requests = {
         ("POST", "/api/webservice/webauth/sessions/clear-subrule"): {

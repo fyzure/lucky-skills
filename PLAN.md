@@ -242,14 +242,16 @@ WebDAV 已完成 localhost 完整闭环；FTP 当前配置没有 `ListenIP`，�
 
 ### Cron
 
-当前：task/group CRUD 已实践，但 Jobs 为空。
+当前：task/group CRUD 已实践，并已完成真实 shell job 的手动执行、按秒调度和失败日志闭环；整个 probe 只写 Lucky 自己的唯一 `/tmp/TEST-*` 目录，不调用网络或业务模块。
 
-- [ ] 创建只写 `/tmp/TEST-*` 的安全 shell job
-- [ ] 手动 trigger
-- [ ] 验证执行结果/log
-- [ ] 验证一次定时触发
-- [ ] 验证失败 job 状态
-- [ ] 清理 task/group/temp file
+- [x] 创建只写 `/tmp/TEST-*` 的安全 `shell_option` job
+- [x] 验证整任务手动 trigger：`GET /api/cron/dojobs`
+- [x] 验证单 job trigger：`POST /api/cron/jobs/trigger`
+- [x] 验证执行结果/log
+- [x] 验证一次真实定时触发：`Type=4` + `TypeParams=2`
+- [x] 验证失败 job：`exit 7` 后出现对应 failure/error log
+- [x] 清理 2 个 TEST task、1 个 TEST group 和临时目录，并恢复 task/group Key 基线
+- [x] 固化 probe / evidence / docs：`tools/lucky_cron_probe.py`
 
 ### WOL
 

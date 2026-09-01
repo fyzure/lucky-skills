@@ -2728,11 +2728,16 @@
         ],
         "responses": {
           "200": {
-            "description": "Lucky JSON response; envelope shape varies by endpoint.",
+            "description": "Response schema observed from runtime evidence; see x-schema-evidence for provenance.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LuckyEnvelope"
+                  "type": "object",
+                  "properties": {
+                    "ret": {
+                      "type": "integer"
+                    }
+                  }
                 }
               }
             }
@@ -2748,11 +2753,12 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_panel-599cSpUA.js"
         ],
         "x-lucky-risk": "mutating",
+        "x-schema-evidence": "frontend manual-trigger flow passes the task key as query parameter; the bounded runtime probe confirmed ret-only success while executing only the uniquely prefixed TEST task",
         "parameters": [
           {
             "name": "key",
@@ -2803,12 +2809,12 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_panel-599cSpUA.js"
         ],
         "x-lucky-risk": "mutating",
-        "x-schema-evidence": "authorized disposable-task probe called enable=false against an already disabled temporary task and observed ret-only success; the task remained disabled",
+        "x-schema-evidence": "authorized bounded scheduled-task probe called enable=false on an actively enabled TEST task and observed ret-only success before deletion",
         "parameters": [
           {
             "name": "enable",
@@ -3380,11 +3386,16 @@
         ],
         "responses": {
           "200": {
-            "description": "Lucky JSON response; envelope shape varies by endpoint.",
+            "description": "Response schema observed from runtime evidence; see x-schema-evidence for provenance.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LuckyEnvelope"
+                  "type": "object",
+                  "properties": {
+                    "ret": {
+                      "type": "integer"
+                    }
+                  }
                 }
               }
             }
@@ -3400,12 +3411,12 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_panel-599cSpUA.js"
         ],
         "x-lucky-risk": "mutating",
-        "x-schema-evidence": "authorized parser-only probes verified CronJobTriggerRequest.cronKey as string and jobIndex as int; both requests failed during JSON decoding before trigger handler execution and the cron-task baseline remained zero",
+        "x-schema-evidence": "current frontend sends {cronKey,jobIndex}; an authorized TEST trigger used a generated Cron key plus integer jobIndex=0, returned ret=0, and produced the expected failure log from the selected shell subtask",
         "requestBody": {
           "required": true,
           "content": {
@@ -3534,12 +3545,12 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_panel-599cSpUA.js"
         ],
         "x-lucky-risk": "mutating",
-        "x-schema-evidence": "authorized cleanup deleted only the disabled disposable Cron task by its generated key and observed ret-only success; the exact pre-probe zero-task baseline hash was restored",
+        "x-schema-evidence": "authorized cleanup deleted only uniquely prefixed TEST Cron tasks by generated key, observed ret-only success, and restored the exact pre-probe task-key baseline",
         "parameters": [
           {
             "name": "key",
@@ -3693,12 +3704,12 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_panel-599cSpUA.js"
         ],
         "x-lucky-risk": "mutating",
-        "x-schema-evidence": "frontend scheduled-task form initializes this explicit model and passes it directly to POST; parser-only probes established primitive request types, then an authorized disposable task with Enable=false, empty Jobs, all external IoT integrations disabled and ExecSecond=59 returned ret-only success. Cleanup restored the exact zero-task baseline",
+        "x-schema-evidence": "frontend scheduled-task form initializes this explicit model and passes it directly to POST; current Access/Cron job editor constructs each Jobs item as {Type,Options,Remark}, and runtime readback of the disposable shell task observed exactly those three job fields before successful execution and cleanup",
         "requestBody": {
           "required": true,
           "content": {
@@ -3738,7 +3749,21 @@
                   },
                   "Jobs": {
                     "type": "array",
-                    "items": {}
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "Type": {
+                          "type": "string"
+                        },
+                        "Options": {
+                          "type": "object",
+                          "additionalProperties": {}
+                        },
+                        "Remark": {
+                          "type": "string"
+                        }
+                      }
+                    }
                   },
                   "Parallel": {
                     "type": "boolean"
@@ -3830,12 +3855,12 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_panel-599cSpUA.js"
         ],
         "x-lucky-risk": "mutating",
-        "x-schema-evidence": "frontend scheduled-task editor loads and passes the same model directly to PUT; the authorized disabled disposable task accepted an identical update and returned ret-only success without executing any job before cleanup restored the zero-task baseline",
+        "x-schema-evidence": "frontend scheduled-task editor loads and passes the same model directly to PUT; the bounded runtime probe updated a real shell_option Jobs item and scheduling fields, returned ret=0, and the resulting scheduled job executed before cleanup",
         "requestBody": {
           "required": true,
           "content": {
@@ -3875,7 +3900,21 @@
                   },
                   "Jobs": {
                     "type": "array",
-                    "items": {}
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "Type": {
+                          "type": "string"
+                        },
+                        "Options": {
+                          "type": "object",
+                          "additionalProperties": {}
+                        },
+                        "Remark": {
+                          "type": "string"
+                        }
+                      }
+                    }
                   },
                   "Parallel": {
                     "type": "boolean"
@@ -33702,11 +33741,16 @@
         ],
         "responses": {
           "200": {
-            "description": "Lucky JSON response; envelope shape varies by endpoint.",
+            "description": "Response schema observed from runtime evidence; see x-schema-evidence for provenance.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LuckyEnvelope"
+                  "type": "object",
+                  "properties": {
+                    "ret": {
+                      "type": "integer"
+                    }
+                  }
                 }
               }
             }
@@ -33722,7 +33766,7 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_storagemanagement-CxTMWo8S.js"
         ],
@@ -33890,11 +33934,16 @@
         ],
         "responses": {
           "200": {
-            "description": "Lucky JSON response; envelope shape varies by endpoint.",
+            "description": "Response schema observed from runtime evidence; see x-schema-evidence for provenance.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LuckyEnvelope"
+                  "type": "object",
+                  "properties": {
+                    "ret": {
+                      "type": "integer"
+                    }
+                  }
                 }
               }
             }
@@ -33910,7 +33959,7 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_storagemanagement-CxTMWo8S.js"
         ],
@@ -33938,11 +33987,16 @@
         ],
         "responses": {
           "200": {
-            "description": "Lucky JSON response; envelope shape varies by endpoint.",
+            "description": "Response schema observed from runtime evidence; see x-schema-evidence for provenance.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LuckyEnvelope"
+                  "type": "object",
+                  "properties": {
+                    "ret": {
+                      "type": "integer"
+                    }
+                  }
                 }
               }
             }
@@ -33958,12 +34012,12 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_storagemanagement-CxTMWo8S.js"
         ],
         "x-lucky-risk": "mutating",
-        "x-schema-evidence": "frontend storage editor initializes {Type,Enable,Key,Remark,Writable,Log,Params,SystemMount} and passes the normalized model directly to POST; paced parser-only probes verified StorageItem string/bool fields, Params as map[string]interface{} and SystemMount as common.SystemMount object before handler execution, with storage baseline remaining zero",
+        "x-schema-evidence": "frontend storage editor initializes {Type,Enable,Key,Remark,Writable,Log,Params,SystemMount} and passes the normalized model directly to POST; an authorized bounded TEST local-storage create returned ret=0 and persisted a generated Key. Runtime readback also showed Lucky normalizes a new local item to Enable=true even when the create candidate explicitly contains Enable=false",
         "requestBody": {
           "required": true,
           "content": {
@@ -34016,11 +34070,16 @@
         ],
         "responses": {
           "200": {
-            "description": "Lucky JSON response; envelope shape varies by endpoint.",
+            "description": "Response schema observed from runtime evidence; see x-schema-evidence for provenance.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LuckyEnvelope"
+                  "type": "object",
+                  "properties": {
+                    "ret": {
+                      "type": "integer"
+                    }
+                  }
                 }
               }
             }
@@ -34036,12 +34095,12 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_storagemanagement-CxTMWo8S.js"
         ],
         "x-lucky-risk": "mutating",
-        "x-schema-evidence": "frontend storage editor deep-merges the existing resource into the same normalized model and passes it directly to PUT; request types reuse the parser-verified StorageItem struct and no successful storage create/update handler was executed",
+        "x-schema-evidence": "frontend storage editor deep-merges the existing resource into the same normalized model and passes it directly to PUT; an authorized bounded TEST local-storage update changed Remark and Writable while the item remained explicitly disabled, returned ret=0, and the updated values were observed on subsequent GET /api/storagemanagement/list readback",
         "requestBody": {
           "required": true,
           "content": {
