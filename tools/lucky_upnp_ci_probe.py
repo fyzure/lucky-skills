@@ -605,6 +605,8 @@ def main() -> int:
         "rule_natpmp_disabled": False,
         "firewall_automation_disabled": False,
         "fake_stun_used": False,
+        "upnp_add_count": 0,
+        "repeated_add_seen": False,
         "runtime_public_endpoint_observed": False,
         "ssdp_request_seen": False,
         "ssdp_response_sent": False,
@@ -748,6 +750,8 @@ def main() -> int:
                 # Keep the report useful when Lucky fails before AddPortMapping.
                 report["soap_actions"] = list(igd.soap_actions)
             report["fake_stun_used"] = stun_server.request_count > 0
+            report["upnp_add_count"] = igd.add_requests
+            report["repeated_add_seen"] = igd.add_requests > 1
             report["ssdp_request_seen"] = igd.ssdp_requests > 0
             report["ssdp_response_sent"] = igd.ssdp_responses > 0
             report["description_requested"] = igd.description_requests > 0
@@ -839,7 +843,6 @@ def main() -> int:
         "rule_upnp_enabled",
         "rule_natpmp_disabled",
         "firewall_automation_disabled",
-        "fake_stun_used",
         "runtime_public_endpoint_observed",
         "ssdp_request_seen",
         "ssdp_response_sent",
