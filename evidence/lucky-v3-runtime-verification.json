@@ -250,6 +250,26 @@
       },
       "security": "The FTP probe is CI-only and refuses local execution. Because Lucky FTP has no ListenIP field, isolation is enforced outside Lucky by publishing every FTP port only to runner loopback; active mode and AutoFireWall are disabled. No production Lucky configuration, host firewall, public listener, password value or transferred marker content is retained."
     },
+    "wol_ci_behavior": {
+      "confidence": "runtime-verified",
+      "model": {
+        "device_lifecycle": "A disposable WOL device can be created and deleted through /api/wol/device while preserving an empty device baseline; BroadcastIPs accepts string broadcast-address entries",
+        "service_lifecycle": "On a fresh Lucky 3.0.0 instance the WOL Server and Client are disabled. The CI probe temporarily enables only Server.Enable through /api/wol/service/configure, verifies the enabled readback, then restores both disabled states",
+        "wake_packet": "GET /api/wol/device/wakeup?key=<owned TEST key> returned ret=0 and emitted the exact standard 102-byte magic packet: six 0xff bytes followed by sixteen repetitions of the six-byte TEST MAC",
+        "destination_port": "The captured wake datagram used UDP destination port 9 even though the disposable device was configured with a different random Port value; current Lucky 3.0.0 wakeup behavior therefore does not use that device Port field for the emitted magic packet",
+        "state_boundary": "The disposable device reported CanWakeup=true while State was Unknown and no real powered endpoint existed. This verifies packet emission, not an actual machine transition from offline to online; shutdown remains intentionally unexercised",
+        "isolation": "The probe runs only in GitHub Actions with a fresh pinned Lucky 3.0.0 container attached to a Docker --internal bridge. The admin port is not published, the wake destination is only that bridge's private broadcast address, and raw capture is bound only to the uniquely named internal bridge"
+      },
+      "verification": "A GitHub-hosted CI run of tools/lucky_wol_ci_probe.py created a disposable Docker --internal bridge and a pinned Lucky 3.0.0 container whose admin port was not published. After API login/OpenToken bootstrap, the probe confirmed an empty WOL device baseline and disabled Server/Client baseline, temporarily enabled only the WOL Server, then created one TEST device with a locally administered random MAC and the internal bridge broadcast address. The device read back CanWakeup=true. GET /api/wol/device/wakeup returned ret=0; an AF_PACKET capture bound only to the TEST bridge observed one exact 102-byte standard magic packet destined for UDP/9. The configured random device Port was not used. The device was deleted, the original disabled service configuration restored, the empty device baseline rechecked, and the disposable container/network removed. No shutdown call was made.",
+      "observations": {
+        "packet": "The captured UDP payload exactly matched ff:ff:ff:ff:ff:ff plus the six-byte TEST MAC repeated sixteen times, for a total payload size of 102 bytes",
+        "port": "Observed wake destination was UDP/9; the separately configured random device Port differed and was not used for the emitted wake datagram",
+        "device_state": "Before wake, the TEST device reported CanWakeup=true and State=Unknown. No claim is made that a real host became online because the target was an isolated synthetic device",
+        "schema": "The TEST device readback contained BroadcastIPs as an array whose populated item was a string broadcast address",
+        "cleanup": "The owned TEST device was deleted, Server/Client returned to the original disabled baseline, no WOL devices remained, and the disposable internal network/container were removed"
+      },
+      "security": "The probe refuses to run outside GitHub Actions. It does not address a physical NIC, LAN broadcast domain or real MAC; the only wake target is a private Docker --internal bridge broadcast address. Lucky's admin port is never host-published, raw capture is restricted to the owned bridge, shutdown is never invoked, and generated MAC/network values or packet bytes are not retained in repository evidence."
+    },
     "smb_loopback_behavior": {
       "confidence": "runtime-verified",
       "model": {
@@ -2525,18 +2545,18 @@
       "method": "POST",
       "risk": "mutating",
       "body_keys": ["Key", "DeviceName", "MacList", "BroadcastIPs", "ProbeTargets", "Port", "Relay", "Repeat", "IOT_DianDeng_Enable", "IOT_DianDeng_AUTHKEY", "IOT_DianDeng_InsecureSkipVerify", "IOT_DianDengBindComponentEnable", "IOT_DianDengBindComponent", "IOT_Bemfa_Enable", "IOT_Bemfa_SecretKey", "IOT_Bemfa_Topic", "IOT_Bemfa_InsecureSkipVerify"],
-      "request_body_schema": {"type":"object","properties":{"Key":{"type":"string"},"DeviceName":{"type":"string"},"MacList":{"type":"array","items":{"type":"string"}},"BroadcastIPs":{"type":"array","items":{}},"ProbeTargets":{"type":"array","items":{}},"Port":{"type":"integer"},"Relay":{"type":"boolean"},"Repeat":{"type":"integer"},"IOT_DianDeng_Enable":{"type":"boolean"},"IOT_DianDeng_AUTHKEY":{"type":"string"},"IOT_DianDeng_InsecureSkipVerify":{"type":"boolean"},"IOT_DianDengBindComponentEnable":{"type":"boolean"},"IOT_DianDengBindComponent":{"type":"string"},"IOT_Bemfa_Enable":{"type":"boolean"},"IOT_Bemfa_SecretKey":{"type":"string"},"IOT_Bemfa_Topic":{"type":"string"},"IOT_Bemfa_InsecureSkipVerify":{"type":"boolean"}}},
+      "request_body_schema": {"type":"object","properties":{"Key":{"type":"string"},"DeviceName":{"type":"string"},"MacList":{"type":"array","items":{"type":"string"}},"BroadcastIPs":{"type":"array","items":{"type":"string"}},"ProbeTargets":{"type":"array","items":{}},"Port":{"type":"integer"},"Relay":{"type":"boolean"},"Repeat":{"type":"integer"},"IOT_DianDeng_Enable":{"type":"boolean"},"IOT_DianDeng_AUTHKEY":{"type":"string"},"IOT_DianDeng_InsecureSkipVerify":{"type":"boolean"},"IOT_DianDengBindComponentEnable":{"type":"boolean"},"IOT_DianDengBindComponent":{"type":"string"},"IOT_Bemfa_Enable":{"type":"boolean"},"IOT_Bemfa_SecretKey":{"type":"string"},"IOT_Bemfa_Topic":{"type":"string"},"IOT_Bemfa_InsecureSkipVerify":{"type":"boolean"}}},
       "response_schema": {"type":"object","properties":{"ret":{"type":"integer"}}},
-      "schema_evidence": "frontend WOL device form initializes this explicit model and passes it directly to POST; an authorized disposable device probe used a locally administered fake MAC, never invoked wakeup/shutdown, verified the request JSON types and ret-only success response, then removed the device with the device-count baseline restored to zero"
+      "schema_evidence": "frontend WOL device form initializes this explicit model and passes it directly to POST. A later GitHub-hosted isolated wake probe populated BroadcastIPs with the private TEST bridge broadcast address, read it back as a string item, emitted a real magic packet only inside that bridge, and restored the empty device/service baselines"
     },
     {
       "path": "/api/wol/device",
       "method": "PUT",
       "risk": "mutating",
       "body_keys": ["Key", "DeviceName", "MacList", "BroadcastIPs", "ProbeTargets", "Port", "Relay", "Repeat", "IOT_DianDeng_Enable", "IOT_DianDeng_AUTHKEY", "IOT_DianDeng_InsecureSkipVerify", "IOT_DianDengBindComponentEnable", "IOT_DianDengBindComponent", "IOT_Bemfa_Enable", "IOT_Bemfa_SecretKey", "IOT_Bemfa_Topic", "IOT_Bemfa_InsecureSkipVerify"],
-      "request_body_schema": {"type":"object","properties":{"Key":{"type":"string"},"DeviceName":{"type":"string"},"MacList":{"type":"array","items":{"type":"string"}},"BroadcastIPs":{"type":"array","items":{}},"ProbeTargets":{"type":"array","items":{}},"Port":{"type":"integer"},"Relay":{"type":"boolean"},"Repeat":{"type":"integer"},"IOT_DianDeng_Enable":{"type":"boolean"},"IOT_DianDeng_AUTHKEY":{"type":"string"},"IOT_DianDeng_InsecureSkipVerify":{"type":"boolean"},"IOT_DianDengBindComponentEnable":{"type":"boolean"},"IOT_DianDengBindComponent":{"type":"string"},"IOT_Bemfa_Enable":{"type":"boolean"},"IOT_Bemfa_SecretKey":{"type":"string"},"IOT_Bemfa_Topic":{"type":"string"},"IOT_Bemfa_InsecureSkipVerify":{"type":"boolean"}}},
+      "request_body_schema": {"type":"object","properties":{"Key":{"type":"string"},"DeviceName":{"type":"string"},"MacList":{"type":"array","items":{"type":"string"}},"BroadcastIPs":{"type":"array","items":{"type":"string"}},"ProbeTargets":{"type":"array","items":{}},"Port":{"type":"integer"},"Relay":{"type":"boolean"},"Repeat":{"type":"integer"},"IOT_DianDeng_Enable":{"type":"boolean"},"IOT_DianDeng_AUTHKEY":{"type":"string"},"IOT_DianDeng_InsecureSkipVerify":{"type":"boolean"},"IOT_DianDengBindComponentEnable":{"type":"boolean"},"IOT_DianDengBindComponent":{"type":"string"},"IOT_Bemfa_Enable":{"type":"boolean"},"IOT_Bemfa_SecretKey":{"type":"string"},"IOT_Bemfa_Topic":{"type":"string"},"IOT_Bemfa_InsecureSkipVerify":{"type":"boolean"}}},
       "response_schema": {"type":"object","properties":{"ret":{"type":"integer"}}},
-      "schema_evidence": "frontend WOL device editor copies the same model into PUT; the authorized disposable device probe round-tripped the generated string Key and the same typed request body, observed ret-only success, and deleted the probe without sending any wake or shutdown action"
+      "schema_evidence": "frontend WOL device editor copies the same model into PUT; the isolated wake behavior probe additionally runtime-verified BroadcastIPs string items through the populated TEST bridge broadcast address. No physical device or shutdown path was used"
     },
     {
       "path": "/api/wol/device",
@@ -2544,6 +2564,14 @@
       "risk": "mutating",
       "response_schema": {"type":"object","properties":{"ret":{"type":"integer"}}},
       "schema_evidence": "authorized disposable WOL device cleanup deleted only the schema-probe device by its generated Key and observed a ret-only success response; the device-count baseline returned to zero"
+    },
+    {
+      "path": "/api/wol/device/wakeup",
+      "method": "GET",
+      "risk": "mutating",
+      "query_keys": ["key"],
+      "response_schema": {"type":"object","properties":{"ret":{"type":"integer"}}},
+      "schema_evidence": "a GitHub-hosted isolated Lucky 3.0.0 probe called wakeup with the generated string Key of its owned TEST device. The route returned ret=0 and the TEST bridge capture observed the exact 102-byte WOL magic packet on UDP/9; the configured random device Port was not used. The TEST device and service configuration were fully restored and shutdown was not called"
     },
     {
       "path": "/api/wol/service/configure",
@@ -3983,8 +4011,8 @@
       "path": "/api/wol/devices",
       "method": "GET",
       "risk": "read-only",
-      "response_schema": {"type":"object","properties":{"ret":{"type":"integer"},"list":{"type":["array","null"],"items":{"type":"object","properties":{"Key":{"type":"string"},"DeviceName":{"type":"string"},"MacList":{"type":"array","items":{"type":"string"}},"BroadcastIPs":{"type":"array","items":{}},"ProbeTargets":{"type":"array","items":{}},"Port":{"type":"integer"},"Relay":{"type":"boolean"},"Repeat":{"type":"integer"},"UpdateTime":{"type":"integer"},"IOT_DianDeng_Enable":{"type":"boolean"},"IOT_DianDeng_InsecureSkipVerify":{"type":"boolean"},"IOT_DianDengBindComponentEnable":{"type":"boolean"},"IOT_DianDengBindComponent":{"type":"string"},"IOT_Bemfa_Enable":{"type":"boolean"},"IOT_Bemfa_Topic":{"type":"string"},"IOT_Bemfa_InsecureSkipVerify":{"type":"boolean"},"State":{"type":"string"},"OnlineMacList":{"type":["array","null"],"items":{}},"ConnectionState":{"type":"string"},"ConnectedMacList":{"type":["array","null"],"items":{}},"ReachabilityState":{"type":"string"},"ReachableTargetList":{"type":["array","null"],"items":{}},"Probe":{"type":"object"},"StateConflict":{"type":"boolean"},"CanShutdown":{"type":"boolean"},"CanWakeup":{"type":"boolean"},"DianDengClientState":{"type":"string"},"BemfaClientState":{"type":"string"}}}},"lastLogs":{"type":["array","null"],"items":{}}}},
-      "schema_evidence": "authorized GET /api/wol/devices observed one disposable device created solely for schema verification; only safe field names and JSON types were retained, IOT authentication/secret fields are intentionally omitted from the response model, empty or null collection item shapes remain unspecified, and the device was deleted with the baseline restored to zero"
+      "response_schema": {"type":"object","properties":{"ret":{"type":"integer"},"list":{"type":["array","null"],"items":{"type":"object","properties":{"Key":{"type":"string"},"DeviceName":{"type":"string"},"MacList":{"type":"array","items":{"type":"string"}},"BroadcastIPs":{"type":"array","items":{"type":"string"}},"ProbeTargets":{"type":"array","items":{}},"Port":{"type":"integer"},"Relay":{"type":"boolean"},"Repeat":{"type":"integer"},"UpdateTime":{"type":"integer"},"IOT_DianDeng_Enable":{"type":"boolean"},"IOT_DianDeng_InsecureSkipVerify":{"type":"boolean"},"IOT_DianDengBindComponentEnable":{"type":"boolean"},"IOT_DianDengBindComponent":{"type":"string"},"IOT_Bemfa_Enable":{"type":"boolean"},"IOT_Bemfa_Topic":{"type":"string"},"IOT_Bemfa_InsecureSkipVerify":{"type":"boolean"},"State":{"type":"string"},"OnlineMacList":{"type":["array","null"],"items":{}},"ConnectionState":{"type":"string"},"ConnectedMacList":{"type":["array","null"],"items":{}},"ReachabilityState":{"type":"string"},"ReachableTargetList":{"type":["array","null"],"items":{}},"Probe":{"type":"object"},"StateConflict":{"type":"boolean"},"CanShutdown":{"type":"boolean"},"CanWakeup":{"type":"boolean"},"DianDengClientState":{"type":"string"},"BemfaClientState":{"type":"string"}}}},"lastLogs":{"type":["array","null"],"items":{}}}},
+      "schema_evidence": "authorized GET /api/wol/devices first observed a disposable device and its safe field names/types. The later isolated wake probe populated BroadcastIPs with a private bridge broadcast address and confirmed its item is a string; secret fields remain omitted, other empty/null collection item shapes remain unspecified, and all TEST state was removed afterward"
     },
     {
       "path": "/api/wol/devices_lite",

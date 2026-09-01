@@ -46867,7 +46867,7 @@
           "lucky_useWolI18n-D9PD6Ww6.js"
         ],
         "x-lucky-risk": "mutating",
-        "x-schema-evidence": "frontend WOL device form initializes this explicit model and passes it directly to POST; an authorized disposable device probe used a locally administered fake MAC, never invoked wakeup/shutdown, verified the request JSON types and ret-only success response, then removed the device with the device-count baseline restored to zero",
+        "x-schema-evidence": "frontend WOL device form initializes this explicit model and passes it directly to POST. A later GitHub-hosted isolated wake probe populated BroadcastIPs with the private TEST bridge broadcast address, read it back as a string item, emitted a real magic packet only inside that bridge, and restored the empty device/service baselines",
         "requestBody": {
           "required": true,
           "content": {
@@ -46889,7 +46889,9 @@
                   },
                   "BroadcastIPs": {
                     "type": "array",
-                    "items": {}
+                    "items": {
+                      "type": "string"
+                    }
                   },
                   "ProbeTargets": {
                     "type": "array",
@@ -46981,7 +46983,7 @@
           "lucky_useWolI18n-D9PD6Ww6.js"
         ],
         "x-lucky-risk": "mutating",
-        "x-schema-evidence": "frontend WOL device editor copies the same model into PUT; the authorized disposable device probe round-tripped the generated string Key and the same typed request body, observed ret-only success, and deleted the probe without sending any wake or shutdown action",
+        "x-schema-evidence": "frontend WOL device editor copies the same model into PUT; the isolated wake behavior probe additionally runtime-verified BroadcastIPs string items through the populated TEST bridge broadcast address. No physical device or shutdown path was used",
         "requestBody": {
           "required": true,
           "content": {
@@ -47003,7 +47005,9 @@
                   },
                   "BroadcastIPs": {
                     "type": "array",
-                    "items": {}
+                    "items": {
+                      "type": "string"
+                    }
                   },
                   "ProbeTargets": {
                     "type": "array",
@@ -47117,11 +47121,16 @@
         ],
         "responses": {
           "200": {
-            "description": "Lucky JSON response; envelope shape varies by endpoint.",
+            "description": "Response schema observed from runtime evidence; see x-schema-evidence for provenance.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LuckyEnvelope"
+                  "type": "object",
+                  "properties": {
+                    "ret": {
+                      "type": "integer"
+                    }
+                  }
                 }
               }
             }
@@ -47137,11 +47146,12 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_useWolI18n-D9PD6Ww6.js"
         ],
         "x-lucky-risk": "mutating",
+        "x-schema-evidence": "a GitHub-hosted isolated Lucky 3.0.0 probe called wakeup with the generated string Key of its owned TEST device. The route returned ret=0 and the TEST bridge capture observed the exact 102-byte WOL magic packet on UDP/9; the configured random device Port was not used. The TEST device and service configuration were fully restored and shutdown was not called",
         "parameters": [
           {
             "name": "key",
@@ -47403,7 +47413,7 @@
           "lucky_useWolI18n-D9PD6Ww6.js"
         ],
         "x-lucky-risk": "read-only",
-        "x-schema-evidence": "authorized GET /api/wol/devices observed one disposable device created solely for schema verification; only safe field names and JSON types were retained, IOT authentication/secret fields are intentionally omitted from the response model, empty or null collection item shapes remain unspecified, and the device was deleted with the baseline restored to zero"
+        "x-schema-evidence": "authorized GET /api/wol/devices first observed a disposable device and its safe field names/types. The later isolated wake probe populated BroadcastIPs with a private bridge broadcast address and confirmed its item is a string; secret fields remain omitted, other empty/null collection item shapes remain unspecified, and all TEST state was removed afterward"
       }
     },
     "/api/wol/devices_lite": {

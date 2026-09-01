@@ -257,11 +257,13 @@ WebDAV、SMB 与 FileBrowser 已完成 localhost 完整闭环；DLNA 已在一�
 
 ### WOL
 
-当前：device CRUD 已实践，未发送 wake/shutdown。
+当前：device CRUD 与真实 wake packet emission 已在 GitHub-hosted disposable Lucky + Docker `--internal` bridge 中完成；没有向物理 LAN、真实设备或公网发送 WOL。真实 powered-device 在线状态变化仍需要专用测试设备；shutdown 继续明确不为覆盖率强测。
 
-- [ ] 仅在明确可控测试设备上发送一次 Wake-on-LAN
-- [ ] 验证在线状态变化
-- [ ] shutdown 保持可选，不为覆盖率强测
+- [x] `tools/lucky_wol_ci_probe.py` 在 isolated internal bridge 上创建 locally-administered TEST MAC/device，临时启用 WOL Server 后调用 `/api/wol/device/wakeup`，抓到并逐字节验证标准 **102-byte magic packet**
+- [x] 固化 wake 端口语义：Lucky 3.0.0 实际发往 **UDP/9**，没有使用 TEST device 中另设的随机 `Port`
+- [x] 验证 `BroadcastIPs` populated item 为 string，并恢复 device 空基线 + Server/Client disabled 基线
+- [ ] 验证真实 powered test device 的 offline → online 状态变化（需要专用可控物理/虚拟硬件，当前 synthetic target 的 `State=Unknown` 不冒充成功）
+- [x] shutdown 保持故意不执行；阶段性覆盖不要求真实关机
 
 ### ThirdPartyAuthManager
 

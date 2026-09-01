@@ -43,6 +43,10 @@ Lucky 3.0.0 的 SNI 分流也已完成真实实例验证。子规则类型值为
 
 `wol` 提供设备列表、服务配置、Webhook、客户端状态、唤醒和关机。`/api/wol/device/wakeup` 与 `/shutdown` 即使使用 GET 也有明显副作用，必须在调用方单独确认。
 
+`tools/lucky_wol_ci_probe.py` 已在 GitHub-hosted 的 disposable Lucky 3.0.0 上验证真实 wake 数据面，但隔离目标不是一台真实机器：probe 创建唯一 Docker `--internal` bridge，Lucky admin 端口不 publish，临时 WOL device 使用 locally-administered 随机 MAC 与该 bridge 的私网 broadcast address；WOL Server 只在这个临时实例中由 API 从 disabled 切到 enabled。`GET /api/wol/device/wakeup?key=<TEST>` 返回 `ret=0` 后，raw capture **只绑定这张 internal bridge**，实际捕获到标准 102-byte magic packet（`ff`×6 + TEST MAC×16）。当前 Lucky 3.0.0 实测把 wake datagram 发往 **UDP/9**，即使 device 的 `Port` 字段设成另一个随机值也不会使用该值。结束后 device 被删除，Server/Client 恢复原 disabled 基线，临时容器/network 全部销毁；`shutdown` 从未调用。
+
+这个闭环只证明 Lucky 确实发出了正确 WOL packet，不证明某台真实机器已经从离线变在线。synthetic TEST device 在 wake 前 `CanWakeup=true`、`State=Unknown`；在线状态变化必须留给明确可控的 powered test device，不应把 packet emission 当作 endpoint power-state 成功。
+
 ## 计划任务
 
 `cron` 提供任务、分组、排序、表达式检查、日志和立即执行。`/api/cron/dojobs` 与 `/api/cron/jobs/trigger` 会执行任务；任务内部还可能调用脚本、Webhook、Docker 和其他 Lucky 模块。

@@ -870,7 +870,7 @@ pageClass: api-routes-page
 | `POST` | `/api/wol/device` | `mutating` | — | `Key`, `DeviceName`, `MacList`, `BroadcastIPs`, `ProbeTargets`, `Port`, `Relay`, `Repeat`, `IOT_DianDeng_Enable`, `IOT_DianDeng_AUTHKEY`, `IOT_DianDeng_InsecureSkipVerify`, `IOT_DianDengBindComponentEnable`, `IOT_DianDengBindComponent`, `IOT_Bemfa_Enable`, `IOT_Bemfa_SecretKey`, `IOT_Bemfa_Topic`, `IOT_Bemfa_InsecureSkipVerify` | `json` | `frontend-call` |
 | `PUT` | `/api/wol/device` | `mutating` | — | `Key`, `DeviceName`, `MacList`, `BroadcastIPs`, `ProbeTargets`, `Port`, `Relay`, `Repeat`, `IOT_DianDeng_Enable`, `IOT_DianDeng_AUTHKEY`, `IOT_DianDeng_InsecureSkipVerify`, `IOT_DianDengBindComponentEnable`, `IOT_DianDengBindComponent`, `IOT_Bemfa_Enable`, `IOT_Bemfa_SecretKey`, `IOT_Bemfa_Topic`, `IOT_Bemfa_InsecureSkipVerify` | `json` | `frontend-call` |
 | `GET` | `/api/wol/device/shutdown` | `dangerous` | `key` | — | `json` | `frontend-call` |
-| `GET` | `/api/wol/device/wakeup` | `mutating` | `key` | — | `json` | `frontend-call` |
+| `GET` | `/api/wol/device/wakeup` | `mutating` | `key` | — | `json` | `runtime-verified` |
 | `PUT` | `/api/wol/deviceorderadjustment` | `mutating` | — | `array<string>` | `json` | `frontend-call` |
 | `GET` | `/api/wol/devices` | `read-only` | — | — | `json` | `frontend-call` |
 | `GET` | `/api/wol/devices_lite` | `read-only` | — | — | `json` | `frontend-call` |

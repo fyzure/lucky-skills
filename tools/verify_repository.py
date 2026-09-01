@@ -631,6 +631,47 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
     if not (ROOT / ".github" / "workflows" / "lucky-ftp-ci.yml").is_file():
         fail("FTP CI workflow is missing")
 
+    wol_evidence = model_evidence.get("wol_ci_behavior")
+    if not isinstance(wol_evidence, dict):
+        fail("WOL CI behavior evidence is missing")
+    if wol_evidence.get("confidence") != "runtime-verified":
+        fail("WOL CI behavior evidence must remain runtime-verified")
+    wol_model = wol_evidence.get("model")
+    if not isinstance(wol_model, dict) or set(wol_model) != {
+        "device_lifecycle",
+        "service_lifecycle",
+        "wake_packet",
+        "destination_port",
+        "state_boundary",
+        "isolation",
+    }:
+        fail("WOL CI behavior model regressed")
+    wol_observations = wol_evidence.get("observations")
+    if not isinstance(wol_observations, dict) or set(wol_observations) != {
+        "packet",
+        "port",
+        "device_state",
+        "schema",
+        "cleanup",
+    }:
+        fail("WOL CI behavior observations regressed")
+    for field in ("verification", "security"):
+        value = wol_evidence.get(field)
+        if not isinstance(value, str) or not value.strip():
+            fail(f"WOL CI behavior evidence field is missing: {field}")
+    if "102-byte" not in str(wol_model.get("wake_packet")):
+        fail("WOL standard magic-packet evidence regressed")
+    if "UDP destination port 9" not in str(wol_model.get("destination_port")):
+        fail("WOL UDP/9 destination evidence regressed")
+    if "--internal" not in str(wol_model.get("isolation")):
+        fail("WOL internal-network isolation evidence regressed")
+    if "shutdown" not in str(wol_model.get("state_boundary")).lower():
+        fail("WOL shutdown safety boundary evidence regressed")
+    if not (ROOT / "tools" / "lucky_wol_ci_probe.py").is_file():
+        fail("WOL CI runtime probe tool is missing")
+    if not (ROOT / ".github" / "workflows" / "lucky-wol-ci.yml").is_file():
+        fail("WOL CI workflow is missing")
+
     smb_evidence = model_evidence.get("smb_loopback_behavior")
     if not isinstance(smb_evidence, dict):
         fail("SMB loopback behavior evidence is missing")
@@ -2758,7 +2799,7 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
             "Key": {"type": "string"},
             "DeviceName": {"type": "string"},
             "MacList": {"type": "array", "items": {"type": "string"}},
-            "BroadcastIPs": {"type": "array", "items": {}},
+            "BroadcastIPs": {"type": "array", "items": {"type": "string"}},
             "ProbeTargets": {"type": "array", "items": {}},
             "Port": {"type": "integer"},
             "Relay": {"type": "boolean"},
@@ -2803,7 +2844,7 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         "Key": {"type": "string"},
         "DeviceName": {"type": "string"},
         "MacList": {"type": "array", "items": {"type": "string"}},
-        "BroadcastIPs": {"type": "array", "items": {}},
+        "BroadcastIPs": {"type": "array", "items": {"type": "string"}},
         "ProbeTargets": {"type": "array", "items": {}},
         "Port": {"type": "integer"},
         "Relay": {"type": "boolean"},
@@ -2814,6 +2855,15 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
     }.items():
         if wol_device_props.get(field) != expected:
             fail(f"WOL device safe response type regressed for {field}")
+    wol_wakeup = merged_by_key[("GET", "/api/wol/device/wakeup")]
+    if wol_wakeup.confidence != "runtime-verified":
+        fail("WOL wakeup behavior must remain runtime-verified")
+    if tuple(wol_wakeup.query_keys) != ("key",):
+        fail("WOL wakeup query-key evidence regressed")
+    if wol_wakeup.response_schema != {
+        "type": "object", "properties": {"ret": {"type": "integer"}}
+    }:
+        fail("WOL wakeup ret-only response schema regressed")
 
     update_confirm = merged_by_key[("PUT", "/api/update/comfire")].request_body_schema
     expected_update_confirm = {
@@ -3487,8 +3537,8 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         fail("Local Path Browser delete must remain classified dangerous")
 
     response_schema_count = sum(route.response_schema is not None for route in patched_merged.routes)
-    if response_schema_count < 353:
-        fail(f"response-schema coverage regressed below 353 routes: {response_schema_count}")
+    if response_schema_count < 354:
+        fail(f"response-schema coverage regressed below 354 routes: {response_schema_count}")
 
     icon_response = merged_by_key[("GET", "/api/iconlib/icon")]
     if icon_response.response_type != "blob" or icon_response.response_content_type != "image/png":
@@ -3508,8 +3558,8 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         for route in merged.routes
         if route.request_body_schema is not None
     )
-    if request_schema_holes > 33:
-        fail(f"nested request-schema coverage regressed above 33 holes: {request_schema_holes}")
+    if request_schema_holes > 31:
+        fail(f"nested request-schema coverage regressed above 31 holes: {request_schema_holes}")
 
     response_schema_holes = sum(
         count_schema_holes(route.response_schema)
