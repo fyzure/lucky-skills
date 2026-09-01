@@ -36092,7 +36092,27 @@
                             "null"
                           ],
                           "items": {
-                            "type": "object"
+                            "type": "object",
+                            "properties": {
+                              "DisplayName": {
+                                "type": "string"
+                              },
+                              "InvalidMsg": {
+                                "type": "string"
+                              },
+                              "IsLocalDir": {
+                                "type": "boolean"
+                              },
+                              "Param": {
+                                "type": "string"
+                              },
+                              "Type": {
+                                "type": "string"
+                              },
+                              "Writable": {
+                                "type": "boolean"
+                              }
+                            }
                           }
                         },
                         "BaseURL": {
@@ -36173,12 +36193,12 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_panel-D9SxgvCq.js"
         ],
         "x-lucky-risk": "read-only",
-        "x-schema-evidence": "authorized GET /api/third/filebrowser/configure observed field names/types only; RedisCacheUrl is intentionally omitted because it may embed credentials, and live filesystem paths were not retained"
+        "x-schema-evidence": "authorized GET /api/third/filebrowser/configure observed field names/types only; a later disposable loopback probe populated one local MountList entry and cross-checked its safe field types. RedisCacheUrl is intentionally omitted because it may embed credentials, and live filesystem paths were not retained"
       },
       "put": {
         "summary": "Lucky frontend call: PUT /api/third/filebrowser/configure",
@@ -36194,11 +36214,16 @@
         ],
         "responses": {
           "200": {
-            "description": "Lucky JSON response; envelope shape varies by endpoint.",
+            "description": "Response schema observed from runtime evidence; see x-schema-evidence for provenance.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LuckyEnvelope"
+                  "type": "object",
+                  "properties": {
+                    "ret": {
+                      "type": "integer"
+                    }
+                  }
                 }
               }
             }
@@ -36214,12 +36239,12 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_panel-D9SxgvCq.js"
         ],
         "x-lucky-risk": "mutating",
-        "x-schema-evidence": "frontend loads authorized GET /api/third/filebrowser/configure, normalizes Port to a string for submit and passes the configure model to PUT; request types reuse the verified safe GET configure projection, while a fresh read-only shape check confirmed RedisCacheUrl is a string without retaining its credential-bearing value",
+        "x-schema-evidence": "frontend loads authorized GET /api/third/filebrowser/configure, normalizes Port to a string and submits the configure model; the shared mount editor constructs Type/Param/DisplayName/Writable/DisableChangeWriteTable. A bounded loopback TEST configuration using a fresh DB/cache and one writable local mount returned ret=0 and started successfully without exposing any existing path or Redis value",
         "requestBody": {
           "required": true,
           "content": {
@@ -36280,7 +36305,26 @@
                       "array",
                       "null"
                     ],
-                    "items": {}
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "Type": {
+                          "type": "string"
+                        },
+                        "Param": {
+                          "type": "string"
+                        },
+                        "DisplayName": {
+                          "type": "string"
+                        },
+                        "Writable": {
+                          "type": "boolean"
+                        },
+                        "DisableChangeWriteTable": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
                   },
                   "Port": {
                     "type": "string"

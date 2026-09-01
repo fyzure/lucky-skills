@@ -691,8 +691,8 @@ pageClass: api-routes-page
 | 方法 | 路径 | 风险 | 查询字段 | 请求体 | 响应 | 证据等级 |
 |---|---|---|---|---|---|---|
 | `GET` | `/api/third/filebrowser/backupdb` | `dangerous` | — | — | `blob` | `runtime-verified` |
-| `GET` | `/api/third/filebrowser/configure` | `read-only` | — | — | `json` | `frontend-call` |
-| `PUT` | `/api/third/filebrowser/configure` | `mutating` | — | `Address`, `AutoFirewall`, `BaseURL`, `CacheDir`, `ConfVersion`, `DBFile`, `DirPerm`, `DisableExec`, `DisablePreviewResize`, `DisableThumbnails`, `DisableTypeDetectionByHeader`, `Enable`, `FilePerm`, `HTTPEnable`, `IMGProcessors`, `ListenNetwork`, `MountList`, `Port`, `RedisCacheUrl`, `TLSEnable`, `TLSListenPort`, `TokenExpirationHour`, `TrustHostList` | `json` | `frontend-call` |
+| `GET` | `/api/third/filebrowser/configure` | `read-only` | — | — | `json` | `runtime-verified` |
+| `PUT` | `/api/third/filebrowser/configure` | `mutating` | — | `Address`, `AutoFirewall`, `BaseURL`, `CacheDir`, `ConfVersion`, `DBFile`, `DirPerm`, `DisableExec`, `DisablePreviewResize`, `DisableThumbnails`, `DisableTypeDetectionByHeader`, `Enable`, `FilePerm`, `HTTPEnable`, `IMGProcessors`, `ListenNetwork`, `MountList`, `Port`, `RedisCacheUrl`, `TLSEnable`, `TLSListenPort`, `TokenExpirationHour`, `TrustHostList` | `json` | `runtime-verified` |
 | `GET` | `/api/third/filebrowser/lastlogs` | `read-only` | `page`, `pageSize` | — | `json` | `frontend-call` |
 | `GET` | `/api/third/filebrowser/logs` | `read-only` | `page`, `pageSize` | — | `json` | `frontend-call` |
 | `GET` | `/api/third/filebrowser/resetadmin` | `dangerous` | — | — | `json` | `frontend-call` |

@@ -591,6 +591,37 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
     if not (ROOT / "tools" / "lucky_webdav_probe.py").is_file():
         fail("WebDAV runtime probe tool is missing")
 
+    filebrowser_evidence = model_evidence.get("filebrowser_local_behavior")
+    if not isinstance(filebrowser_evidence, dict):
+        fail("FileBrowser local behavior evidence is missing")
+    if filebrowser_evidence.get("confidence") != "runtime-verified":
+        fail("FileBrowser local behavior evidence must remain runtime-verified")
+    filebrowser_model = filebrowser_evidence.get("model")
+    if not isinstance(filebrowser_model, dict) or set(filebrowser_model) != {
+        "service_lifecycle",
+        "mount_model",
+        "fresh_database_auth",
+        "resource_api",
+        "single_mount_root",
+        "isolation",
+    }:
+        fail("FileBrowser local behavior model regressed")
+    filebrowser_observations = filebrowser_evidence.get("observations")
+    if not isinstance(filebrowser_observations, dict) or set(filebrowser_observations) != {
+        "config_readback",
+        "auth",
+        "file_lifecycle",
+        "delete_semantics",
+        "cleanup",
+    }:
+        fail("FileBrowser local behavior observations regressed")
+    for field in ("verification", "security"):
+        value = filebrowser_evidence.get(field)
+        if not isinstance(value, str) or not value.strip():
+            fail(f"FileBrowser local behavior evidence field is missing: {field}")
+    if not (ROOT / "tools" / "lucky_filebrowser_probe.py").is_file():
+        fail("FileBrowser runtime probe tool is missing")
+
     rclone_evidence = model_evidence.get("rclone_local_sync_behavior")
     if not isinstance(rclone_evidence, dict):
         fail("Rclone local sync behavior evidence is missing")
@@ -2418,19 +2449,58 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
     }:
         fail("DDNS record delete request schema regressed")
 
-    filebrowser_put = merged_by_key[("PUT", "/api/third/filebrowser/configure")].request_body_schema
-    filebrowser_get = merged_by_key[("GET", "/api/third/filebrowser/configure")].response_schema
+    filebrowser_put_route = merged_by_key[("PUT", "/api/third/filebrowser/configure")]
+    filebrowser_put = filebrowser_put_route.request_body_schema
+    filebrowser_get_route = merged_by_key[("GET", "/api/third/filebrowser/configure")]
+    filebrowser_get = filebrowser_get_route.response_schema
     filebrowser_get_props = (
         filebrowser_get.get("properties", {}).get("configure", {}).get("properties", {})
         if isinstance(filebrowser_get, dict)
         else {}
     )
     expected_filebrowser_props = dict(filebrowser_get_props)
+    expected_filebrowser_props["MountList"] = {
+        "type": ["array", "null"],
+        "items": {
+            "type": "object",
+            "properties": {
+                "Type": {"type": "string"},
+                "Param": {"type": "string"},
+                "DisplayName": {"type": "string"},
+                "Writable": {"type": "boolean"},
+                "DisableChangeWriteTable": {"type": "boolean"},
+            },
+        },
+    }
     expected_filebrowser_props["RedisCacheUrl"] = {"type": "string"}
     if filebrowser_put != {"type": "object", "properties": expected_filebrowser_props}:
-        fail("FileBrowser PUT request schema must match safe GET projection plus RedisCacheUrl:string")
+        fail("FileBrowser PUT request schema must match the verified editable configuration model")
     if isinstance(filebrowser_put, dict) and "required" in filebrowser_put:
         fail("FileBrowser PUT request schema must not invent required fields")
+    filebrowser_get_mount = filebrowser_get_props.get("MountList")
+    if filebrowser_get_mount != {
+        "type": ["array", "null"],
+        "items": {
+            "type": "object",
+            "properties": {
+                "DisplayName": {"type": "string"},
+                "InvalidMsg": {"type": "string"},
+                "IsLocalDir": {"type": "boolean"},
+                "Param": {"type": "string"},
+                "Type": {"type": "string"},
+                "Writable": {"type": "boolean"},
+            },
+        },
+    }:
+        fail("FileBrowser GET MountList runtime item model regressed")
+    if filebrowser_put_route.confidence != "runtime-verified":
+        fail("FileBrowser PUT configuration behavior must remain runtime-verified")
+    if filebrowser_put_route.response_schema != {
+        "type": "object", "properties": {"ret": {"type": "integer"}}
+    }:
+        fail("FileBrowser PUT ret-only response schema regressed")
+    if filebrowser_get_route.confidence != "runtime-verified":
+        fail("FileBrowser GET configuration behavior must remain runtime-verified")
 
     wol_webhook = merged_by_key[("POST", "/api/wol/webhooktest")].request_body_schema
     wol_get = merged_by_key[("GET", "/api/wol/service/configure")].response_schema
@@ -3087,8 +3157,8 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         fail("Local Path Browser delete must remain classified dangerous")
 
     response_schema_count = sum(route.response_schema is not None for route in patched_merged.routes)
-    if response_schema_count < 342:
-        fail(f"response-schema coverage regressed below 342 routes: {response_schema_count}")
+    if response_schema_count < 343:
+        fail(f"response-schema coverage regressed below 343 routes: {response_schema_count}")
 
     icon_response = merged_by_key[("GET", "/api/iconlib/icon")]
     if icon_response.response_type != "blob" or icon_response.response_content_type != "image/png":
@@ -3108,8 +3178,8 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         for route in merged.routes
         if route.request_body_schema is not None
     )
-    if request_schema_holes > 38:
-        fail(f"nested request-schema coverage regressed above 38 holes: {request_schema_holes}")
+    if request_schema_holes > 37:
+        fail(f"nested request-schema coverage regressed above 37 holes: {request_schema_holes}")
 
     response_schema_holes = sum(
         count_schema_holes(route.response_schema)

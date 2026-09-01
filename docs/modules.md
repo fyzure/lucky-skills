@@ -80,6 +80,10 @@ Cron 的 shell 子任务也已完成真实行为验证。`tools/lucky_cron_probe
 
 FTP 当前仍保持未启动。Lucky 3.0.0 的 FTP 配置只有 `Network + Port + PassivePortStart/End`，没有 WebDAV 那样的 `ListenIP`；为了行为覆盖而临时启动会使随机控制/PASV 端口监听所选 network 的全部地址。因此当前实例不为测试启动 FTP，也不修改宿主防火墙来人为制造隔离；真实 FTP 登录/传输应放在 network namespace 或专用隔离环境中完成。
 
+FileBrowser 已通过 `tools/lucky_filebrowser_probe.py` 完成独立 loopback 行为闭环。probe 只在原 FileBrowser 为 stopped/disabled 时运行，创建唯一 `/tmp/TEST-*` root、cache 和全新 TEST DB，以 `127.0.0.1` + `tcp4` + 随机高位 HTTP 端口启动服务，同时关闭 TLS、AutoFirewall 和 exec。local mount 的编辑模型为 `Type / Param / DisplayName / Writable / DisableChangeWriteTable`，运行时回读还确认 `InvalidMsg / IsLocalDir`；当 `MountList` 只有一个 local mount 时，FileBrowser 的 `/api/resources/` 直接就是该目录内容，而不是再生成一层虚拟 mount 目录。
+
+全新 TEST DB 可直接用 FileBrowser 文档化的 reset-default `666/666` 登录，probe **不会**调用 Lucky 的高风险 `resetadmin`；登录得到的 JWT 只保存在进程内并作为 `X-Auth` 使用。实际文件闭环已经验证：raw POST upload 返回 200、资源 GET 返回 200 并读回相同 TEST 内容、PATCH rename 返回 200，DELETE 正常成功码为 **204**，对应 Lucky-visible backing file 同步创建、改名并消失。恢复前 probe 会重新确认 DB path、listener port 和 mount Param 仍是本次 TEST ownership marker，只有匹配时才 PUT 回原配置；最终 stopped 状态、完整配置和 TEST path 均恢复基线。
+
 ## Docker
 
 `docker` 是最大的接口族之一，覆盖：

@@ -231,6 +231,26 @@
       },
       "security": "The probe refuses to run when WebDAV is already active or has configured users, binds only loopback, disables firewall automation and TLS, uses a disposable random password, and never prints credentials or file content. Configuration restoration is ownership-guarded to avoid overwriting a concurrent change."
     },
+    "filebrowser_local_behavior": {
+      "confidence": "runtime-verified",
+      "model": {
+        "service_lifecycle": "PUT /api/third/filebrowser/configure can start FileBrowser against a fresh TEST database and later restore the exact stopped baseline through an ownership-guarded PUT",
+        "mount_model": "A writable local FileBrowser mount uses Type=local, Param=<local path>, DisplayName and Writable; runtime readback also exposed InvalidMsg and IsLocalDir",
+        "fresh_database_auth": "A fresh isolated FileBrowser database accepted the documented reset-default first account/password 666/666 without invoking Lucky's dangerous resetadmin route",
+        "resource_api": "After login, FileBrowser uses the returned token in X-Auth. GET /api/resources/ reads the mounted root, POST /api/resources/<name>?override=false uploads raw bytes, PATCH with action=rename renames a resource, and DELETE removes it",
+        "single_mount_root": "With exactly one local MountList entry, /api/resources/ is the contents of that mounted directory itself; an empty TEST directory therefore returned items=[] rather than a virtual mount folder",
+        "isolation": "The verified service listened only on 127.0.0.1/tcp4 on a random high HTTP port with TLS disabled, AutoFirewall=false, DisableExec=true and unique TEST DB/cache/root paths"
+      },
+      "verification": "Starting from a stopped FileBrowser baseline, a bounded Lucky 3.0.0 probe created one unique /tmp/TEST-* tree and configured a fresh FileBrowser database, cache and writable local mount. FileBrowser started only on 127.0.0.1/tcp4 with HTTP enabled, TLS and firewall automation disabled. The fresh TEST database accepted its documented reset-default 666/666 credentials without calling resetadmin; the returned JWT was kept only in memory and used through X-Auth. The probe confirmed that the single local mount maps directly to /api/resources/, uploaded a tiny TEST text resource, read the exact content back, observed the backing file through Lucky local-path-browser, renamed it with PATCH, deleted it with HTTP 204, and confirmed the backing file disappeared. Module logs were queried without retaining content. The original FileBrowser configuration/status were restored only after the live configuration still matched the unique TEST DB/port/mount ownership markers, and the TEST tree was removed.",
+      "observations": {
+        "config_readback": "The TEST mount read back DisplayName, InvalidMsg, IsLocalDir, Param, Type and Writable; loopback Address/Port, TEST DB path and AutoFirewall=false also persisted as configured",
+        "auth": "POST /api/login on the fresh TEST database returned HTTP 200 and a non-empty token for 666/666; no resetadmin operation was executed and no JWT or credential value is retained",
+        "file_lifecycle": "Raw POST upload returned 200, resource GET returned 200 application/json with the exact TEST content, PATCH rename returned 200, and the Lucky-visible backing path reflected create and rename",
+        "delete_semantics": "DELETE of the renamed resource returned HTTP 204 and the Lucky-visible backing file disappeared",
+        "cleanup": "The ownership guard passed, baseline configuration and stopped status were restored exactly, and the entire TEST path was removed"
+      },
+      "security": "The probe refuses to run when FileBrowser is already enabled/running, never calls resetadmin, never reuses an existing FileBrowser database, binds only loopback, disables AutoFirewall/TLS/exec, writes only a unique TEST mount and restores configuration only while its ownership markers still match. OpenToken, JWT, passwords, Redis URLs, existing paths and TEST file contents are never emitted."
+    },
     "rclone_local_sync_behavior": {
       "confidence": "runtime-verified",
       "model": {
@@ -3586,8 +3606,11 @@
       "method": "PUT",
       "risk": "mutating",
       "body_keys": ["Address", "AutoFirewall", "BaseURL", "CacheDir", "ConfVersion", "DBFile", "DirPerm", "DisableExec", "DisablePreviewResize", "DisableThumbnails", "DisableTypeDetectionByHeader", "Enable", "FilePerm", "HTTPEnable", "IMGProcessors", "ListenNetwork", "MountList", "Port", "RedisCacheUrl", "TLSEnable", "TLSListenPort", "TokenExpirationHour", "TrustHostList"],
-      "request_body_schema": {"type":"object","properties":{"Address":{"type":"string"},"AutoFirewall":{"type":"boolean"},"BaseURL":{"type":"string"},"CacheDir":{"type":"string"},"ConfVersion":{"type":"integer"},"DBFile":{"type":"string"},"DirPerm":{"type":"string"},"DisableExec":{"type":"boolean"},"DisablePreviewResize":{"type":"boolean"},"DisableThumbnails":{"type":"boolean"},"DisableTypeDetectionByHeader":{"type":"boolean"},"Enable":{"type":"boolean"},"FilePerm":{"type":"string"},"HTTPEnable":{"type":"boolean"},"IMGProcessors":{"type":"integer"},"ListenNetwork":{"type":"string"},"MountList":{"type":["array","null"],"items":{}},"Port":{"type":"string"},"RedisCacheUrl":{"type":"string"},"TLSEnable":{"type":"boolean"},"TLSListenPort":{"type":"integer"},"TokenExpirationHour":{"type":"integer"},"TrustHostList":{"type":"string"}}},
-      "schema_evidence": "frontend loads authorized GET /api/third/filebrowser/configure, normalizes Port to a string for submit and passes the configure model to PUT; request types reuse the verified safe GET configure projection, while a fresh read-only shape check confirmed RedisCacheUrl is a string without retaining its credential-bearing value"
+      "request_body_schema": {"type":"object","properties":{"Address":{"type":"string"},"AutoFirewall":{"type":"boolean"},"BaseURL":{"type":"string"},"CacheDir":{"type":"string"},"ConfVersion":{"type":"integer"},"DBFile":{"type":"string"},"DirPerm":{"type":"string"},"DisableExec":{"type":"boolean"},"DisablePreviewResize":{"type":"boolean"},"DisableThumbnails":{"type":"boolean"},"DisableTypeDetectionByHeader":{"type":"boolean"},"Enable":{"type":"boolean"},"FilePerm":{"type":"string"},"HTTPEnable":{"type":"boolean"},"IMGProcessors":{"type":"integer"},"ListenNetwork":{"type":"string"},"MountList":{"type":["array","null"],"items":{"type":"object","properties":{"Type":{"type":"string"},"Param":{"type":"string"},"DisplayName":{"type":"string"},"Writable":{"type":"boolean"},"DisableChangeWriteTable":{"type":"boolean"}}}},"Port":{"type":"string"},"RedisCacheUrl":{"type":"string"},"TLSEnable":{"type":"boolean"},"TLSListenPort":{"type":"integer"},"TokenExpirationHour":{"type":"integer"},"TrustHostList":{"type":"string"}}},
+      "response_schema": {"type": "object", "properties": {"ret": {"type": "integer"}}},
+      "confidence": "runtime-verified",
+      "schema_evidence": "frontend loads authorized GET /api/third/filebrowser/configure, normalizes Port to a string and submits the configure model; the shared mount editor constructs Type/Param/DisplayName/Writable/DisableChangeWriteTable. A bounded loopback TEST configuration using a fresh DB/cache and one writable local mount returned ret=0 and started successfully without exposing any existing path or Redis value",
+      "verification": "A disposable loopback FileBrowser probe successfully PUT a full TEST configuration using 127.0.0.1/tcp4, a random high HTTP port, AutoFirewall=false, TLS disabled, a fresh TEST DB/cache and one writable local mount. The resulting service started and the original stopped configuration was restored exactly after an ownership guard."
     },
     {
       "path": "/api/update/comfire",
@@ -3848,7 +3871,9 @@
       "method": "GET",
       "risk": "read-only",
       "response_schema": {"type": "object", "properties": {"ret": {"type": "integer"}, "status": {"type": "boolean"}, "configure": {"type": "object", "properties": {"Enable": {"type": "boolean"}, "MountList": {"type": ["array", "null"], "items": {}}, "BaseURL": {"type": "string"}, "Port": {"type": "string"}, "Address": {"type": "string"}, "DBFile": {"type": "string"}, "CacheDir": {"type": "string"}, "IMGProcessors": {"type": "integer"}, "DisableThumbnails": {"type": "boolean"}, "DisablePreviewResize": {"type": "boolean"}, "DisableExec": {"type": "boolean"}, "DisableTypeDetectionByHeader": {"type": "boolean"}, "TokenExpirationHour": {"type": "integer"}, "FilePerm": {"type": "string"}, "DirPerm": {"type": "string"}, "ListenNetwork": {"type": "string"}, "TLSEnable": {"type": "boolean"}, "TLSListenPort": {"type": "integer"}, "HTTPEnable": {"type": "boolean"}, "AutoFirewall": {"type": "boolean"}, "TrustHostList": {"type": "string"}, "ConfVersion": {"type": "integer"}}}}},
-      "schema_evidence": "authorized GET /api/third/filebrowser/configure observed field names/types only; RedisCacheUrl is intentionally omitted because it may embed credentials, and live filesystem paths were not retained"
+      "confidence": "runtime-verified",
+      "schema_evidence": "authorized GET /api/third/filebrowser/configure observed field names/types only; a later disposable loopback probe populated one local MountList entry and cross-checked its safe field types. RedisCacheUrl is intentionally omitted because it may embed credentials, and live filesystem paths were not retained",
+      "verification": "Repeated authorized reads covered both the original stopped configuration and the disposable running loopback TEST configuration; no existing path, Redis URL, JWT or credential value is retained."
     },
     {
       "path": "/api/third/filebrowser/status",
@@ -4469,8 +4494,9 @@
     },
     {
       "path": "/api/third/filebrowser/configure", "method": "GET",
-      "at": ["properties", "configure", "properties", "MountList", "items"], "value": {"type": "object"},
-      "evidence": "MountList contains structured mount records; filesystem and remote details remain intentionally unspecified"
+      "at": ["properties", "configure", "properties", "MountList", "items"],
+      "value": {"type": "object", "properties": {"DisplayName": {"type": "string"}, "InvalidMsg": {"type": "string"}, "IsLocalDir": {"type": "boolean"}, "Param": {"type": "string"}, "Type": {"type": "string"}, "Writable": {"type": "boolean"}}},
+      "evidence": "a bounded disposable local-mount probe observed these safe MountList item field types; mount paths and validation-message values are not retained"
     },
     {
       "path": "/api/webdav/configure", "method": "GET",

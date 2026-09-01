@@ -125,6 +125,12 @@ Before restoring the baseline WebDAV configuration, the probe re-reads the live 
 
 FTP is not equivalent from a safety perspective. The current FTP configuration exposes `Network`, control `Port` and passive port range but no loopback `ListenIP`. Do not start a temporary FTP listener on a production host merely for coverage and do not modify the host firewall to manufacture isolation. Practice real FTP login/transfer only in a network namespace or dedicated isolated instance.
 
+## FileBrowser local behavior
+
+`tools/lucky_filebrowser_probe.py` verifies FileBrowser only from a stopped/disabled baseline. It creates a fresh TEST database, cache and writable local mount under one unique Lucky-visible `/tmp/TEST-*` tree, then starts HTTP on a random `127.0.0.1` tcp4 port with TLS, AutoFirewall and exec disabled. Never point this probe at an existing FileBrowser database and never call `/api/third/filebrowser/resetadmin` for coverage.
+
+A fresh disposable database accepts FileBrowser's documented reset-default account/password `666/666`; this fact applies to the fresh TEST database only and is not a reason to reset or assume credentials on an existing database. The JWT returned by `/api/login` stays in process memory and is sent only as `X-Auth`. With exactly one local mount, `/api/resources/` maps directly to that backing directory. Runtime verification covers raw upload, exact content readback, PATCH rename and DELETE; current FileBrowser returns HTTP 204 for a successful delete. Before restoring the baseline configuration, require the live DB path, listener port and mount Param to still match this probe's unique TEST ownership markers, then verify the original stopped status/configuration and remove the TEST tree.
+
 ## Rclone local sync behavior
 
 `tools/lucky_rclone_sync_probe.py` verifies Rclone's execution engine without remotes or credentials. It creates unique Lucky-visible source/destination `/tmp/TEST-*` trees and one TEST task with `SourceType=local`, `DestType=local`, `SyncMode=sync` and `CreateEmptyDirs=true`. A real run must reach success and propagate a source-only empty directory. The same task is then PUT-updated to `DryRun=true`; a second source-only directory must remain absent from the destination after another successful run.
