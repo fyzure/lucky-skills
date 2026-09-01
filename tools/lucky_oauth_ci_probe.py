@@ -332,6 +332,15 @@ def frontend_runtime_snippets(base_url: str) -> dict[str, str]:
                 snippets["index:exports"] = re.sub(
                     r"\s+", " ", text[export_index : min(len(text), export_index + 16000)]
                 )[:16000]
+            for marker in ("function Ji", "Ji=", "async function Ji"):
+                ji_index = text.find(marker)
+                if ji_index >= 0:
+                    snippets["index:oauth-login-encryptor"] = re.sub(
+                        r"\s+",
+                        " ",
+                        text[max(0, ji_index - 2600) : min(len(text), ji_index + 5200)],
+                    )[:8000]
+                    break
         if "xe(u.value,1)" in text:
             snippets["login-helper-imports"] = re.sub(r"\s+", " ", text[:5000])[:5000]
         if "$e(A,0)" in text:
