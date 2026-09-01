@@ -131,6 +131,12 @@ Use `tools/lucky_dlna_probe.py` only from a stopped DLNA baseline with an empty 
 
 The verified behavior is HTTP/UPnP control-plane behavior on that empty host-local bridge: one unique `/tmp/TEST-*` local mount, a random high HTTP port, `/rootDesc.xml`, ContentDirectory advertisement and a SOAP `Browse(ObjectID=0, BrowseDirectChildren)` that exposes the TEST child directory. Host-side SSDP M-SEARCH on the empty Linux bridge returned no response in the verified run; record that as an observation rather than treating it as a DLNA failure or claiming discovery success. Also do not assume `FriendlyName` changes the rootDesc friendly name merely because configure readback preserved it. Restore the original stopped configuration only while listener/interface/mount ownership markers still match, then delete the TEST tree.
 
+## FRP STCP visitor behavior
+
+Use `tools/lucky_frp_visitor_probe.py` for visitor behavior instead of exposing a public frps. The verified topology is entirely loopback: one TEST frps on `127.0.0.1`, one provider frpc with an STCP proxy backed by a process-local echo server, and a separate visitor frpc with an STCP visitor bound only to a random `127.0.0.1` port. FRP auth tokens and STCP `secretKey` values must be generated in memory and never printed or persisted in evidence.
+
+For the current VisitorForm, `serverName` identifies the provider STCP proxy and the visitor shares its `secretKey`; `bindAddr/bindPort` are the local consumer endpoint. Require a real byte-for-byte roundtrip through the visitor. A PUT update through `{oldName,newVisitor}` has also been verified with both `transport.useEncryption` and `transport.useCompression` enabled, followed by a second exact roundtrip. Do not use `visitorStatuses` as the sole success signal: current Lucky 3.0.0 returned an empty visitorStatuses array while the STCP data plane was working. Explicitly delete visitor and provider proxy before deleting the three TEST FRP instances, then verify the complete instance-key baseline.
+
 ## FileBrowser local behavior
 
 `tools/lucky_filebrowser_probe.py` verifies FileBrowser only from a stopped/disabled baseline. It creates a fresh TEST database, cache and writable local mount under one unique Lucky-visible `/tmp/TEST-*` tree, then starts HTTP on a random `127.0.0.1` tcp4 port with TLS, AutoFirewall and exec disabled. Never point this probe at an existing FileBrowser database and never call `/api/third/filebrowser/resetadmin` for coverage.

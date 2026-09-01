@@ -19793,7 +19793,66 @@
                         "null"
                       ],
                       "items": {
-                        "type": "object"
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "disabled": {
+                            "type": "boolean"
+                          },
+                          "serverName": {
+                            "type": "string"
+                          },
+                          "bindAddr": {
+                            "type": "string"
+                          },
+                          "bindPort": {
+                            "type": "integer"
+                          },
+                          "maxRetriesAnHour": {
+                            "type": "integer"
+                          },
+                          "minRetryInterval": {
+                            "type": "integer"
+                          },
+                          "protocol": {
+                            "type": "string"
+                          },
+                          "transport": {
+                            "type": "object",
+                            "properties": {
+                              "useEncryption": {
+                                "type": "boolean"
+                              },
+                              "useCompression": {
+                                "type": "boolean"
+                              }
+                            }
+                          },
+                          "natTraversal": {
+                            "type": "object",
+                            "properties": {
+                              "disableAssistedAddrs": {
+                                "type": "boolean"
+                              }
+                            }
+                          },
+                          "plugin": {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "type": "string"
+                              },
+                              "destinationIP": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
                       }
                     }
                   }
@@ -19812,12 +19871,12 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_panel-BjQOfwVI.js"
         ],
         "x-lucky-risk": "read-only",
-        "x-schema-evidence": "authorized GET for the disposable text-mode FRP client returned visitors=null; envelope is verified and visitor item schema is intentionally not inferred from write models",
+        "x-schema-evidence": "an earlier disabled disposable client established the nullable visitors envelope; the later STCP visitor probe populated one disposable visitor and verified safe item field types while intentionally omitting secretKey values from response documentation",
         "parameters": [
           {
             "name": "param",
@@ -19843,11 +19902,16 @@
         ],
         "responses": {
           "200": {
-            "description": "Lucky JSON response; envelope shape varies by endpoint.",
+            "description": "Response schema observed from runtime evidence; see x-schema-evidence for provenance.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LuckyEnvelope"
+                  "type": "object",
+                  "properties": {
+                    "ret": {
+                      "type": "integer"
+                    }
+                  }
                 }
               }
             }
@@ -19863,12 +19927,12 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_panel-BjQOfwVI.js"
         ],
         "x-lucky-risk": "mutating",
-        "x-schema-evidence": "current FRP VisitorForm returns this model directly; the default model proves nested transport/natTraversal/plugin shapes and the visitor type/protocol/plugin selectors provide the enums",
+        "x-schema-evidence": "current FRP VisitorForm returns this model directly; a bounded STCP visitor probe POSTed the default STCP shape with a loopback bind, generated secret and provider proxy name, received ret=0 and passed a real byte roundtrip",
         "parameters": [
           {
             "name": "param",
@@ -19993,11 +20057,16 @@
         ],
         "responses": {
           "200": {
-            "description": "Lucky JSON response; envelope shape varies by endpoint.",
+            "description": "Response schema observed from runtime evidence; see x-schema-evidence for provenance.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LuckyEnvelope"
+                  "type": "object",
+                  "properties": {
+                    "ret": {
+                      "type": "integer"
+                    }
+                  }
                 }
               }
             }
@@ -20013,12 +20082,12 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_panel-BjQOfwVI.js"
         ],
         "x-lucky-risk": "mutating",
-        "x-schema-evidence": "frontend visitor update explicitly wraps edited VisitorForm object as {oldName:string,newVisitor:object}; the create schema documents the nested VisitorForm model",
+        "x-schema-evidence": "frontend visitor update explicitly wraps edited VisitorForm object as {oldName:string,newVisitor:object}; a bounded STCP visitor update enabled transport useEncryption/useCompression, returned ret=0, read back both booleans and retained a working byte roundtrip",
         "parameters": [
           {
             "name": "param",
@@ -20064,11 +20133,16 @@
         ],
         "responses": {
           "200": {
-            "description": "Lucky JSON response; envelope shape varies by endpoint.",
+            "description": "Response schema observed from runtime evidence; see x-schema-evidence for provenance.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LuckyEnvelope"
+                  "type": "object",
+                  "properties": {
+                    "ret": {
+                      "type": "integer"
+                    }
+                  }
                 }
               }
             }
@@ -20084,11 +20158,12 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_panel-BjQOfwVI.js"
         ],
         "x-lucky-risk": "mutating",
+        "x-schema-evidence": "bounded cleanup deleted only the uniquely named TEST STCP visitor, returned ret=0 and GET visitors confirmed the TEST name was absent before FRP instance cleanup",
         "parameters": [
           {
             "name": "param",

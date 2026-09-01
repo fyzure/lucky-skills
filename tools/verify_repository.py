@@ -626,6 +626,40 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
     if not (ROOT / "tools" / "lucky_dlna_probe.py").is_file():
         fail("DLNA runtime probe tool is missing")
 
+    frp_visitor_evidence = model_evidence.get("frp_stcp_visitor_behavior")
+    if not isinstance(frp_visitor_evidence, dict):
+        fail("FRP STCP visitor behavior evidence is missing")
+    if frp_visitor_evidence.get("confidence") != "runtime-verified":
+        fail("FRP STCP visitor behavior evidence must remain runtime-verified")
+    frp_visitor_model = frp_visitor_evidence.get("model")
+    if not isinstance(frp_visitor_model, dict) or set(frp_visitor_model) != {
+        "topology",
+        "provider_proxy",
+        "visitor",
+        "data_plane",
+        "transport_update",
+        "status_boundary",
+    }:
+        fail("FRP STCP visitor behavior model regressed")
+    frp_visitor_observations = frp_visitor_evidence.get("observations")
+    if not isinstance(frp_visitor_observations, dict) or set(frp_visitor_observations) != {
+        "visitor_readback",
+        "roundtrip",
+        "status",
+        "cleanup",
+    }:
+        fail("FRP STCP visitor observations regressed")
+    for field in ("verification", "security"):
+        value = frp_visitor_evidence.get(field)
+        if not isinstance(value, str) or not value.strip():
+            fail(f"FRP STCP visitor evidence field is missing: {field}")
+    if "127.0.0.1" not in str(frp_visitor_model.get("visitor")):
+        fail("FRP visitor loopback binding evidence regressed")
+    if "visitorStatuses" not in str(frp_visitor_model.get("status_boundary")):
+        fail("FRP visitor status-boundary evidence regressed")
+    if not (ROOT / "tools" / "lucky_frp_visitor_probe.py").is_file():
+        fail("FRP STCP visitor runtime probe tool is missing")
+
     filebrowser_evidence = model_evidence.get("filebrowser_local_behavior")
     if not isinstance(filebrowser_evidence, dict):
         fail("FileBrowser local behavior evidence is missing")
@@ -3274,8 +3308,8 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         fail("Local Path Browser delete must remain classified dangerous")
 
     response_schema_count = sum(route.response_schema is not None for route in patched_merged.routes)
-    if response_schema_count < 347:
-        fail(f"response-schema coverage regressed below 347 routes: {response_schema_count}")
+    if response_schema_count < 350:
+        fail(f"response-schema coverage regressed below 350 routes: {response_schema_count}")
 
     icon_response = merged_by_key[("GET", "/api/iconlib/icon")]
     if icon_response.response_type != "blob" or icon_response.response_content_type != "image/png":
@@ -4665,13 +4699,64 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         ("GET", "/api/frp/{param}/proxies"): {
             "type": "object", "properties": {"proxies": nullable_untyped_array, "ret": {"type": "integer"}}
         },
-        ("GET", "/api/frp/{param}/visitors"): {
-            "type": "object", "properties": {"ret": {"type": "integer"}, "visitors": nullable_untyped_array}
-        },
     }
     for route_key, expected_schema in frp_read_schemas.items():
         if merged_by_key[route_key].response_schema != expected_schema:
             fail(f"FRP disposable read response schema regressed for {route_key}")
+
+    expected_frp_visitor_item = {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string"},
+            "type": {"type": "string"},
+            "disabled": {"type": "boolean"},
+            "serverName": {"type": "string"},
+            "bindAddr": {"type": "string"},
+            "bindPort": {"type": "integer"},
+            "maxRetriesAnHour": {"type": "integer"},
+            "minRetryInterval": {"type": "integer"},
+            "protocol": {"type": "string"},
+            "transport": {
+                "type": "object",
+                "properties": {
+                    "useEncryption": {"type": "boolean"},
+                    "useCompression": {"type": "boolean"},
+                },
+            },
+            "natTraversal": {
+                "type": "object",
+                "properties": {"disableAssistedAddrs": {"type": "boolean"}},
+            },
+            "plugin": {
+                "type": "object",
+                "properties": {
+                    "type": {"type": "string"},
+                    "destinationIP": {"type": "string"},
+                },
+            },
+        },
+    }
+    frp_visitor_get = patched_by_key[("GET", "/api/frp/{param}/visitors")]
+    if frp_visitor_get.response_schema != {
+        "type": "object",
+        "properties": {
+            "ret": {"type": "integer"},
+            "visitors": {"type": ["array", "null"], "items": expected_frp_visitor_item},
+        },
+    }:
+        fail("FRP visitor runtime readback schema regressed")
+    if frp_visitor_get.confidence != "runtime-verified":
+        fail("FRP visitor GET must remain runtime-verified")
+    for route_key in {
+        ("POST", "/api/frp/{param}/visitors"),
+        ("PUT", "/api/frp/{param}/visitors"),
+        ("DELETE", "/api/frp/{param}/visitors/{param2}"),
+    }:
+        route = merged_by_key[route_key]
+        if route.response_schema != ret_only_schema:
+            fail(f"FRP visitor ret-only response schema regressed for {route_key}")
+        if route.confidence != "runtime-verified":
+            fail(f"FRP visitor route must remain runtime-verified for {route_key}")
 
 
 def check_generated_artifacts() -> None:

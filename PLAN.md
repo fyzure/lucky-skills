@@ -153,15 +153,15 @@
 
 ### FRP
 
-当前：disabled client CRUD 已实践，未真正连接 frps。
+当前：已完成 loopback frps/frpc、TCP proxy 真实数据面，以及独立 provider/visitor 两个 frpc 之间的 STCP visitor 数据面。
 
 - [x] 使用本机/测试 VPS 启动隔离 frps
 - [x] 创建 TEST frpc client
 - [x] 验证连接状态变为 running/connected
 - [x] 创建 TCP proxy
 - [x] 实际发送 TCP 数据
-- [ ] 如可行，补 visitor 流程
-- [x] 验证 logs/status/proxies（visitors 留待 visitor 流程）
+- [x] STCP visitor：独立 provider frpc + visitor frpc；visitor 仅绑定 `127.0.0.1`，真实 TCP echo 往返成功；再 PUT 开启 transport encryption+compression 后仍成功；固化 `tools/lucky_frp_visitor_probe.py`
+- [x] 验证 logs/status/proxies/visitors；注意当前 STCP 数据面可用时 `/status` 的 `visitorStatuses` 仍可能为空，不能只靠 status collection 判断成功
 - [x] 清理 frpc/frps TEST 资源
 
 ### Cloudflared

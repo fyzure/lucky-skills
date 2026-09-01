@@ -121,6 +121,10 @@ localhost SSH 还验证了首次 host-key 流程：connection test 返回 `ret=4
 
 `cloudflared` 和 `frp` 管理隧道实例、排序与日志。改变路由或隧道配置会直接改变公网可达性。更新后应从内外网分别验证 DNS、TLS 和回源行为。
 
+FRP 的普通 TCP proxy 和 STCP visitor 都已完成纯 loopback 行为验证。`tools/lucky_frp_probe.py` 在同一 Lucky 里启动 disposable `frps + frpc`，用一个只监听 `127.0.0.1` 的 echo origin 验证 TCP proxy 的真实双向字节往返；`tools/lucky_frp_visitor_probe.py` 则进一步使用一个 loopback frps、一个 provider frpc 和一个独立 visitor frpc。provider 创建 `type=stcp` 的 TEST proxy，visitor 创建对应 `type=stcp` visitor 并只绑定 `127.0.0.1:<随机端口>`，真实 payload 经 `visitor frpc → frps → provider frpc → echo` 原样返回。
+
+Visitor 的当前前端默认模型为 `type=stcp`、`bindAddr=127.0.0.1`、`bindPort=0`，另含 `serverName / secretKey / serverUser / transport / protocol / keepTunnelOpen / retry / fallback / natTraversal / plugin`。运行时 probe 使用内存生成的独立 FRP auth token 和 STCP secret，不输出任何 secret；第一次 roundtrip 成功后，又通过 `PUT /api/frp/{client}/visitors` 把 `transport.useEncryption/useCompression` 同时打开，GET readback 两个布尔值为 true，第二个不同 payload 仍成功往返。一个需要保留的语义是：当前 STCP visitor 明明能实际传输数据时，`GET /api/frp/{client}/status` 仍可能返回空的 `visitorStatuses`，因此 data-plane roundtrip 比 status collection 更强。最终 visitor/proxy 和三个 TEST FRP instance 都显式清理，instance-key 基线恢复。
+
 ## 第三方登录与 OAuth
 
 `thirdPartyAuthManager`、`oauth`、`security-groups` 和 `webservice/webauth` 共同管理第三方身份、授权用户和会话。不要记录临时 code、回调参数、用户标识或会话票据。

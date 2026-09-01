@@ -315,10 +315,10 @@ pageClass: api-routes-page
 | `PUT` | `/api/frp/{param}/proxies` | `mutating` | — | `oldName`, `newProxy` | `json` | `frontend-call` |
 | `DELETE` | `/api/frp/{param}/proxies/{param2}` | `mutating` | — | — | `json` | `frontend-call` |
 | `GET` | `/api/frp/{param}/status` | `read-only` | — | — | `json` | `frontend-call` |
-| `GET` | `/api/frp/{param}/visitors` | `read-only` | — | — | `json` | `frontend-call` |
-| `POST` | `/api/frp/{param}/visitors` | `mutating` | — | `bindAddr`, `bindPort`, `disabled`, `fallbackTimeoutMs`, `fallbackTo`, `keepTunnelOpen`, `maxRetriesAnHour`, `minRetryInterval`, `name`, `natTraversal`, `plugin`, `protocol`, `secretKey`, `serverName`, `serverUser`, `transport`, `type` | `json` | `frontend-call` |
-| `PUT` | `/api/frp/{param}/visitors` | `mutating` | — | `oldName`, `newVisitor` | `json` | `frontend-call` |
-| `DELETE` | `/api/frp/{param}/visitors/{param2}` | `mutating` | — | — | `json` | `frontend-call` |
+| `GET` | `/api/frp/{param}/visitors` | `read-only` | — | — | `json` | `runtime-verified` |
+| `POST` | `/api/frp/{param}/visitors` | `mutating` | — | `bindAddr`, `bindPort`, `disabled`, `fallbackTimeoutMs`, `fallbackTo`, `keepTunnelOpen`, `maxRetriesAnHour`, `minRetryInterval`, `name`, `natTraversal`, `plugin`, `protocol`, `secretKey`, `serverName`, `serverUser`, `transport`, `type` | `json` | `runtime-verified` |
+| `PUT` | `/api/frp/{param}/visitors` | `mutating` | — | `oldName`, `newVisitor` | `json` | `runtime-verified` |
+| `DELETE` | `/api/frp/{param}/visitors/{param2}` | `mutating` | — | — | `json` | `runtime-verified` |
 
 ## `ftpserver`
 

@@ -251,6 +251,25 @@
       },
       "security": "The probe refuses any physical or named LAN interface and only selects an empty Docker-style br-* interface with private IPv4, UP+MULTICAST and zero attached veths. It never modifies firewall/network configuration, never mounts external storage, creates only an owned /tmp media tree, and restores DLNA only while the live configuration still matches the TEST listener/interface/mount markers. Interface/IP values, DeviceUUID, log bodies and existing paths are not retained in evidence."
     },
+    "frp_stcp_visitor_behavior": {
+      "confidence": "runtime-verified",
+      "model": {
+        "topology": "A single Lucky runtime can host one loopback frps plus two loopback frpc clients: a provider client with an STCP proxy and a separate visitor client with an STCP visitor",
+        "provider_proxy": "The provider STCP proxy uses a loopback localIP/localPort backed by an owned echo server, a shared in-memory secretKey and no public remotePort",
+        "visitor": "The visitor uses type=stcp, serverName=<provider proxy name>, the same in-memory secretKey and bindAddr=127.0.0.1 with a random local bindPort",
+        "data_plane": "Connecting to the visitor bind port sent real bytes through visitor frpc -> frps -> provider frpc -> loopback echo and returned the exact payload",
+        "transport_update": "PUT /api/frp/{client}/visitors with {oldName,newVisitor} enabled visitor transport encryption and compression; readback preserved both booleans and real STCP byte roundtrip still succeeded",
+        "status_boundary": "GET /api/frp/{client}/status returned ret=0 while visitorStatuses remained an empty array during a working STCP visitor, so visitorStatuses is not treated as a data-plane success oracle"
+      },
+      "verification": "Starting from the existing FRP instance-key baseline, a bounded Lucky 3.0.0 probe created one TEST frps bound only to 127.0.0.1, one provider frpc and one visitor frpc connected only to that loopback frps. It created one STCP provider proxy backed by a process-local echo server and one STCP visitor bound to another 127.0.0.1 ephemeral port. A real payload round-tripped exactly through the visitor. The visitor was then PUT-updated to enable transport encryption and compression, those fields read back true, and a second distinct payload round-tripped exactly. The visitor and proxy were explicitly deleted, all three TEST FRP instances were removed, and the original FRP key baseline was restored.",
+      "observations": {
+        "visitor_readback": "Runtime visitor GET exposed name/type/disabled/serverName/bindAddr/bindPort plus transport, protocol, retry, NAT traversal and plugin structures; secretKey was never retained in evidence",
+        "roundtrip": "Both the initial STCP visitor and the encryption+compression visitor update passed exact loopback TCP payload roundtrip",
+        "status": "The instance status endpoint returned ret=0 but visitorStatuses count was zero while the data plane worked",
+        "cleanup": "Visitor/proxy deletion succeeded and the three disposable FRP instances returned to the exact pre-probe key baseline"
+      },
+      "security": "The probe exposes no public listener: frps, both frpc server connections, the provider echo target and the visitor bind are all 127.0.0.1. Authentication and STCP secret keys are generated in memory and never printed or written to evidence. Cleanup touches only uniquely TEST-prefixed objects and verifies the complete FRP instance-key baseline."
+    },
     "filebrowser_local_behavior": {
       "confidence": "runtime-verified",
       "model": {
@@ -1115,7 +1134,9 @@
       "method": "GET",
       "risk": "read-only",
       "response_schema": {"type":"object","properties":{"ret":{"type":"integer"},"visitors":{"type":["array","null"],"items":{}}}},
-      "schema_evidence": "authorized GET for the disposable text-mode FRP client returned visitors=null; envelope is verified and visitor item schema is intentionally not inferred from write models"
+      "confidence": "runtime-verified",
+      "schema_evidence": "an earlier disabled disposable client established the nullable visitors envelope; the later STCP visitor probe populated one disposable visitor and verified safe item field types while intentionally omitting secretKey values from response documentation",
+      "verification": "A running disposable visitor client returned one STCP visitor via GET and the same object continued to pass real data-plane traffic before and after a transport update."
     },
     {
       "path": "/api/frp/orderadjustment",
@@ -1147,7 +1168,10 @@
       "risk": "mutating",
       "body_keys": ["bindAddr", "bindPort", "disabled", "fallbackTimeoutMs", "fallbackTo", "keepTunnelOpen", "maxRetriesAnHour", "minRetryInterval", "name", "natTraversal", "plugin", "protocol", "secretKey", "serverName", "serverUser", "transport", "type"],
       "request_body_schema": {"type": "object", "properties": {"bindAddr": {"type": "string"}, "bindPort": {"type": "integer", "minimum": 0, "maximum": 65535}, "disabled": {"type": "boolean"}, "fallbackTimeoutMs": {"type": "integer"}, "fallbackTo": {"type": "string"}, "keepTunnelOpen": {"type": "boolean"}, "maxRetriesAnHour": {"type": "integer"}, "minRetryInterval": {"type": "integer"}, "name": {"type": "string"}, "natTraversal": {"type": "object", "properties": {"disableAssistedAddrs": {"type": "boolean"}}}, "plugin": {"type": "object", "properties": {"type": {"type": "string", "enum": ["", "virtual_net"]}, "destinationIP": {"type": "string"}}}, "protocol": {"type": "string", "enum": ["quic", "kcp"]}, "secretKey": {"type": "string"}, "serverName": {"type": "string"}, "serverUser": {"type": "string"}, "transport": {"type": "object", "properties": {"useEncryption": {"type": "boolean"}, "useCompression": {"type": "boolean"}}}, "type": {"type": "string", "enum": ["stcp", "xtcp", "sudp"]}}},
-      "schema_evidence": "current FRP VisitorForm returns this model directly; the default model proves nested transport/natTraversal/plugin shapes and the visitor type/protocol/plugin selectors provide the enums"
+      "response_schema": {"type": "object", "properties": {"ret": {"type": "integer"}}},
+      "confidence": "runtime-verified",
+      "schema_evidence": "current FRP VisitorForm returns this model directly; a bounded STCP visitor probe POSTed the default STCP shape with a loopback bind, generated secret and provider proxy name, received ret=0 and passed a real byte roundtrip",
+      "verification": "A disposable STCP visitor was created on a separate loopback frpc client and immediately carried real TCP echo traffic through the loopback frps/provider path."
     },
     {
       "path": "/api/frp/{param}/visitors",
@@ -1155,7 +1179,19 @@
       "risk": "mutating",
       "body_keys": ["oldName", "newVisitor"],
       "request_body_schema": {"type": "object", "properties": {"oldName": {"type": "string"}, "newVisitor": {"type": "object"}}},
-      "schema_evidence": "frontend visitor update explicitly wraps edited VisitorForm object as {oldName:string,newVisitor:object}; the create schema documents the nested VisitorForm model"
+      "response_schema": {"type": "object", "properties": {"ret": {"type": "integer"}}},
+      "confidence": "runtime-verified",
+      "schema_evidence": "frontend visitor update explicitly wraps edited VisitorForm object as {oldName:string,newVisitor:object}; a bounded STCP visitor update enabled transport useEncryption/useCompression, returned ret=0, read back both booleans and retained a working byte roundtrip",
+      "verification": "The disposable STCP visitor was PUT-updated in place and the updated data plane was verified rather than relying only on ret=0."
+    },
+    {
+      "path": "/api/frp/{param}/visitors/{param2}",
+      "method": "DELETE",
+      "risk": "mutating",
+      "response_schema": {"type": "object", "properties": {"ret": {"type": "integer"}}},
+      "confidence": "runtime-verified",
+      "schema_evidence": "bounded cleanup deleted only the uniquely named TEST STCP visitor, returned ret=0 and GET visitors confirmed the TEST name was absent before FRP instance cleanup",
+      "verification": "The disposable visitor was explicitly removed before deleting its owning TEST frpc instance."
     },
     {
       "path": "/api/webservice/frontend-state",
@@ -4385,8 +4421,8 @@
     },
     {
       "path": "/api/frp/{param}/visitors", "method": "GET",
-      "at": ["properties", "visitors", "items"], "value": {"type": "object"},
-      "evidence": "the typed FRP write model establishes Visitors as an array of structured objects; credential-bearing nested fields remain undocumented"
+      "at": ["properties", "visitors", "items"], "value": {"type": "object", "properties": {"name": {"type": "string"}, "type": {"type": "string"}, "disabled": {"type": "boolean"}, "serverName": {"type": "string"}, "bindAddr": {"type": "string"}, "bindPort": {"type": "integer"}, "maxRetriesAnHour": {"type": "integer"}, "minRetryInterval": {"type": "integer"}, "protocol": {"type": "string"}, "transport": {"type": "object", "properties": {"useEncryption": {"type": "boolean"}, "useCompression": {"type": "boolean"}}}, "natTraversal": {"type": "object", "properties": {"disableAssistedAddrs": {"type": "boolean"}}}, "plugin": {"type": "object", "properties": {"type": {"type": "string"}, "destinationIP": {"type": "string"}}}}},
+      "evidence": "the disposable STCP visitor readback verified these safe fields/types. secretKey was present in the live object but is intentionally omitted from response documentation and evidence values"
     },
     {
       "path": "/api/ftpserver/configure", "method": "GET",
