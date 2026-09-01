@@ -1122,6 +1122,14 @@ def main() -> int:
                                     and isinstance(login_token, str)
                                     and bool(login_token.strip())
                                 )
+                                if report["oauth_login_token_present"]:
+                                    # Lucky switches the active backend auth context
+                                    # after a successful OAuth login. Re-authenticate
+                                    # the disposable administrator before lifecycle
+                                    # cleanup instead of reusing the pre-OAuth token.
+                                    admin_token, browser_opener, _ = login_browser_admin(
+                                        base_url, tmp
+                                    )
 
                         admin_json(
                             base_url,
