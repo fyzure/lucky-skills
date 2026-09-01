@@ -130,13 +130,13 @@
 
 ### STUN / NAT Mapping
 
-当前：生产 RS 仍不模拟 NAT；真实 mapping 行为改在 GitHub-hosted disposable Lucky 3.0.0 中完成。probe 使用 Docker `--internal` 作为 Lucky LAN、独立 veth/netns 作为 synthetic WAN、owned STUN responder + NAT-PMP UDP/5351 gateway。Lucky 仅通过 API 创建 udp4 TEST rule；NAT-PMP add 的 internal port 与 ListenPort 一致，外部 netns 的随机 UDP marker 通过临时 mapping relay → Lucky → echo target → Lucky → relay 原样返回，disable/delete 后观察到 lifetime=0 delete 并撤销 mapping。UPnP mapping 仍未单独实践。
+当前：生产 RS 仍不模拟 NAT；真实 mapping 行为改在 GitHub-hosted disposable Lucky 3.0.0 中完成。NAT-PMP 与 UPnP 都使用 Docker `--internal` 作为 Lucky LAN、独立 veth/netns 作为 synthetic WAN，并只通过 Lucky API 创建 udp4 TEST rule。NAT-PMP 已验证 UDP/5351 add、真实数据面与 lifetime=0 delete；UPnP 也已验证 SSDP discovery、IGD device description、GetExternalIPAddress、AddPortMapping、真实 UDP 数据面和 DeletePortMapping。两条路径都不接触生产防火墙/路由器。
 
 - [x] 创建隔离 TEST STUN rule
 - [x] 真实执行 STUN 地址探测
 - [x] 验证 NAT 类型/公网映射结果
 - [x] 在安全条件下验证一个临时端口映射（隔离 CI NAT-PMP）
-- [x] 优先测试 NAT-PMP / UPnP 中当前网络实际支持的方式（已完成 NAT-PMP；UPnP 保留独立边界）
+- [x] 优先测试 NAT-PMP / UPnP 中当前网络实际支持的方式（隔离 CI 已分别完成 NAT-PMP 与 UPnP E2E）
 - [x] 验证地址变化/状态日志
 - [x] 清理 TEST rule 和映射
 - [x] 验证没有残留防火墙/端口映射

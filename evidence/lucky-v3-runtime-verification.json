@@ -287,7 +287,27 @@
         "logs": "Safe Lucky log samples included NAT-PMP local mapping creation, the current owned STUN server, successful redacted public-address discovery, forwarding-service enabled state and IP-filter pass entries",
         "cleanup": "The NAT-PMP lifetime=0 delete was observed, the owned mapping relay was closed, the TEST rule key baseline returned empty and the temporary STUN module configuration returned to its original state"
       },
-      "security": "The probe refuses execution outside GitHub Actions and requires root only to create/delete its private veth network namespace. It does not modify iptables, sysctls, a physical NIC, production Lucky, a real router or any public route. Lucky's admin port remains unpublished; all generated WAN/LAN addresses, ports and marker bytes are disposable and are not retained as repository evidence. UPnP mapping remains independently unexercised."
+      "security": "The probe refuses execution outside GitHub Actions and requires root only to create/delete its private veth network namespace. It does not modify iptables, sysctls, a physical NIC, production Lucky, a real router or any public route. Lucky's admin port remains unpublished; all generated WAN/LAN addresses, ports and marker bytes are disposable and are not retained as repository evidence. UPnP mapping is verified separately by the dedicated isolated UPnP CI probe rather than inferred from NAT-PMP."
+    },
+    "stun_upnp_ci_behavior": {
+      "confidence": "runtime-verified",
+      "model": {
+        "topology": "A fresh pinned Lucky 3.0.0 container runs only on a Docker --internal LAN while a separate veth-backed network namespace acts as the synthetic WAN; an owned stdlib IGD v1 fixture is bound only to the disposable bridge and WAN address",
+        "discovery": "Lucky issued SSDP M-SEARCH, consumed the owned SSDP response, fetched the IGD device description, then invoked WANIPConnection SOAP actions against the owned control URL",
+        "control_plane": "The TEST udp4 rule uses UPnP=true, NatPMP=false and AutoOptionsFirewall=false. Lucky called GetExternalIPAddress and AddPortMapping; the requested protocol was UDP, NewInternalClient matched the disposable Lucky IP and NewInternalPort matched rule ListenPort",
+        "mapping_data_plane": "The owned IGD creates a userspace UDP mapping relay on the synthetic WAN address for AddPortMapping. A random WAN marker traversed relay -> Lucky listener -> owned UDP echo target -> Lucky -> relay and returned byte-for-byte",
+        "public_endpoint": "The successful UPnP path obtained the synthetic WAN address through IGD GetExternalIPAddress and exposed that address in Lucky runtime state even though the separately configured owned STUN Binding responder received no request in this run",
+        "delete": "Disabling/deleting the TEST rule caused DeletePortMapping; the owned relay was removed, the TEST rule disappeared and the original STUN module state was restored"
+      },
+      "verification": "A GitHub-hosted CI run of tools/lucky_upnp_ci_probe.py started a disposable Docker --internal Lucky LAN, an isolated veth/network-namespace WAN, a pinned Lucky 3.0.0 container with no published admin port, and owned stdlib SSDP/IGD/UDP-echo/STUN fixtures. Lucky configuration changed only through HTTP APIs after OpenToken bootstrap. The temporary udp4 rule enabled UPnP while keeping NatPMP and firewall automation disabled. The probe observed real SSDP discovery, device-description retrieval, GetExternalIPAddress and AddPortMapping. AddPortMapping requested UDP, used the Lucky container address as internal client and the rule ListenPort as internal port. The resulting external mapping carried a random UDP marker from the WAN namespace through Lucky to the echo target and back exactly, with nonzero mapping forward/return counts. Disabling/deleting the rule produced DeletePortMapping, removed the relay, restored the rule baseline and restored the original STUN module state. The successful report had failed=[].",
+      "observations": {
+        "soap": "The successful trace contained GetExternalIPAddress, AddPortMapping and DeletePortMapping WANIPConnection actions; SSDP request/response and device-description fetch were also observed",
+        "mapping": "The requested protocol was UDP, internal client matched the disposable Lucky IP and internal port matched ListenPort; the mapping relay was installed only for that owned mapping",
+        "data_plane": "mapped_data_roundtrip and mapped_echo_target_used were true, with exactly one observed relay forward and one relay return for the marker transaction",
+        "stun_binding": "The owned STUN Binding responder saw zero requests in the successful UPnP run; Lucky still obtained and reported the synthetic WAN endpoint through the IGD GetExternalIPAddress path",
+        "cleanup": "DeletePortMapping was observed, the mapping relay was gone, the TEST rule baseline returned empty and the STUN module configuration returned to its original state"
+      },
+      "security": "The probe is GitHub-Actions-only and uses root solely for its disposable veth/network namespace and bridge-scoped SSDP socket binding. It does not touch production Lucky, a physical/LAN interface, a real IGD/router, Internet routing, iptables or sysctls. Lucky's admin port is not published, and generated addresses, ports and marker bytes are not retained as repository evidence."
     },
     "smb_loopback_behavior": {
       "confidence": "runtime-verified",

@@ -39,7 +39,9 @@ Lucky 3.0.0 的 SNI 分流也已完成真实实例验证。子规则类型值为
 
 启用规则会立即改变网络暴露面。自动化保存后应验证监听地址、防火墙状态和目标服务，不要只检查 `ret: 0`。
 
-NAT-PMP 映射已经通过 `tools/lucky_natpmp_ci_probe.py` 在 GitHub-hosted disposable Lucky 3.0.0 上完成真实协议与数据面闭环，而不是在 RS 生产公网网卡上制造 NAT。隔离拓扑由 Docker `--internal` Lucky LAN、独立 veth/network namespace synthetic WAN、owned STUN responder、NAT-PMP UDP/5351 gateway 和 UDP echo target 组成。Lucky 只通过 HTTP API 临时启用 STUN 模块并创建唯一 udp4 TEST rule，`NatPMP=true`、`UPnP=false`、`AutoOptionsFirewall=false`。CI 实际观察到 NAT-PMP UDP add，internal port 与 rule `ListenPort` 一致；fake gateway 分配 external UDP port 后创建 owned mapping relay，WAN namespace 的随机 marker 经 relay → Lucky → echo → Lucky → relay 完整原样返回。关闭/删除 rule 时又观察到 lifetime=0 delete，relay 随即消失，rule/module baseline 完整恢复。当前不把这项证据扩展成“UPnP mapping 也已验证”；UPnP 仍是单独边界。
+NAT-PMP 映射已经通过 `tools/lucky_natpmp_ci_probe.py` 在 GitHub-hosted disposable Lucky 3.0.0 上完成真实协议与数据面闭环，而不是在 RS 生产公网网卡上制造 NAT。隔离拓扑由 Docker `--internal` Lucky LAN、独立 veth/network namespace synthetic WAN、owned STUN responder、NAT-PMP UDP/5351 gateway 和 UDP echo target 组成。Lucky 只通过 HTTP API 临时启用 STUN 模块并创建唯一 udp4 TEST rule，`NatPMP=true`、`UPnP=false`、`AutoOptionsFirewall=false`。CI 实际观察到 NAT-PMP UDP add，internal port 与 rule `ListenPort` 一致；fake gateway 分配 external UDP port 后创建 owned mapping relay，WAN namespace 的随机 marker 经 relay → Lucky → echo → Lucky → relay 完整原样返回。关闭/删除 rule 时又观察到 lifetime=0 delete，relay 随即消失，rule/module baseline 完整恢复。
+
+UPnP mapping 也已通过 `tools/lucky_upnp_ci_probe.py` 独立完成，不是从 NAT-PMP 结果推断。probe 复用同类 isolated LAN/WAN 拓扑，但路由器侧改为只绑定 TEST bridge 的 stdlib IGD v1 fixture。Lucky 的 `UPnP=true` / `NatPMP=false` udp4 rule 实际发出 SSDP M-SEARCH，读取 fake IGD device description，然后调用 WANIPConnection 的 `GetExternalIPAddress` 与 `AddPortMapping`。AddPortMapping 实测为 UDP，internal client 等于 disposable Lucky IP，internal port 等于 `ListenPort`。fake IGD 为这条 owned mapping 建立 userspace relay 后，synthetic WAN 的随机 marker 能经 mapping → Lucky → echo target → Lucky → mapping 原样返回；关闭/删除 rule 后又收到 `DeletePortMapping` 并撤销 relay。当前成功运行中，另配的 TEST STUN Binding responder没有收到请求，说明 Lucky 3.0.0 这条 UPnP 路径可直接通过 IGD `GetExternalIPAddress` 得到公网端点；这只是当前运行时语义，不应外推成所有配置都绕过 STUN。
 
 ## 网络唤醒
 

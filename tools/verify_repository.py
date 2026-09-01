@@ -707,12 +707,55 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         fail("STUN NAT-PMP deletion evidence regressed")
     if "network namespace" not in str(natpmp_model.get("topology")):
         fail("STUN NAT-PMP WAN isolation evidence regressed")
-    if "UPnP" not in str(natpmp_evidence.get("security")):
-        fail("STUN NAT-PMP UPnP boundary evidence regressed")
     if not (ROOT / "tools" / "lucky_natpmp_ci_probe.py").is_file():
         fail("STUN NAT-PMP CI runtime probe tool is missing")
     if not (ROOT / ".github" / "workflows" / "lucky-natpmp-ci.yml").is_file():
         fail("STUN NAT-PMP CI workflow is missing")
+
+    upnp_evidence = model_evidence.get("stun_upnp_ci_behavior")
+    if not isinstance(upnp_evidence, dict):
+        fail("STUN UPnP CI behavior evidence is missing")
+    if upnp_evidence.get("confidence") != "runtime-verified":
+        fail("STUN UPnP CI behavior evidence must remain runtime-verified")
+    upnp_model = upnp_evidence.get("model")
+    if not isinstance(upnp_model, dict) or set(upnp_model) != {
+        "topology",
+        "discovery",
+        "control_plane",
+        "mapping_data_plane",
+        "public_endpoint",
+        "delete",
+    }:
+        fail("STUN UPnP CI behavior model regressed")
+    upnp_observations = upnp_evidence.get("observations")
+    if not isinstance(upnp_observations, dict) or set(upnp_observations) != {
+        "soap",
+        "mapping",
+        "data_plane",
+        "stun_binding",
+        "cleanup",
+    }:
+        fail("STUN UPnP CI behavior observations regressed")
+    for field in ("verification", "security"):
+        value = upnp_evidence.get(field)
+        if not isinstance(value, str) or not value.strip():
+            fail(f"STUN UPnP CI behavior evidence field is missing: {field}")
+    if "SSDP" not in str(upnp_model.get("discovery")):
+        fail("STUN UPnP SSDP discovery evidence regressed")
+    if "AddPortMapping" not in str(upnp_model.get("control_plane")):
+        fail("STUN UPnP AddPortMapping evidence regressed")
+    if "mapping relay" not in str(upnp_model.get("mapping_data_plane")):
+        fail("STUN UPnP mapping-relay evidence regressed")
+    if "DeletePortMapping" not in str(upnp_model.get("delete")):
+        fail("STUN UPnP deletion evidence regressed")
+    if "network namespace" not in str(upnp_model.get("topology")):
+        fail("STUN UPnP WAN isolation evidence regressed")
+    if "zero requests" not in str(upnp_observations.get("stun_binding")):
+        fail("STUN UPnP STUN-binding observation regressed")
+    if not (ROOT / "tools" / "lucky_upnp_ci_probe.py").is_file():
+        fail("STUN UPnP CI runtime probe tool is missing")
+    if not (ROOT / ".github" / "workflows" / "lucky-upnp-ci.yml").is_file():
+        fail("STUN UPnP CI workflow is missing")
 
     smb_evidence = model_evidence.get("smb_loopback_behavior")
     if not isinstance(smb_evidence, dict):
