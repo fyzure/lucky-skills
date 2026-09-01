@@ -2300,14 +2300,6 @@
     },
     {
       "path": "/api/storagemanagement/list",
-      "method": "GET",
-      "risk": "read-only",
-      "response_type": "json",
-      "confidence": "runtime-verified",
-      "verification": "Current Lucky 3.0.0 frontend explicitly calls GET /api/storagemanagement/list. An authorized GET on the verified Linux instance returned ret=0 with os plus list and aliyunpanAuthorizationList envelope fields; both lists were null at the pre-probe baseline. No storage mutation occurred."
-    },
-    {
-      "path": "/api/storagemanagement/list",
       "method": "POST",
       "risk": "mutating",
       "body_keys": ["Type", "Enable", "Key", "Remark", "Writable", "Log", "Params", "SystemMount"],
