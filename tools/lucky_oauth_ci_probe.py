@@ -19,6 +19,9 @@ from __future__ import annotations
 
 import http.server
 import http.cookiejar
+import base64
+import hashlib
+import hmac
 import json
 import os
 import re
@@ -332,9 +335,10 @@ def tmpcode_browser_attempt(
 
 
 class FakeOidcProvider:
-    def __init__(self, bind_ip: str, client_id: str) -> None:
+    def __init__(self, bind_ip: str, client_id: str, client_secret: str) -> None:
         self.bind_ip = bind_ip
         self.client_id = client_id
+        self.client_secret = client_secret
         self.authorization_requests = 0
         self.callback_requests = 0
         self.token_requests = 0
@@ -346,6 +350,7 @@ class FakeOidcProvider:
         self.redirect_uri_seen = False
         self.client_id_matches = False
         self.state_seen = False
+        self._nonce = ""
         self._code = "TEST-" + secrets.token_urlsafe(18)
         self._access_token = "TEST-" + secrets.token_urlsafe(22)
         self._relay_code = "TEST-" + secrets.token_urlsafe(20)
@@ -360,6 +365,32 @@ class FakeOidcProvider:
         ]
         self.relay_responses_used: list[str] = []
         fixture = self
+
+        def b64url(value: bytes) -> str:
+            return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
+
+        def id_token() -> str:
+            now = int(time.time())
+            header = {"alg": "HS256", "typ": "JWT"}
+            claims: dict[str, Any] = {
+                "iss": f"http://{fixture.bind_ip}:{fixture.port}",
+                "aud": fixture.client_id,
+                "sub": "TEST-SUBJECT",
+                "name": "Lucky Skills OAuth CI",
+                "email": "test-oauth-ci@example.invalid",
+                "preferred_username": "lucky-skills-oauth-ci",
+                "iat": now,
+                "exp": now + 300,
+            }
+            if fixture._nonce:
+                claims["nonce"] = fixture._nonce
+            encoded_header = b64url(json.dumps(header, separators=(",", ":")).encode())
+            encoded_claims = b64url(json.dumps(claims, separators=(",", ":")).encode())
+            signing_input = f"{encoded_header}.{encoded_claims}".encode("ascii")
+            signature = hmac.new(
+                fixture.client_secret.encode(), signing_input, hashlib.sha256
+            ).digest()
+            return f"{encoded_header}.{encoded_claims}.{b64url(signature)}"
 
         class Handler(http.server.BaseHTTPRequestHandler):
             server_version = "LuckySkillsOIDC/1"
@@ -454,6 +485,7 @@ class FakeOidcProvider:
                     fixture.redirect_uri_seen = bool(query.get("redirect_uri", [""])[0])
                     fixture.client_id_matches = query.get("client_id", [""])[0] == fixture.client_id
                     fixture.state_seen = bool(query.get("state", [""])[0])
+                    fixture._nonce = query.get("nonce", [""])[0]
                     redirect_uri = query.get("redirect_uri", [""])[0]
                     if not redirect_uri:
                         self._json(400, {"error": "missing_redirect_uri"})
@@ -490,7 +522,11 @@ class FakeOidcProvider:
                             "jwks_uri": origin + "/jwks",
                             "response_types_supported": ["code"],
                             "subject_types_supported": ["public"],
-                            "id_token_signing_alg_values_supported": ["none"],
+                            "id_token_signing_alg_values_supported": ["HS256"],
+                            "token_endpoint_auth_methods_supported": [
+                                "client_secret_post",
+                                "client_secret_basic",
+                            ],
                         },
                     )
                     return
@@ -533,6 +569,7 @@ class FakeOidcProvider:
                             "access_token": fixture._access_token,
                             "token_type": "Bearer",
                             "expires_in": 300,
+                            "id_token": id_token(),
                         },
                     )
                     return
@@ -586,6 +623,7 @@ def main() -> int:
     bridge_name = f"broauth{nonce[:6]}"
     container_name = f"lucky-oauth-ci-{nonce}"
     client_id = TEST_PREFIX + nonce
+    client_secret = secrets.token_urlsafe(24)
     report: dict[str, Any] = {
         "lucky_version": "",
         "api_only_lucky_operations": True,
@@ -609,6 +647,7 @@ def main() -> int:
         "auth_url_owned": False,
         "auth_server_shape": "",
         "authorization_followed": False,
+        "authorization_callback_completed": False,
         "authorization_query_keys": [],
         "authorization_client_id_matches": False,
         "authorization_redirect_uri_seen": False,
@@ -623,6 +662,8 @@ def main() -> int:
         "oauth_status_ret_values": [],
         "oauth_userinfo_shape": {},
         "oauth_userinfo_ret": None,
+        "oauth_userinfo_msg": "",
+        "oauth_userinfo_error": "",
         "third_party_user_created": False,
         "config_restored": False,
         "user_baseline_restored": False,
@@ -656,7 +697,7 @@ def main() -> int:
         try:
             gateway_ip, _ = docker_network_values(network_name)
             report["network_internal"] = True
-            provider = FakeOidcProvider(gateway_ip, client_id)
+            provider = FakeOidcProvider(gateway_ip, client_id, client_secret)
             provider.start()
             docker(
                 "run",
@@ -725,7 +766,7 @@ def main() -> int:
                 name=TEST_PREFIX + nonce + "-relay",
                 listen_port=relay_port,
                 client_id=client_id,
-                client_secret=secrets.token_urlsafe(24),
+                client_secret=client_secret,
                 provider_origin=provider_origin,
                 callback_url=relay_callback,
             )
@@ -793,7 +834,8 @@ def main() -> int:
                 report["auth_url_owned"] = parsed.hostname == gateway_ip and parsed.port == provider.port
                 if report["auth_url_owned"]:
                     follow = follow_authorization(auth_url, gateway_ip, provider.port)
-                    report["authorization_followed"] = follow.get("status") == 200
+                    report["authorization_followed"] = provider.token_requests > 0
+                    report["authorization_callback_completed"] = provider.token_requests > 0
 
             # Give the fixture redirect a moment to settle, then poll exactly as
             # the frontend does.  No raw temporary code is reported.
@@ -840,6 +882,8 @@ def main() -> int:
                 )
                 report["oauth_userinfo_ret"] = userinfo.get("ret")
                 report["oauth_userinfo_shape"] = json_shape(userinfo)
+                report["oauth_userinfo_msg"] = str(userinfo.get("msg") or "")[:240]
+                report["oauth_userinfo_error"] = str(userinfo.get("error") or "")[:400]
 
             report["authorization_query_keys"] = provider.authorization_query_keys
             report["authorization_client_id_matches"] = provider.client_id_matches
@@ -930,9 +974,9 @@ def main() -> int:
         "tmpcode_available",
         "auth_url_owned",
         "authorization_followed",
+        "authorization_callback_completed",
         "authorization_client_id_matches",
         "authorization_redirect_uri_seen",
-        "callback_seen",
         "config_restored",
         "user_baseline_restored",
     )
