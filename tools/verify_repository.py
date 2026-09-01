@@ -3209,7 +3209,6 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         "/api/rclone/globalconfig": "globalConfig",
         "/api/ipfliter/list/{param}": "rule",
         "/api/thirdPartyAuthManager/config": "config",
-        "/api/ftpserver/configure": "configure",
         "/api/webdav/configure": "configure",
         "/api/wol/service/configure": "configure",
     }

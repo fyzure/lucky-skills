@@ -279,6 +279,8 @@ def main() -> int:
         "baseline_restored": False,
         "user_readback_fields": [],
         "mount_readback_fields": [],
+        "user_safe_type_names": {},
+        "mount_safe_type_names": {},
     }
 
     with tempfile.TemporaryDirectory(prefix="lucky-ftp-ci-", dir=runner_temp) as temp_dir_raw:
@@ -404,6 +406,14 @@ def main() -> int:
                 mounts[0] if isinstance(mounts, list) and mounts and isinstance(mounts[0], dict) else {}
             )
             report["mount_readback_fields"] = sorted(first_mount)
+            report["user_safe_type_names"] = {
+                field: type(first_user.get(field)).__name__
+                for field in ("Username", "Dirs", "ReadOnly", "MountList")
+            }
+            report["mount_safe_type_names"] = {
+                field: type(first_mount.get(field)).__name__
+                for field in ("Type", "Param", "DisplayName", "Writable", "IsLocalDir")
+            }
             report["readback_safe_types"] = (
                 isinstance(first_user.get("Username"), str)
                 and isinstance(first_user.get("Dirs"), list)
