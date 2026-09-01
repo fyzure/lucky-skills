@@ -245,6 +245,80 @@ def remote_detail(base_url: str, token: str, key: str) -> dict[str, Any]:
     return remote
 
 
+def rclone_log_diagnostics(base_url: str, token: str) -> dict[str, Any]:
+    """Return bounded disposable-instance Rclone logs for CI failure triage."""
+
+    diagnostics: dict[str, Any] = {}
+    for label, path in (
+        ("lastlogs", "/api/rclone/lastlogs"),
+        ("logs", query_path("/api/rclone/logs", {"page": 1, "pageSize": 50})),
+    ):
+        try:
+            response = api(base_url, token, "GET", path, label=f"Rclone {label}")
+            diagnostics[label] = json.dumps(response, ensure_ascii=False, sort_keys=True)[:12000]
+        except Exception as error:  # noqa: BLE001 - failure diagnostic only
+            diagnostics[label] = {"error": type(error).__name__, "message": str(error)[:500]}
+    return diagnostics
+
+
+def cron_runtime_diagnostics(
+    base_url: str,
+    token: str,
+    helper: dict[str, Any],
+    cron_task_key: str,
+    root: str,
+    mount_path: str,
+) -> dict[str, bool]:
+    """Inspect mount namespace and /dev/fuse through Lucky's Cron API only."""
+
+    mounted_yes = root + "/diag-mountinfo-mounted"
+    mounted_no = root + "/diag-mountinfo-not-mounted"
+    fuse_yes = root + "/diag-fuse-rw"
+    fuse_no = root + "/diag-fuse-not-rw"
+    diagnostic_helper = copy.deepcopy(helper)
+    diagnostic_helper["Key"] = cron_task_key
+    diagnostic_helper["Jobs"][0]["Options"]["shell_content"] = (
+        f"if grep -F ' {mount_path} ' /proc/self/mountinfo >/dev/null 2>&1; "
+        f"then mkdir -p '{mounted_yes}'; else mkdir -p '{mounted_no}'; fi; "
+        f"if test -c /dev/fuse && test -r /dev/fuse && test -w /dev/fuse; "
+        f"then mkdir -p '{fuse_yes}'; else mkdir -p '{fuse_no}'; fi"
+    )
+    api(
+        base_url,
+        token,
+        "PUT",
+        "/api/cron/list",
+        payload=diagnostic_helper,
+        label="update Cron helper for mount diagnostics",
+    )
+    api(
+        base_url,
+        token,
+        "GET",
+        query_path("/api/cron/dojobs", {"key": cron_task_key}),
+        label="run mount diagnostics",
+    )
+    deadline = time.monotonic() + 8
+    while time.monotonic() < deadline:
+        if any(
+            path_has(base_url, token, root, name)
+            for name in (
+                "diag-mountinfo-mounted",
+                "diag-mountinfo-not-mounted",
+                "diag-fuse-rw",
+                "diag-fuse-not-rw",
+            )
+        ):
+            break
+        time.sleep(0.2)
+    return {
+        "mountinfo_has_mount": path_has(base_url, token, root, "diag-mountinfo-mounted"),
+        "mountinfo_reports_absent": path_has(base_url, token, root, "diag-mountinfo-not-mounted"),
+        "fuse_device_rw": path_has(base_url, token, root, "diag-fuse-rw"),
+        "fuse_device_not_rw": path_has(base_url, token, root, "diag-fuse-not-rw"),
+    }
+
+
 def frontend_mount_snippets(base_url: str) -> dict[str, str]:
     """Extract public Lucky 3.0.0 Rclone UI context for mount field semantics."""
 
@@ -449,6 +523,7 @@ def main() -> int:
         "baseline_cron_groups_empty": False,
         "global_config_restored": False,
         "remote_created": False,
+        "mount_enable_retry_used": False,
         "mount_visible": False,
         "mount_msg_empty": False,
         "write_through": False,
@@ -631,15 +706,64 @@ def main() -> int:
                 remote_key,
                 mount_path,
                 source_marker,
+                timeout=8.0,
             )
+            if not mounted:
+                # Some Lucky module lifecycles instantiate the VFS only on an
+                # explicit enable transition. Exercise the same public API the
+                # UI uses before treating create-with-Enable as a mount failure.
+                report["mount_enable_retry_used"] = True
+                api(
+                    base_url,
+                    token,
+                    "GET",
+                    query_path(
+                        "/api/rclone/remotelist/option",
+                        {"key": remote_key, "enable": "false"},
+                    ),
+                    label="disable Rclone remote before mount retry",
+                )
+                api(
+                    base_url,
+                    token,
+                    "GET",
+                    query_path(
+                        "/api/rclone/remotelist/option",
+                        {"key": remote_key, "enable": "true"},
+                    ),
+                    label="re-enable Rclone remote for mount retry",
+                )
+                mounted, mount_msg, mount_diagnostic = wait_mount_ready(
+                    base_url,
+                    token,
+                    remote_key,
+                    mount_path,
+                    source_marker,
+                    timeout=25.0,
+                )
             report["mount_visible"] = mounted
             report["mount_msg_empty"] = not mount_msg
             if not mounted:
+                runtime_diagnostic = (
+                    cron_runtime_diagnostics(
+                        base_url,
+                        token,
+                        helper,
+                        cron_task_key,
+                        root,
+                        mount_path,
+                    )
+                    if helper is not None and cron_task_key
+                    else {}
+                )
+                log_diagnostic = rclone_log_diagnostics(base_url, token)
                 frontend_diagnostic = frontend_mount_snippets(base_url)
                 raise ProbeError(
                     "Rclone SystemMount did not become visible; "
                     f"MountMsg={mount_msg[:240]!r}; "
                     f"readback={json.dumps(mount_diagnostic, ensure_ascii=False, sort_keys=True)}; "
+                    f"runtime={json.dumps(runtime_diagnostic, ensure_ascii=False, sort_keys=True)}; "
+                    f"logs={json.dumps(log_diagnostic, ensure_ascii=False, sort_keys=True)[:16000]}; "
                     f"frontend={json.dumps(frontend_diagnostic, ensure_ascii=False, sort_keys=True)[:18000]}"
                 )
 
