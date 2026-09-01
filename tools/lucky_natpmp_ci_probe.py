@@ -334,6 +334,7 @@ class NatPmpGateway:
         self.started_at = time.monotonic()
         self.public_address_requests = 0
         self.add_requests = 0
+        self.renew_requests = 0
         self.delete_requests = 0
         self.last_internal_port = 0
         self.last_requested_external_port = 0
@@ -419,9 +420,17 @@ class NatPmpGateway:
                     self.delete_event.set()
                 else:
                     self.add_requests += 1
-                    external_port = self._choose_external_port(requested_external, internal_port)
-                    self._replace_forwarder(external_port, internal_port)
-                    self.last_external_port = external_port
+                    if (
+                        self.forwarder is not None
+                        and self.forwarder.internal_port == internal_port
+                        and self.last_external_port > 0
+                    ):
+                        external_port = self.last_external_port
+                        self.renew_requests += 1
+                    else:
+                        external_port = self._choose_external_port(requested_external, internal_port)
+                        self._replace_forwarder(external_port, internal_port)
+                        self.last_external_port = external_port
                     self.add_event.set()
             response = struct.pack(
                 "!BBHIHHI",
