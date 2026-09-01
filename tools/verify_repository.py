@@ -591,6 +591,43 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
     if not (ROOT / "tools" / "lucky_webdav_probe.py").is_file():
         fail("WebDAV runtime probe tool is missing")
 
+    smb_evidence = model_evidence.get("smb_loopback_behavior")
+    if not isinstance(smb_evidence, dict):
+        fail("SMB loopback behavior evidence is missing")
+    if smb_evidence.get("confidence") != "runtime-verified":
+        fail("SMB loopback behavior evidence must remain runtime-verified")
+    smb_model = smb_evidence.get("model")
+    if not isinstance(smb_model, dict) or set(smb_model) != {
+        "service_lifecycle",
+        "guest_protocol",
+        "share_model",
+        "file_lifecycle",
+        "runtime",
+        "isolation",
+    }:
+        fail("SMB loopback behavior model regressed")
+    smb_observations = smb_evidence.get("observations")
+    if not isinstance(smb_observations, dict) or set(smb_observations) != {
+        "dialect",
+        "guest_session",
+        "curl_boundary",
+        "backing_file",
+        "cleanup",
+    }:
+        fail("SMB loopback behavior observations regressed")
+    for field in ("verification", "security"):
+        value = smb_evidence.get(field)
+        if not isinstance(value, str) or not value.strip():
+            fail(f"SMB loopback behavior evidence field is missing: {field}")
+    if "0x0210" not in str(smb_model.get("guest_protocol")):
+        fail("SMB2 dialect evidence regressed")
+    if "127.0.0.1" not in str(smb_model.get("isolation")):
+        fail("SMB loopback isolation evidence regressed")
+    if "delete-on-close" not in str(smb_model.get("file_lifecycle")):
+        fail("SMB delete-on-close behavior evidence regressed")
+    if not (ROOT / "tools" / "lucky_smb_probe.py").is_file():
+        fail("SMB runtime probe tool is missing")
+
     dlna_evidence = model_evidence.get("dlna_isolated_behavior")
     if not isinstance(dlna_evidence, dict):
         fail("DLNA isolated behavior evidence is missing")
@@ -3079,7 +3116,6 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         "/api/ipfliter/list/{param}": "rule",
         "/api/thirdPartyAuthManager/config": "config",
         "/api/ftpserver/configure": "configure",
-        "/api/smb/configure": "configure",
         "/api/webdav/configure": "configure",
         "/api/wol/service/configure": "configure",
     }
@@ -3095,6 +3131,48 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
             fail(f"PUT request schema must match verified GET {response_field} model for {path}")
         if isinstance(put_schema, dict) and "required" in put_schema:
             fail(f"read-model-derived PUT schema must not invent required fields for {path}")
+
+    smb_get_route = patched_by_key[("GET", "/api/smb/configure")]
+    smb_put_route = merged_by_key[("PUT", "/api/smb/configure")]
+    smb_get_props = (
+        smb_get_route.response_schema.get("properties", {})
+        .get("configure", {})
+        .get("properties", {})
+        if isinstance(smb_get_route.response_schema, dict)
+        else {}
+    )
+    expected_smb_mount = {
+        "type": ["array", "null"],
+        "items": {
+            "type": "object",
+            "properties": {
+                "Type": {"type": "string"},
+                "Param": {"type": "string"},
+                "DisplayName": {"type": "string"},
+                "Writable": {"type": "boolean"},
+                "DisableChangeWriteTable": {"type": "boolean"},
+            },
+        },
+    }
+    if smb_get_props.get("PublicMountList") != expected_smb_mount:
+        fail("SMB PublicMountList runtime item model regressed")
+    smb_put_props = (
+        smb_put_route.request_body_schema.get("properties", {})
+        if isinstance(smb_put_route.request_body_schema, dict)
+        else {}
+    )
+    if smb_put_props.get("PublicMountList") != expected_smb_mount:
+        fail("SMB PUT PublicMountList editable model regressed")
+    if smb_put_props.get("Users") != smb_get_props.get("Users"):
+        fail("SMB credential-bearing Users model must stay aligned and unspecified")
+    if smb_get_route.confidence != "runtime-verified":
+        fail("SMB GET configuration behavior must remain runtime-verified")
+    if smb_put_route.confidence != "runtime-verified":
+        fail("SMB PUT configuration behavior must remain runtime-verified")
+    if smb_put_route.response_schema != {
+        "type": "object", "properties": {"ret": {"type": "integer"}}
+    }:
+        fail("SMB PUT ret-only response schema regressed")
 
     wol_put = merged_by_key[("PUT", "/api/wol/service/configure")].request_body_schema
     wol_server_props = (
@@ -3308,8 +3386,8 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         fail("Local Path Browser delete must remain classified dangerous")
 
     response_schema_count = sum(route.response_schema is not None for route in patched_merged.routes)
-    if response_schema_count < 350:
-        fail(f"response-schema coverage regressed below 350 routes: {response_schema_count}")
+    if response_schema_count < 351:
+        fail(f"response-schema coverage regressed below 351 routes: {response_schema_count}")
 
     icon_response = merged_by_key[("GET", "/api/iconlib/icon")]
     if icon_response.response_type != "blob" or icon_response.response_content_type != "image/png":
@@ -3329,8 +3407,8 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         for route in merged.routes
         if route.request_body_schema is not None
     )
-    if request_schema_holes > 35:
-        fail(f"nested request-schema coverage regressed above 35 holes: {request_schema_holes}")
+    if request_schema_holes > 34:
+        fail(f"nested request-schema coverage regressed above 34 holes: {request_schema_holes}")
 
     response_schema_holes = sum(
         count_schema_holes(route.response_schema)

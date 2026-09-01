@@ -231,6 +231,26 @@
       },
       "security": "The probe refuses to run when WebDAV is already active or has configured users, binds only loopback, disables firewall automation and TLS, uses a disposable random password, and never prints credentials or file content. Configuration restoration is ownership-guarded to avoid overwriting a concurrent change."
     },
+    "smb_loopback_behavior": {
+      "confidence": "runtime-verified",
+      "model": {
+        "service_lifecycle": "PUT /api/smb/configure can start a temporary SMB service on a loopback high port and a later ownership-guarded PUT restores the exact stopped baseline",
+        "guest_protocol": "With GuestEnable=true and Signing/Encryption disabled for the isolated TEST service, a dependency-free SMB2 client negotiated dialect 0x0210 and raw NTLMSSP Type 1 established a session whose SessionFlags included SMB2_SESSION_FLAG_IS_GUEST",
+        "share_model": "A public local SMB share uses Type=local, Param=<local path>, DisplayName=<share name>, Writable and DisableChangeWriteTable; the TEST share was reachable through TREE_CONNECT using DisplayName as the SMB share name",
+        "file_lifecycle": "Inside the guest share, SMB2 CREATE with delete-on-close, WRITE and READ all succeeded; Lucky local-path-browser saw the backing TEST file while open and confirmed it disappeared after CLOSE",
+        "runtime": "GET /api/smb/runtime remained available during the live SMB2 session and exposed the documented aggregate summary fields; module logs were also readable",
+        "isolation": "The verified service used ListenIP=127.0.0.1, ListenNetwork=tcp4, a random high port, AutoFirewall=false and WSDD/mDNS/NBNS all disabled"
+      },
+      "verification": "Starting from a stopped SMB baseline with no configured users or public shares, a bounded Lucky 3.0.0 probe created one unique Lucky-visible /tmp/TEST-* directory and configured exactly one writable public local share. SMB listened only on 127.0.0.1 on a random high port, with firewall automation and all discovery protocols disabled. A pure-Python SMB2 client negotiated SMB 2.1, established a guest session, TREE_CONNECTed to the TEST share, created one tiny delete-on-close file, wrote a random in-memory marker, read the exact bytes back, and cross-checked the backing file through Lucky local-path-browser before CLOSE removed it. TREE_DISCONNECT and LOGOFF succeeded. Runtime/log surfaces were read, then the exact original stopped SMB configuration was restored only while the listener/share ownership markers still matched, and the TEST tree was deleted.",
+      "observations": {
+        "dialect": "The server selected SMB dialect 0x0210 from the probe's 0x0202/0x0210 offer",
+        "guest_session": "SESSION_SETUP returned success with SessionFlags=1, confirming the isolated connection was a guest session",
+        "curl_boundary": "The host curl build advertises smb/smbs but its SMB implementation sent SMB1; LiteSMB logs rejected it as 'client does not support SMB2', so the final probe uses a dependency-free SMB2 client instead of installing smbclient or Python SMB packages",
+        "backing_file": "The TEST file appeared through Lucky local-path-browser after SMB2 WRITE and disappeared after SMB2 CLOSE because CREATE requested delete-on-close",
+        "cleanup": "The ownership guard passed, the original disabled configuration/status were restored exactly and the unique TEST tree was removed"
+      },
+      "security": "The probe refuses to run when SMB is active or has existing users/public shares. It creates no credential-bearing user, uses guest access only on loopback, disables AutoFirewall plus WSDD/mDNS/NBNS, writes only one random marker inside an owned TEST directory, and restores configuration only while listener/share ownership markers still match. No password, marker content, live path, port or connection address is retained in evidence."
+    },
     "dlna_isolated_behavior": {
       "confidence": "runtime-verified",
       "model": {
@@ -2744,7 +2764,8 @@
       "method": "GET",
       "risk": "read-only",
       "response_schema": {"type": "object", "properties": {"ret": {"type": "integer"}, "configure": {"type": "object", "properties": {"Enable": {"type": "boolean"}, "ListenIP": {"type": "string"}, "ListenPort": {"type": "integer"}, "DiscoveryIP": {"type": "string"}, "PublicMountList": {"type": ["array", "null"], "items": {}}, "Users": {"type": ["array", "null"], "items": {}}, "ListenNetwork": {"type": "string"}, "AutoFirewall": {"type": "boolean"}, "ServerName": {"type": "string"}, "Workgroup": {"type": "string"}, "Signing": {"type": "string"}, "Encryption": {"type": "string"}, "Multichannel": {"type": "boolean"}, "GuestEnable": {"type": "boolean"}, "MaxConnections": {"type": "integer"}, "LiteSMBLogLevel": {"type": "string"}, "LiteSMBLogToTerminal": {"type": "boolean"}, "EnableWSDD": {"type": "boolean"}, "EnableMDNS": {"type": "boolean"}, "EnableNBNS": {"type": "boolean"}, "SMBConfVersion": {"type": "integer"}}}}},
-      "schema_evidence": "authorized GET /api/smb/configure observed SMB configuration field names/types; Users/PublicMountList were null so account/share item schemas remain unspecified"
+      "confidence": "runtime-verified",
+      "schema_evidence": "authorized GET /api/smb/configure first established the configuration field types; a later bounded loopback SMB2 probe populated one local PublicMountList entry and verified its safe share/mount fields while Users intentionally remained empty"
     },
     {
       "path": "/api/smb/runtime",
@@ -3673,8 +3694,10 @@
       "method": "PUT",
       "risk": "mutating",
       "body_keys": ["AutoFirewall", "DiscoveryIP", "Enable", "EnableMDNS", "EnableNBNS", "EnableWSDD", "Encryption", "GuestEnable", "ListenIP", "ListenNetwork", "ListenPort", "LiteSMBLogLevel", "LiteSMBLogToTerminal", "MaxConnections", "Multichannel", "PublicMountList", "SMBConfVersion", "ServerName", "Signing", "Users", "Workgroup"],
-      "request_body_schema": {"type": "object", "properties": {"Enable": {"type": "boolean"}, "ListenIP": {"type": "string"}, "ListenPort": {"type": "integer"}, "DiscoveryIP": {"type": "string"}, "PublicMountList": {"type": ["array", "null"], "items": {}}, "Users": {"type": ["array", "null"], "items": {}}, "ListenNetwork": {"type": "string"}, "AutoFirewall": {"type": "boolean"}, "ServerName": {"type": "string"}, "Workgroup": {"type": "string"}, "Signing": {"type": "string"}, "Encryption": {"type": "string"}, "Multichannel": {"type": "boolean"}, "GuestEnable": {"type": "boolean"}, "MaxConnections": {"type": "integer"}, "LiteSMBLogLevel": {"type": "string"}, "LiteSMBLogToTerminal": {"type": "boolean"}, "EnableWSDD": {"type": "boolean"}, "EnableMDNS": {"type": "boolean"}, "EnableNBNS": {"type": "boolean"}, "SMBConfVersion": {"type": "integer"}}},
-      "schema_evidence": "frontend loads authorized GET /api/smb/configure, normalizes mount/user lists and passes the full configure model directly to PUT; request types are copied from the matching verified GET configure model while mount/user item shapes remain unspecified"
+      "request_body_schema": {"type": "object", "properties": {"Enable": {"type": "boolean"}, "ListenIP": {"type": "string"}, "ListenPort": {"type": "integer"}, "DiscoveryIP": {"type": "string"}, "PublicMountList": {"type": ["array", "null"], "items": {"type": "object", "properties": {"Type": {"type": "string"}, "Param": {"type": "string"}, "DisplayName": {"type": "string"}, "Writable": {"type": "boolean"}, "DisableChangeWriteTable": {"type": "boolean"}}}}, "Users": {"type": ["array", "null"], "items": {}}, "ListenNetwork": {"type": "string"}, "AutoFirewall": {"type": "boolean"}, "ServerName": {"type": "string"}, "Workgroup": {"type": "string"}, "Signing": {"type": "string"}, "Encryption": {"type": "string"}, "Multichannel": {"type": "boolean"}, "GuestEnable": {"type": "boolean"}, "MaxConnections": {"type": "integer"}, "LiteSMBLogLevel": {"type": "string"}, "LiteSMBLogToTerminal": {"type": "boolean"}, "EnableWSDD": {"type": "boolean"}, "EnableMDNS": {"type": "boolean"}, "EnableNBNS": {"type": "boolean"}, "SMBConfVersion": {"type": "integer"}}},
+      "response_schema": {"type": "object", "properties": {"ret": {"type": "integer"}}},
+      "confidence": "runtime-verified",
+      "schema_evidence": "frontend loads authorized GET /api/smb/configure, normalizes mount/user lists and passes the full configure model directly to PUT; a bounded loopback guest SMB2 probe used one local PublicMountList entry, returned ret=0, started successfully and restored the original stopped configuration. Users remains intentionally untyped because no password-bearing SMB account was created"
     },
     {
       "path": "/api/status/host-process-kill",
@@ -4532,8 +4555,8 @@
     },
     {
       "path": "/api/smb/configure", "method": "GET",
-      "at": ["properties", "configure", "properties", "PublicMountList", "items"], "value": {"type": "object"},
-      "evidence": "PublicMountList contains structured share/mount records; filesystem paths remain intentionally unspecified"
+      "at": ["properties", "configure", "properties", "PublicMountList", "items"], "value": {"type": "object", "properties": {"Type": {"type": "string"}, "Param": {"type": "string"}, "DisplayName": {"type": "string"}, "Writable": {"type": "boolean"}, "DisableChangeWriteTable": {"type": "boolean"}}},
+      "evidence": "the loopback SMB2 guest probe populated one local public share and runtime readback cross-checked Type/Param/DisplayName/Writable while the current shared mount editor supplies DisableChangeWriteTable; actual path/share values are not retained"
     },
     {
       "path": "/api/smb/configure", "method": "GET",

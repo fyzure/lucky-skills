@@ -587,8 +587,8 @@ pageClass: api-routes-page
 
 | 方法 | 路径 | 风险 | 查询字段 | 请求体 | 响应 | 证据等级 |
 |---|---|---|---|---|---|---|
-| `GET` | `/api/smb/configure` | `read-only` | — | — | `json` | `frontend-call` |
-| `PUT` | `/api/smb/configure` | `mutating` | — | `AutoFirewall`, `DiscoveryIP`, `Enable`, `EnableMDNS`, `EnableNBNS`, `EnableWSDD`, `Encryption`, `GuestEnable`, `ListenIP`, `ListenNetwork`, `ListenPort`, `LiteSMBLogLevel`, `LiteSMBLogToTerminal`, `MaxConnections`, `Multichannel`, `PublicMountList`, `SMBConfVersion`, `ServerName`, `Signing`, `Users`, `Workgroup` | `json` | `frontend-call` |
+| `GET` | `/api/smb/configure` | `read-only` | — | — | `json` | `runtime-verified` |
+| `PUT` | `/api/smb/configure` | `mutating` | — | `AutoFirewall`, `DiscoveryIP`, `Enable`, `EnableMDNS`, `EnableNBNS`, `EnableWSDD`, `Encryption`, `GuestEnable`, `ListenIP`, `ListenNetwork`, `ListenPort`, `LiteSMBLogLevel`, `LiteSMBLogToTerminal`, `MaxConnections`, `Multichannel`, `PublicMountList`, `SMBConfVersion`, `ServerName`, `Signing`, `Users`, `Workgroup` | `json` | `runtime-verified` |
 | `POST` | `/api/smb/connections/{param}/disconnect` | `dangerous` | — | — | `json` | `frontend-call` |
 | `GET` | `/api/smb/lastlogs` | `read-only` | `page`, `pageSize` | — | `json` | `frontend-call` |
 | `GET` | `/api/smb/logs` | `read-only` | `page`, `pageSize` | — | `json` | `frontend-call` |

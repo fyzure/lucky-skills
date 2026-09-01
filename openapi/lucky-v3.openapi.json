@@ -30792,7 +30792,24 @@
                             "null"
                           ],
                           "items": {
-                            "type": "object"
+                            "type": "object",
+                            "properties": {
+                              "Type": {
+                                "type": "string"
+                              },
+                              "Param": {
+                                "type": "string"
+                              },
+                              "DisplayName": {
+                                "type": "string"
+                              },
+                              "Writable": {
+                                "type": "boolean"
+                              },
+                              "DisableChangeWriteTable": {
+                                "type": "boolean"
+                              }
+                            }
                           }
                         },
                         "Users": {
@@ -30867,12 +30884,12 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_panel-cAWqYdFv.js"
         ],
         "x-lucky-risk": "read-only",
-        "x-schema-evidence": "authorized GET /api/smb/configure observed SMB configuration field names/types; Users/PublicMountList were null so account/share item schemas remain unspecified"
+        "x-schema-evidence": "authorized GET /api/smb/configure first established the configuration field types; a later bounded loopback SMB2 probe populated one local PublicMountList entry and verified its safe share/mount fields while Users intentionally remained empty"
       },
       "put": {
         "summary": "Lucky frontend call: PUT /api/smb/configure",
@@ -30888,11 +30905,16 @@
         ],
         "responses": {
           "200": {
-            "description": "Lucky JSON response; envelope shape varies by endpoint.",
+            "description": "Response schema observed from runtime evidence; see x-schema-evidence for provenance.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LuckyEnvelope"
+                  "type": "object",
+                  "properties": {
+                    "ret": {
+                      "type": "integer"
+                    }
+                  }
                 }
               }
             }
@@ -30908,12 +30930,12 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_panel-cAWqYdFv.js"
         ],
         "x-lucky-risk": "mutating",
-        "x-schema-evidence": "frontend loads authorized GET /api/smb/configure, normalizes mount/user lists and passes the full configure model directly to PUT; request types are copied from the matching verified GET configure model while mount/user item shapes remain unspecified",
+        "x-schema-evidence": "frontend loads authorized GET /api/smb/configure, normalizes mount/user lists and passes the full configure model directly to PUT; a bounded loopback guest SMB2 probe used one local PublicMountList entry, returned ret=0, started successfully and restored the original stopped configuration. Users remains intentionally untyped because no password-bearing SMB account was created",
         "requestBody": {
           "required": true,
           "content": {
@@ -30938,7 +30960,26 @@
                       "array",
                       "null"
                     ],
-                    "items": {}
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "Type": {
+                          "type": "string"
+                        },
+                        "Param": {
+                          "type": "string"
+                        },
+                        "DisplayName": {
+                          "type": "string"
+                        },
+                        "Writable": {
+                          "type": "boolean"
+                        },
+                        "DisableChangeWriteTable": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
                   },
                   "Users": {
                     "type": [
