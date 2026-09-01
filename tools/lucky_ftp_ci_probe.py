@@ -264,6 +264,8 @@ def main() -> int:
         "baseline_stopped_empty": False,
         "configure_put": False,
         "configure_readback": False,
+        "readback_safe_types": False,
+        "single_mount_is_root": False,
         "service_started": False,
         "wrong_password_rejected": False,
         "ftp_login": False,
@@ -402,6 +404,18 @@ def main() -> int:
                 mounts[0] if isinstance(mounts, list) and mounts and isinstance(mounts[0], dict) else {}
             )
             report["mount_readback_fields"] = sorted(first_mount)
+            report["readback_safe_types"] = (
+                isinstance(first_user.get("Username"), str)
+                and isinstance(first_user.get("Dirs"), list)
+                and isinstance(first_user.get("ReadOnly"), bool)
+                and isinstance(mounts, list)
+                and len(mounts) == 1
+                and isinstance(first_mount.get("Type"), str)
+                and isinstance(first_mount.get("Param"), str)
+                and isinstance(first_mount.get("DisplayName"), str)
+                and isinstance(first_mount.get("Writable"), bool)
+                and isinstance(first_mount.get("IsLocalDir"), bool)
+            )
             if not report["configure_readback"]:
                 raise ProbeError("FTP TEST configuration readback ownership mismatch")
 
@@ -414,6 +428,7 @@ def main() -> int:
             report["ftp_upload"] = rounds["upload"]
             report["ftp_download"] = rounds["download"]
             report["ftp_delete"] = rounds["delete"]
+            report["single_mount_is_root"] = rounds["list"] and rounds["upload"]
             report["status_read"] = get_ftp_status(base_url, open_token) is True
             report["lastlogs_read"], report["logs_read"] = read_ftp_logs(base_url, open_token)
         finally:
@@ -439,6 +454,8 @@ def main() -> int:
         "baseline_stopped_empty",
         "configure_put",
         "configure_readback",
+        "readback_safe_types",
+        "single_mount_is_root",
         "service_started",
         "wrong_password_rejected",
         "ftp_login",

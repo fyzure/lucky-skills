@@ -20248,7 +20248,41 @@
                             "null"
                           ],
                           "items": {
-                            "type": "object"
+                            "type": "object",
+                            "properties": {
+                              "Username": {
+                                "type": "string"
+                              },
+                              "Dirs": {
+                                "type": "array"
+                              },
+                              "ReadOnly": {
+                                "type": "boolean"
+                              },
+                              "MountList": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "Type": {
+                                      "type": "string"
+                                    },
+                                    "Param": {
+                                      "type": "string"
+                                    },
+                                    "DisplayName": {
+                                      "type": "string"
+                                    },
+                                    "Writable": {
+                                      "type": "boolean"
+                                    },
+                                    "IsLocalDir": {
+                                      "type": "boolean"
+                                    }
+                                  }
+                                }
+                              }
+                            }
                           }
                         },
                         "AutoFireWall": {
@@ -20334,7 +20368,7 @@
           "lucky_panel-Tg1eQCBM.js"
         ],
         "x-lucky-risk": "read-only",
-        "x-schema-evidence": "authorized GET /api/ftpserver/configure observed server configuration field names/types; Users was null so user/password item schema is intentionally unspecified"
+        "x-schema-evidence": "authorized GET /api/ftpserver/configure first established server configuration field names/types. A later GitHub-hosted disposable Lucky 3.0.0 FTP behavior probe populated one TEST user/local mount, verified safe non-secret user/mount readback types plus real passive transfers, and intentionally omitted the live Password value from response documentation"
       },
       "put": {
         "summary": "Lucky frontend call: PUT /api/ftpserver/configure",
@@ -20375,7 +20409,7 @@
           "lucky_panel-Tg1eQCBM.js"
         ],
         "x-lucky-risk": "mutating",
-        "x-schema-evidence": "frontend loads authorized GET /api/ftpserver/configure into its form and passes the normalized form object directly to PUT; request types are copied from the matching verified GET configure model, Users item shape remains unspecified, and the observed API field named 'DisableLISTArgs ' includes a trailing space",
+        "x-schema-evidence": "frontend loads authorized GET /api/ftpserver/configure into its form and passes the normalized form object directly to PUT. A later GitHub-hosted disposable Lucky 3.0.0 behavior probe successfully used a Username/Password account with one local MountList and completed real login/list/upload/download/delete, which runtime-verifies those safe principal/mount field types without retaining credential values. The observed API field named 'DisableLISTArgs ' includes a trailing space",
         "requestBody": {
           "required": true,
           "content": {
@@ -20403,7 +20437,40 @@
                       "array",
                       "null"
                     ],
-                    "items": {}
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "Username": {
+                          "type": "string"
+                        },
+                        "Password": {
+                          "type": "string"
+                        },
+                        "MountList": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "Type": {
+                                "type": "string"
+                              },
+                              "Param": {
+                                "type": "string"
+                              },
+                              "DisplayName": {
+                                "type": "string"
+                              },
+                              "Writable": {
+                                "type": "boolean"
+                              },
+                              "DisableChangeWriteTable": {
+                                "type": "boolean"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
                   },
                   "AutoFireWall": {
                     "type": "boolean"

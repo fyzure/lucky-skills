@@ -82,7 +82,9 @@ SystemMount 也做过一次有界前置条件实践，但**当前部署不能宣
 
 Cron 的 shell 子任务也已完成真实行为验证。`tools/lucky_cron_probe.py` 从空 task/group 基线创建唯一 TEST group 和两个 TEST task；当前前端/运行时确认一个 shell job 的最小结构为 `{Type:"shell_option", Options:{shell_content:<script>}, Remark:<label>}`。`Type=8` 的手动任务经 `GET /api/cron/dojobs` 实际在 Lucky 自己的 `/tmp/TEST-*` 写入 marker；同一任务经 PUT 改为 `Type=4`、`TypeParams="2"` 后，在不手动触发的情况下由调度器自动写入第二个 marker。另一个 `exit 7` 子任务经 `POST /api/cron/jobs/trigger` 单独触发后，Cron 日志出现对应失败记录。整个闭环不访问网络、不切换业务服务，最后删除 TEST task/group/path 并恢复原 Key 基线。
 
-FTP 当前仍保持未启动。Lucky 3.0.0 的 FTP 配置只有 `Network + Port + PassivePortStart/End`，没有 WebDAV 那样的 `ListenIP`；为了行为覆盖而临时启动会使随机控制/PASV 端口监听所选 network 的全部地址。因此当前实例不为测试启动 FTP，也不修改宿主防火墙来人为制造隔离；真实 FTP 登录/传输应放在 network namespace 或专用隔离环境中完成。
+FTP 现已通过 `tools/lucky_ftp_ci_probe.py` 在 GitHub-hosted 的一次性 Lucky 3.0.0 容器中完成真实数据面闭环，RS 生产实例仍保持不启动 FTP。原因没有改变：FTP 配置只有 `Network + Port + PassivePortStart/End`，没有 WebDAV 那样的 `ListenIP`。CI probe 因此把 Lucky admin、FTP control 以及整段 PASV 端口都通过 Docker **只发布到 runner 的 `127.0.0.1`**，同时设置 `AutoFireWall=false`、`DisableActiveMode=true`，所有 Lucky 配置写入仍只走 HTTP API，不修改宿主防火墙。
+
+最终闭环使用一个随机 TEST 用户和一个 local `MountList`，先确认错误密码被拒绝，再用 Python 标准库 FTP 客户端完成 passive login、根目录 LIST/NLST、`STOR` 上传、`RETR` 下载和 `DELE` 删除，并从 runner backing directory 逐字节交叉验证文件内容。实测还补出两个重要语义：Lucky 3.0.0 要求 `PassivePortEnd - PassivePortStart >= 9`，所以 probe 使用连续 10 个 PASV 端口；当用户只有一个 local mount 时，该 mount **直接就是 FTP 根目录**，`DisplayName` 不会再生成一层虚拟目录。结束后 probe 通过 ownership check PUT 回原始 stopped/empty 配置，再删除整个临时 Lucky 容器与 TEST 目录。
 
 SMB 已通过 `tools/lucky_smb_probe.py` 完成真正的 loopback SMB2 文件闭环，而且不依赖 `smbclient` 或第三方 Python SMB 库。probe 只在原 SMB 为 stopped、`Users/PublicMountList` 为空时运行，创建唯一 `/tmp/TEST-*` local root，并以 `ListenIP=127.0.0.1`、`ListenNetwork=tcp4`、随机高位端口启动一个 guest public share；`AutoFirewall=false`，WSDD/mDNS/NBNS 全部关闭。公共 share 的编辑模型为 `Type / Param / DisplayName / Writable / DisableChangeWriteTable`，其中 `DisplayName` 已真实作为 TREE_CONNECT 的 SMB share name 使用。
 

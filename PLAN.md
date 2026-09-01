@@ -214,12 +214,12 @@
 
 ### FTP / WebDAV / SMB / DLNA / FileBrowser
 
-WebDAV、SMB 与 FileBrowser 已完成 localhost 完整闭环；DLNA 已在一个 **UP+MULTICAST、私网 IPv4、veth_count=0** 的空 Docker bridge 上完成 HTTP/UPnP 闭环。`lo` 因缺少 MULTICAST 被 Lucky 明确拒绝，因此没有为了满足“localhost”字面要求去改宿主网卡；空 bridge 不连接物理网卡或业务容器。FTP 当前配置没有 `ListenIP`，启动会监听所选 network 的全部地址，因此不为了覆盖率临时暴露控制/PASV 端口，留待隔离 network namespace/专用测试环境。
+WebDAV、SMB 与 FileBrowser 已完成 localhost 完整闭环；DLNA 已在一个 **UP+MULTICAST、私网 IPv4、veth_count=0** 的空 Docker bridge 上完成 HTTP/UPnP 闭环。`lo` 因缺少 MULTICAST 被 Lucky 明确拒绝，因此没有为了满足“localhost”字面要求去改宿主网卡；空 bridge 不连接物理网卡或业务容器。FTP 虽然没有 `ListenIP`，但现已迁到 GitHub Actions 的 pinned Lucky 3.0.0 临时容器中完成真实行为验证：control + 连续 10 个 PASV 端口全部只由 Docker 发布到 runner `127.0.0.1`，Lucky 配置仍只经 API 写入，RS 生产 FTP 始终未启动。
 
 - [x] WebDAV：独立 TEST root/storage、TEST 用户、127.0.0.1 高位端口
 - [x] WebDAV：OPTIONS / PROPFIND / 可写 PUT-GET-DELETE / 只读写拒绝
 - [x] WebDAV：status/logs、停止并恢复原配置、删除 TEST 用户/storage/path
-- [ ] FTP：隔离网络环境下真实登录/列目录/上传下载（当前不启动公网可见随机端口）
+- [x] FTP：`tools/lucky_ftp_ci_probe.py` 在 GitHub-hosted 临时 Lucky 中验证错误密码拒绝、passive login/LIST/STOR/RETR/DELE、backing-file 内容一致、单 local mount 直接映射 FTP root、PASV range 差值至少 9，并完整恢复 stopped/empty baseline；所有 FTP 端口只映射 runner loopback
 - [x] SMB：独立临时 root + guest public share，127.0.0.1 高位端口；纯标准库 SMB2.1 NEGOTIATE/session/TREE_CONNECT/CREATE/WRITE/READ/CLOSE/delete-on-close，底层文件交叉验证；固化 `tools/lucky_smb_probe.py`
 - [x] DLNA：独立临时媒体 root + 空私网 Docker bridge；`/rootDesc.xml` + ContentDirectory SOAP Browse 实际可用并能看到 TEST 子目录；host-side SSDP M-SEARCH 无回包，不宣称 SSDP discovery 成功；固化 `tools/lucky_dlna_probe.py`
 - [x] FileBrowser：fresh TEST DB + local mount，127.0.0.1 高位端口，登录、upload/GET/rename/DELETE 与底层文件行为

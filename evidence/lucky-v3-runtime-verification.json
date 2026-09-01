@@ -231,6 +231,25 @@
       },
       "security": "The probe refuses to run when WebDAV is already active or has configured users, binds only loopback, disables firewall automation and TLS, uses a disposable random password, and never prints credentials or file content. Configuration restoration is ownership-guarded to avoid overwriting a concurrent change."
     },
+    "ftp_ci_behavior": {
+      "confidence": "runtime-verified",
+      "model": {
+        "service_lifecycle": "PUT /api/ftpserver/configure starts and stops the FTP service on Lucky 3.0.0; the successful CI probe started from the fresh stopped/empty baseline, applied one TEST configuration, then restored the exact baseline through the API",
+        "principal_model": "A working FTP user accepts Username, Password and one local MountList. Runtime readback exposed safe account fields Username, Dirs, ReadOnly and MountList; credential values are never retained. The local mount readback exposed Type, Param, DisplayName, Writable and IsLocalDir among its fields",
+        "protocol": "A Python stdlib FTP client completed passive-mode login, directory listing, STOR upload, RETR download and DELE against the disposable Lucky service; a wrong password was rejected",
+        "root_mapping": "With exactly one local mount, the mounted directory is the FTP root itself rather than an extra DisplayName subdirectory: a seed file placed directly in the mounted directory appeared in root LIST/NLST and an uploaded file appeared directly in the same backing directory",
+        "passive_range": "Lucky 3.0.0 rejects a PassivePortStart/PassivePortEnd range whose difference is below 9; the final probe uses ten consecutive passive ports and disables active mode",
+        "isolation": "The probe runs only under GitHub Actions with a fresh pinned Lucky 3.0.0 container. Admin, FTP control and all passive ports are Docker-published only on runner 127.0.0.1, AutoFireWall is disabled, TLS is not required and no RS production listener or firewall is changed"
+      },
+      "verification": "A GitHub-hosted CI run of tools/lucky_ftp_ci_probe.py used the pinned Lucky 3.0.0 image and configured the disposable instance exclusively through Lucky HTTP APIs after OpenToken bootstrap. The probe verified the fresh FTP baseline was stopped with no users, started one TEST account and local mount, confirmed all published admin/control/passive ports were runner-loopback-only, rejected a wrong password, completed real passive FTP login/list/upload/download/delete with byte-for-byte backing-file checks, read status plus both log surfaces, then PUT-restored the original stopped configuration and removed the container. The final successful run reported failed=[] and Lucky version 3.0.0.",
+      "observations": {
+        "authentication": "The disposable TEST account accepted the generated password and rejected the same username with an incorrect password",
+        "list_and_transfer": "Root directory listing saw the pre-created seed file; STOR created the exact marker bytes in the mounted backing directory, RETR returned the same bytes and DELE removed the backing file",
+        "readback": "Safe FTP user readback fields included Dirs, MountList, ReadOnly and Username. Safe mount readback fields included DisplayName, IsLocalDir, Param, Type and Writable; the live Password value and all generated credentials were omitted from evidence",
+        "cleanup": "The exact fresh stopped FTP configuration was restored through the API after an ownership check, and the disposable Lucky container plus TEST directory were removed by runner teardown"
+      },
+      "security": "The FTP probe is CI-only and refuses local execution. Because Lucky FTP has no ListenIP field, isolation is enforced outside Lucky by publishing every FTP port only to runner loopback; active mode and AutoFireWall are disabled. No production Lucky configuration, host firewall, public listener, password value or transferred marker content is retained."
+    },
     "smb_loopback_behavior": {
       "confidence": "runtime-verified",
       "model": {
@@ -2769,7 +2788,7 @@
       "method": "GET",
       "risk": "read-only",
       "response_schema": {"type": "object", "properties": {"ret": {"type": "integer"}, "configure": {"type": "object", "properties": {"Enable": {"type": "boolean"}, "Network": {"type": "string"}, "Port": {"type": "integer"}, "PassivePortStart": {"type": "integer"}, "PassivePortEnd": {"type": "integer"}, "Users": {"type": ["array", "null"], "items": {}}, "AutoFireWall": {"type": "boolean"}, "AdvancedParametersShow": {"type": "boolean"}, "TLSRequired": {"type": "integer"}, "ActiveTransferPortNon20": {"type": "boolean"}, "IdleTimeout": {"type": "integer"}, "ConnectionTimeout": {"type": "integer"}, "DisableMLSD": {"type": "boolean"}, "DisableMLST": {"type": "boolean"}, "DisableMFMT": {"type": "boolean"}, "DisableLISTArgs ": {"type": "boolean"}, "DisableSite": {"type": "boolean"}, "DisableActiveMode": {"type": "boolean"}, "DisableSTAT": {"type": "boolean"}, "DisableSYST": {"type": "boolean"}, "EnableHASH": {"type": "boolean"}, "EnableCOMB": {"type": "boolean"}, "DefaultTransferType": {"type": "integer"}, "ActiveConnectionsCheck": {"type": "integer"}, "PasvConnectionsCheck": {"type": "integer"}, "ConfVersion": {"type": "integer"}}}}},
-      "schema_evidence": "authorized GET /api/ftpserver/configure observed server configuration field names/types; Users was null so user/password item schema is intentionally unspecified"
+      "schema_evidence": "authorized GET /api/ftpserver/configure first established server configuration field names/types. A later GitHub-hosted disposable Lucky 3.0.0 FTP behavior probe populated one TEST user/local mount, verified safe non-secret user/mount readback types plus real passive transfers, and intentionally omitted the live Password value from response documentation"
     },
     {
       "path": "/api/ftpserver/status",
@@ -3665,8 +3684,8 @@
       "method": "PUT",
       "risk": "mutating",
       "body_keys": ["ActiveConnectionsCheck", "ActiveTransferPortNon20", "AdvancedParametersShow", "AutoFireWall", "ConfVersion", "ConnectionTimeout", "DefaultTransferType", "DisableActiveMode", "DisableLISTArgs ", "DisableMFMT", "DisableMLSD", "DisableMLST", "DisableSTAT", "DisableSYST", "DisableSite", "Enable", "EnableCOMB", "EnableHASH", "IdleTimeout", "Network", "PassivePortEnd", "PassivePortStart", "PasvConnectionsCheck", "Port", "TLSRequired", "Users"],
-      "request_body_schema": {"type": "object", "properties": {"Enable": {"type": "boolean"}, "Network": {"type": "string"}, "Port": {"type": "integer"}, "PassivePortStart": {"type": "integer"}, "PassivePortEnd": {"type": "integer"}, "Users": {"type": ["array", "null"], "items": {}}, "AutoFireWall": {"type": "boolean"}, "AdvancedParametersShow": {"type": "boolean"}, "TLSRequired": {"type": "integer"}, "ActiveTransferPortNon20": {"type": "boolean"}, "IdleTimeout": {"type": "integer"}, "ConnectionTimeout": {"type": "integer"}, "DisableMLSD": {"type": "boolean"}, "DisableMLST": {"type": "boolean"}, "DisableMFMT": {"type": "boolean"}, "DisableLISTArgs ": {"type": "boolean"}, "DisableSite": {"type": "boolean"}, "DisableActiveMode": {"type": "boolean"}, "DisableSTAT": {"type": "boolean"}, "DisableSYST": {"type": "boolean"}, "EnableHASH": {"type": "boolean"}, "EnableCOMB": {"type": "boolean"}, "DefaultTransferType": {"type": "integer"}, "ActiveConnectionsCheck": {"type": "integer"}, "PasvConnectionsCheck": {"type": "integer"}, "ConfVersion": {"type": "integer"}}},
-      "schema_evidence": "frontend loads authorized GET /api/ftpserver/configure into its form and passes the normalized form object directly to PUT; request types are copied from the matching verified GET configure model, Users item shape remains unspecified, and the observed API field named 'DisableLISTArgs ' includes a trailing space"
+      "request_body_schema": {"type": "object", "properties": {"Enable": {"type": "boolean"}, "Network": {"type": "string"}, "Port": {"type": "integer"}, "PassivePortStart": {"type": "integer"}, "PassivePortEnd": {"type": "integer"}, "Users": {"type": ["array", "null"], "items": {"type": "object", "properties": {"Username": {"type": "string"}, "Password": {"type": "string"}, "MountList": {"type": "array", "items": {"type": "object", "properties": {"Type": {"type": "string"}, "Param": {"type": "string"}, "DisplayName": {"type": "string"}, "Writable": {"type": "boolean"}, "DisableChangeWriteTable": {"type": "boolean"}}}}}}}, "AutoFireWall": {"type": "boolean"}, "AdvancedParametersShow": {"type": "boolean"}, "TLSRequired": {"type": "integer"}, "ActiveTransferPortNon20": {"type": "boolean"}, "IdleTimeout": {"type": "integer"}, "ConnectionTimeout": {"type": "integer"}, "DisableMLSD": {"type": "boolean"}, "DisableMLST": {"type": "boolean"}, "DisableMFMT": {"type": "boolean"}, "DisableLISTArgs ": {"type": "boolean"}, "DisableSite": {"type": "boolean"}, "DisableActiveMode": {"type": "boolean"}, "DisableSTAT": {"type": "boolean"}, "DisableSYST": {"type": "boolean"}, "EnableHASH": {"type": "boolean"}, "EnableCOMB": {"type": "boolean"}, "DefaultTransferType": {"type": "integer"}, "ActiveConnectionsCheck": {"type": "integer"}, "PasvConnectionsCheck": {"type": "integer"}, "ConfVersion": {"type": "integer"}}},
+      "schema_evidence": "frontend loads authorized GET /api/ftpserver/configure into its form and passes the normalized form object directly to PUT. A later GitHub-hosted disposable Lucky 3.0.0 behavior probe successfully used a Username/Password account with one local MountList and completed real login/list/upload/download/delete, which runtime-verifies those safe principal/mount field types without retaining credential values. The observed API field named 'DisableLISTArgs ' includes a trailing space"
     },
     {
       "path": "/api/login",
@@ -4472,8 +4491,8 @@
     },
     {
       "path": "/api/ftpserver/configure", "method": "GET",
-      "at": ["properties", "configure", "properties", "Users", "items"], "value": {"type": "object"},
-      "evidence": "Users contains structured account records; credential-bearing member fields remain intentionally undocumented"
+      "at": ["properties", "configure", "properties", "Users", "items"], "value": {"type": "object", "properties": {"Username": {"type": "string"}, "Dirs": {"type": "array"}, "ReadOnly": {"type": "boolean"}, "MountList": {"type": "array", "items": {"type": "object", "properties": {"Type": {"type": "string"}, "Param": {"type": "string"}, "DisplayName": {"type": "string"}, "Writable": {"type": "boolean"}, "IsLocalDir": {"type": "boolean"}}}}}},
+      "evidence": "A disposable CI FTP behavior probe runtime-verified these non-secret account and local-mount fields/types through configure readback plus real passive FTP transfer behavior. Password is present in the live user object but is intentionally omitted from response documentation"
     },
     {
       "path": "/api/ipdb/avalidDBFiles", "method": "GET",

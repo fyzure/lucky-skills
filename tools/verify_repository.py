@@ -591,6 +591,46 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
     if not (ROOT / "tools" / "lucky_webdav_probe.py").is_file():
         fail("WebDAV runtime probe tool is missing")
 
+    ftp_evidence = model_evidence.get("ftp_ci_behavior")
+    if not isinstance(ftp_evidence, dict):
+        fail("FTP CI behavior evidence is missing")
+    if ftp_evidence.get("confidence") != "runtime-verified":
+        fail("FTP CI behavior evidence must remain runtime-verified")
+    ftp_model = ftp_evidence.get("model")
+    if not isinstance(ftp_model, dict) or set(ftp_model) != {
+        "service_lifecycle",
+        "principal_model",
+        "protocol",
+        "root_mapping",
+        "passive_range",
+        "isolation",
+    }:
+        fail("FTP CI behavior model regressed")
+    ftp_observations = ftp_evidence.get("observations")
+    if not isinstance(ftp_observations, dict) or set(ftp_observations) != {
+        "authentication",
+        "list_and_transfer",
+        "readback",
+        "cleanup",
+    }:
+        fail("FTP CI behavior observations regressed")
+    for field in ("verification", "security"):
+        value = ftp_evidence.get(field)
+        if not isinstance(value, str) or not value.strip():
+            fail(f"FTP CI behavior evidence field is missing: {field}")
+    if "127.0.0.1" not in str(ftp_model.get("isolation")):
+        fail("FTP CI loopback isolation evidence regressed")
+    if "difference" not in str(ftp_model.get("passive_range")):
+        fail("FTP passive-range behavior evidence regressed")
+    if "FTP root" not in str(ftp_model.get("root_mapping")):
+        fail("FTP single-mount root behavior evidence regressed")
+    if "STOR" not in str(ftp_model.get("protocol")) or "RETR" not in str(ftp_model.get("protocol")):
+        fail("FTP transfer behavior evidence regressed")
+    if not (ROOT / "tools" / "lucky_ftp_ci_probe.py").is_file():
+        fail("FTP CI runtime probe tool is missing")
+    if not (ROOT / ".github" / "workflows" / "lucky-ftp-ci.yml").is_file():
+        fail("FTP CI workflow is missing")
+
     smb_evidence = model_evidence.get("smb_loopback_behavior")
     if not isinstance(smb_evidence, dict):
         fail("SMB loopback behavior evidence is missing")
@@ -3469,8 +3509,8 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         for route in merged.routes
         if route.request_body_schema is not None
     )
-    if request_schema_holes > 34:
-        fail(f"nested request-schema coverage regressed above 34 holes: {request_schema_holes}")
+    if request_schema_holes > 33:
+        fail(f"nested request-schema coverage regressed above 33 holes: {request_schema_holes}")
 
     response_schema_holes = sum(
         count_schema_holes(route.response_schema)
@@ -4441,7 +4481,6 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
             fail(f"service response schema missing for {route_key}")
 
     for route_key in {
-        ("GET", "/api/ftpserver/configure"),
         ("GET", "/api/smb/configure"),
         ("GET", "/api/webdav/configure"),
     }:
@@ -4450,6 +4489,69 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         users = configure_props.get("Users")
         if not isinstance(users, dict) or users.get("items") != {}:
             fail(f"credential-bearing user item schema must remain unspecified for {route_key}")
+
+    ftp_response_schema = merged_by_key[("GET", "/api/ftpserver/configure")].response_schema
+    ftp_configure_props = (
+        ftp_response_schema.get("properties", {}).get("configure", {}).get("properties", {})
+    )
+    ftp_users = ftp_configure_props.get("Users")
+    expected_ftp_response_user = {
+        "type": "object",
+        "properties": {
+            "Username": {"type": "string"},
+            "Dirs": {"type": "array"},
+            "ReadOnly": {"type": "boolean"},
+            "MountList": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "Type": {"type": "string"},
+                        "Param": {"type": "string"},
+                        "DisplayName": {"type": "string"},
+                        "Writable": {"type": "boolean"},
+                        "IsLocalDir": {"type": "boolean"},
+                    },
+                },
+            },
+        },
+    }
+    if not isinstance(ftp_users, dict) or ftp_users.get("items") != expected_ftp_response_user:
+        fail("FTP runtime-safe user response schema regressed")
+    if "Password" in expected_ftp_response_user["properties"]:
+        fail("FTP response schema must not document password values")
+
+    ftp_put = merged_by_key[("PUT", "/api/ftpserver/configure")]
+    ftp_put_users = (
+        ftp_put.request_body_schema.get("properties", {}).get("Users")
+        if isinstance(ftp_put.request_body_schema, dict)
+        else None
+    )
+    expected_ftp_request_users = {
+        "type": ["array", "null"],
+        "items": {
+            "type": "object",
+            "properties": {
+                "Username": {"type": "string"},
+                "Password": {"type": "string"},
+                "MountList": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "Type": {"type": "string"},
+                            "Param": {"type": "string"},
+                            "DisplayName": {"type": "string"},
+                            "Writable": {"type": "boolean"},
+                            "DisableChangeWriteTable": {"type": "boolean"},
+                        },
+                    },
+                },
+            },
+        },
+    }
+    if ftp_put_users != expected_ftp_request_users:
+        fail("FTP runtime-backed user request schema regressed")
 
     expected_log_item_properties = {
         "LogContent": {"type": "string"},
