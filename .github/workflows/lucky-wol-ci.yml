@@ -29,4 +29,4 @@ jobs:
         run: docker version
 
       - name: Run isolated Lucky WOL probe
-        run: python3 tools/lucky_wol_ci_probe.py
+        run: sudo -E python3 tools/lucky_wol_ci_probe.py

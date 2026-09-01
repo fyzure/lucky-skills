@@ -16,6 +16,7 @@ printed or persisted in repository evidence.
 from __future__ import annotations
 
 import json
+import ipaddress
 import secrets
 import shutil
 import socket
@@ -48,13 +49,7 @@ from lucky_docker_build_ci_probe import (
 TEST_PREFIX = "TEST-lucky-skills-wol-ci-"
 
 
-def choose_udp_port(bind_ip: str) -> int:
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-        sock.bind((bind_ip, 0))
-        return int(sock.getsockname()[1])
-
-
-def network_gateway(network_name: str) -> str:
+def network_addresses(network_name: str) -> tuple[str, str]:
     raw = docker("network", "inspect", network_name, timeout=30)
     rows = json.loads(raw)
     if not isinstance(rows, list) or len(rows) != 1:
@@ -63,15 +58,52 @@ def network_gateway(network_name: str) -> str:
     if not isinstance(configs, list):
         raise ProbeError("Docker network inspect missing IPAM config")
     for config in configs:
-        if isinstance(config, dict) and isinstance(config.get("Gateway"), str):
+        if (
+            isinstance(config, dict)
+            and isinstance(config.get("Gateway"), str)
+            and isinstance(config.get("Subnet"), str)
+        ):
             gateway = config["Gateway"]
             try:
-                packed = socket.inet_aton(gateway)
-            except OSError as exc:
-                raise ProbeError("Docker internal bridge gateway is not IPv4") from exc
-            if packed[0] in {10, 172, 192}:
-                return gateway
-    raise ProbeError("Docker internal bridge did not expose an IPv4 gateway")
+                network = ipaddress.ip_network(config["Subnet"], strict=False)
+                gateway_ip = ipaddress.ip_address(gateway)
+            except ValueError as exc:
+                raise ProbeError("Docker internal bridge IPAM values are invalid") from exc
+            if isinstance(network, ipaddress.IPv4Network) and gateway_ip in network and network.is_private:
+                return gateway, str(network.broadcast_address)
+    raise ProbeError("Docker internal bridge did not expose a private IPv4 subnet/gateway")
+
+
+def receive_magic_packet(
+    capture: socket.socket,
+    expected_packet: bytes,
+    destination_port: int,
+    timeout: float = 10.0,
+) -> bytes:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        capture.settimeout(max(0.1, deadline - time.time()))
+        try:
+            frame = capture.recv(65535)
+        except socket.timeout:
+            break
+        if len(frame) < 14 or frame[12:14] != b"\x08\x00":
+            continue
+        ip_start = 14
+        ihl = (frame[ip_start] & 0x0F) * 4
+        if ihl < 20 or len(frame) < ip_start + ihl + 8:
+            continue
+        if frame[ip_start + 9] != 17:
+            continue
+        udp_start = ip_start + ihl
+        udp_destination = int.from_bytes(frame[udp_start + 2 : udp_start + 4], "big")
+        udp_length = int.from_bytes(frame[udp_start + 4 : udp_start + 6], "big")
+        if udp_destination != destination_port or udp_length < 8:
+            continue
+        payload = frame[udp_start + 8 : udp_start + udp_length]
+        if payload == expected_packet:
+            return payload
+    return b""
 
 
 def container_ipv4(container_name: str, network_name: str) -> str:
@@ -153,6 +185,7 @@ def main() -> int:
     nonce = secrets.token_hex(5)
     container_name = f"lucky-wol-ci-{nonce}"
     network_name = f"lucky-wol-ci-{nonce}"
+    bridge_name = f"lwol-{nonce[:8]}"
     open_token = secrets.token_hex(16)
     device_name = TEST_PREFIX + nonce
     mac_text, mac_bytes = test_mac()
@@ -162,6 +195,7 @@ def main() -> int:
         "lucky_version": "",
         "api_only_lucky_operations": True,
         "network_internal": False,
+        "capture_bridge_only": False,
         "admin_port_unpublished": False,
         "admin_reachable_on_internal_bridge": False,
         "baseline_empty": False,
@@ -182,17 +216,30 @@ def main() -> int:
         conf_dir.mkdir()
 
         pull_pinned_image()
-        run(["docker", "network", "create", "--internal", network_name], timeout=45)
+        run(
+            [
+                "docker",
+                "network",
+                "create",
+                "--internal",
+                "--opt",
+                f"com.docker.network.bridge.name={bridge_name}",
+                network_name,
+            ],
+            timeout=45,
+        )
         created_key = ""
-        listener: socket.socket | None = None
+        capture: socket.socket | None = None
 
         try:
-            gateway = network_gateway(network_name)
+            gateway, broadcast = network_addresses(network_name)
             report["network_internal"] = True
-            wol_port = choose_udp_port(gateway)
-            listener = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            listener.settimeout(10)
-            listener.bind((gateway, wol_port))
+            wol_port = 20000 + secrets.randbelow(30000)
+            if not hasattr(socket, "AF_PACKET"):
+                raise ProbeError("runner Python lacks AF_PACKET support")
+            capture = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(0x0003))
+            capture.bind((bridge_name, 0))
+            report["capture_bridge_only"] = True
 
             docker(
                 "run",
@@ -234,7 +281,7 @@ def main() -> int:
                 "Key": "",
                 "DeviceName": device_name,
                 "MacList": [mac_text],
-                "BroadcastIPs": [gateway],
+                "BroadcastIPs": [broadcast],
                 "ProbeTargets": [],
                 "Port": wol_port,
                 "Relay": False,
@@ -273,10 +320,7 @@ def main() -> int:
             wake = api_json(base_url, open_token, f"/api/wol/device/wakeup?{query}")
             report["wakeup_ret_zero"] = wake.get("ret") == 0
 
-            try:
-                packet, _ = listener.recvfrom(2048)
-            except socket.timeout:
-                packet = b""
+            packet = receive_magic_packet(capture, expected_packet, wol_port)
             report["magic_packet_received"] = bool(packet)
             report["magic_packet_size"] = len(packet)
             report["magic_packet_exact"] = packet == expected_packet
@@ -294,8 +338,8 @@ def main() -> int:
                     api_json(base_url, open_token, f"/api/wol/device?{query}", method="DELETE")
                 except Exception:  # noqa: BLE001 - disposable container teardown is final safety net
                     pass
-            if listener is not None:
-                listener.close()
+            if capture is not None:
+                capture.close()
             run(["docker", "rm", "-f", container_name], check=False, timeout=45)
             run(["docker", "network", "rm", network_name], check=False, timeout=45)
             cleanup_root_owned_conf(conf_dir)
@@ -303,6 +347,7 @@ def main() -> int:
     required_true = (
         "api_only_lucky_operations",
         "network_internal",
+        "capture_bridge_only",
         "admin_port_unpublished",
         "admin_reachable_on_internal_bridge",
         "baseline_empty",
