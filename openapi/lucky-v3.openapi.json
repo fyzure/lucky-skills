@@ -14085,11 +14085,19 @@
         ],
         "responses": {
           "200": {
-            "description": "Lucky JSON response; envelope shape varies by endpoint.",
+            "description": "Response schema observed from runtime evidence; see x-schema-evidence for provenance.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LuckyEnvelope"
+                  "type": "object",
+                  "properties": {
+                    "ret": {
+                      "type": "integer"
+                    },
+                    "output": {
+                      "type": "string"
+                    }
+                  }
                 }
               }
             }
@@ -14105,12 +14113,12 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_docker-BCN-OILs.js"
         ],
         "x-lucky-risk": "mutating",
-        "x-schema-evidence": "authorized validation probe: {} and tag-only bodies were rejected; git_url alone passed request validation and reached git clone, which then failed because git is absent from the Lucky container. url and repo_url aliases were rejected",
+        "x-schema-evidence": "earlier validation established git_url as the required request field; a later GitHub-hosted disposable Lucky 3.0.0 probe supplied a local fake clone source, completed the real clone-to-Docker-build handler, observed exact {ret,output} success with output:string and verified the resulting owned image marker before full cleanup",
         "requestBody": {
           "required": true,
           "content": {
@@ -14146,11 +14154,19 @@
         ],
         "responses": {
           "200": {
-            "description": "Lucky JSON response; envelope shape varies by endpoint.",
+            "description": "Response schema observed from runtime evidence; see x-schema-evidence for provenance.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LuckyEnvelope"
+                  "type": "object",
+                  "properties": {
+                    "ret": {
+                      "type": "integer"
+                    },
+                    "output": {
+                      "type": "string"
+                    }
+                  }
                 }
               }
             }
@@ -14166,12 +14182,12 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_docker-BCN-OILs.js"
         ],
         "x-lucky-risk": "mutating",
-        "x-schema-evidence": "authorized validation probe: {} and tag-only bodies were rejected; zip_path alone passed request validation and the backend attempted to open that path. path and file aliases were rejected",
+        "x-schema-evidence": "earlier validation established zip_path as the required request field; a later GitHub-hosted disposable Lucky 3.0.0 probe built a two-file FROM scratch ZIP context, observed exact {ret,output} success with output:string and verified the resulting owned image marker before full cleanup",
         "requestBody": {
           "required": true,
           "content": {

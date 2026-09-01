@@ -228,8 +228,8 @@ pageClass: api-routes-page
 | `GET` | `/api/docker/images` | `read-only` | `all` | — | `json` | `frontend-call` |
 | `POST` | `/api/docker/images/backup-tag` | `mutating` | — | `image_ref` | `json` | `frontend-call` |
 | `POST` | `/api/docker/images/build` | `mutating` | — | `dockerfile` | `json` | `frontend-call` |
-| `POST` | `/api/docker/images/build-from-git` | `mutating` | — | `git_url` | `json` | `frontend-call` |
-| `POST` | `/api/docker/images/build-from-zip` | `mutating` | — | `zip_path` | `json` | `frontend-call` |
+| `POST` | `/api/docker/images/build-from-git` | `mutating` | — | `git_url` | `json` | `runtime-verified` |
+| `POST` | `/api/docker/images/build-from-zip` | `mutating` | — | `zip_path` | `json` | `runtime-verified` |
 | `GET` | `/api/docker/images/containers` | `read-only` | `image_ref` | — | `json` | `frontend-call` |
 | `POST` | `/api/docker/images/import` | `dangerous` | — | `source` | `json` | `runtime-verified` |
 | `POST` | `/api/docker/images/load` | `mutating` | — | `path`, `cleanup` | `json` | `runtime-verified` |

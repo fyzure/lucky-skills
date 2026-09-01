@@ -866,6 +866,42 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
     if not (ROOT / "tools" / "lucky_docker_image_import_probe.py").is_file():
         fail("Docker image import/load runtime probe tool is missing")
 
+    docker_build_evidence = model_evidence.get("docker_image_build_behavior")
+    if not isinstance(docker_build_evidence, dict):
+        fail("Docker image build behavior evidence is missing")
+    if docker_build_evidence.get("confidence") != "runtime-verified":
+        fail("Docker image build behavior evidence must remain runtime-verified")
+    docker_build_model = docker_build_evidence.get("model")
+    if not isinstance(docker_build_model, dict) or set(docker_build_model) != {
+        "dockerfile_text",
+        "zip_context",
+        "git_context",
+        "response",
+        "isolation",
+        "cleanup",
+    }:
+        fail("Docker image build behavior model regressed")
+    docker_build_observations = docker_build_evidence.get("observations")
+    if not isinstance(docker_build_observations, dict) or set(docker_build_observations) != {
+        "zip",
+        "git",
+        "admin_auth",
+        "cleanup",
+    }:
+        fail("Docker image build runtime observations regressed")
+    for field in ("verification", "security"):
+        value = docker_build_evidence.get(field)
+        if not isinstance(value, str) or not value.strip():
+            fail(f"Docker image build evidence field is missing: {field}")
+    if "GitHub Actions" not in str(docker_build_evidence.get("security")):
+        fail("Docker image build evidence lost its GitHub Actions-only safety boundary")
+    if "fake clone" not in str(docker_build_model.get("git_context")):
+        fail("Docker image build evidence lost its no-external-Git isolation model")
+    if not (ROOT / "tools" / "lucky_docker_build_ci_probe.py").is_file():
+        fail("Docker image build CI probe tool is missing")
+    if not (ROOT / ".github" / "workflows" / "lucky-docker-build-ci.yml").is_file():
+        fail("Docker image build CI workflow is missing")
+
     security_group_evidence = model_evidence.get("security_group_webauth_behavior")
     if not isinstance(security_group_evidence, dict):
         fail("Security Group + WebAuth behavior evidence is missing")
@@ -1186,6 +1222,23 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         route = merged_by_key.get(key)
         if route is None or route.request_body_schema != expected_schema:
             fail(f"legacy Docker schema evidence changed unexpectedly for {key[0]} {key[1]}")
+
+    docker_build_response = {
+        "type": "object",
+        "properties": {
+            "ret": {"type": "integer"},
+            "output": {"type": "string"},
+        },
+    }
+    for route_key in {
+        ("POST", "/api/docker/images/build-from-git"),
+        ("POST", "/api/docker/images/build-from-zip"),
+    }:
+        route = merged_by_key[route_key]
+        if route.response_schema != docker_build_response:
+            fail(f"Docker image build runtime response schema regressed for {route_key}")
+        if route.confidence != "runtime-verified":
+            fail(f"Docker image build route must remain runtime-verified for {route_key}")
 
     untyped_request_routes = [
         route
@@ -3394,8 +3447,8 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         fail("Local Path Browser delete must remain classified dangerous")
 
     response_schema_count = sum(route.response_schema is not None for route in patched_merged.routes)
-    if response_schema_count < 351:
-        fail(f"response-schema coverage regressed below 351 routes: {response_schema_count}")
+    if response_schema_count < 353:
+        fail(f"response-schema coverage regressed below 353 routes: {response_schema_count}")
 
     icon_response = merged_by_key[("GET", "/api/iconlib/icon")]
     if icon_response.response_type != "blob" or icon_response.response_content_type != "image/png":

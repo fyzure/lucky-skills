@@ -393,6 +393,25 @@
       },
       "security": "All mutable resources use unique TEST prefixes. The raw rootfs contains one harmless text file; the helper Cron task writes only inside its owned /tmp directory except for a cleanup fallback aimed at the exact temporary path returned by this probe's own upload request. No image is pulled or built, no business image is retagged/deleted, no container/network/volume is created, and Docker prune/global Docker settings are never changed."
     },
+    "docker_image_build_behavior": {
+      "confidence": "runtime-verified",
+      "model": {
+        "dockerfile_text": "POST /api/docker/images/build accepts Dockerfile text through {dockerfile:<string>}; the earlier isolated BusyBox runtime probe built successfully and observed the ret/output response envelope",
+        "zip_context": "POST /api/docker/images/build-from-zip accepts {zip_path:<Lucky-visible zip path>}; a GitHub-hosted disposable Lucky 3.0.0 instance built a FROM scratch context containing one marker file and one unique label",
+        "git_context": "POST /api/docker/images/build-from-git accepts {git_url:<string>}; the isolated CI probe mounted a fake git executable that implements only clone by copying a read-only owned fixture, so Lucky exercised the complete clone-to-build handler without contacting an external Git service",
+        "response": "Successful Dockerfile-text, ZIP and Git build handlers return a JSON object with ret:integer and output:string",
+        "isolation": "ZIP/Git runtime verification runs only on a GitHub-hosted ephemeral runner against an exact Lucky 3.0.0 image digest, exposes the temporary admin listener on runner loopback only, uses the runner's temporary Docker daemon and FROM scratch contexts, and performs no external Git fetch or production Docker mutation",
+        "cleanup": "The CI probe removes the temporary Lucky container and every image identity created after its baseline, verifies the image-ID baseline is restored, and deletes root-owned temporary Lucky configuration files using a network-disabled helper from the already-pulled pinned image"
+      },
+      "verification": "The GitHub Actions-only probe tools/lucky_docker_build_ci_probe.py ran against gdy666/lucky@sha256:0ea4276bcb7e57bc528ac2f3fa28cfec100103a2089087b30b1e8f7eca02c003 and verified Lucky 3.0.0. A fresh disposable instance was published only on 127.0.0.1, authenticated through the current challenge/RSA admin-login flow, enabled an in-memory random OpenToken, configured only its own temporary Docker operation path and used the runner's ephemeral Docker socket. build-from-zip consumed a two-file FROM scratch ZIP context and produced a uniquely labeled image whose /marker.txt content was copied back and compared exactly. build-from-git used a read-only local fixture plus a fake git clone wrapper inside the disposable Lucky container, so no external Git service was contacted; the resulting uniquely labeled image also passed exact marker verification. Both success responses contained exactly ret and output, with output a string. Cleanup removed the disposable container and all post-baseline image IDs and restored the runner image baseline.",
+      "observations": {
+        "zip": "build-from-zip returned ret=0 with response keys [output, ret], output was a string, exactly one expected labeled image appeared, and its marker file matched the owned TEST payload",
+        "git": "build-from-git returned ret=0 with response keys [output, ret], output was a string, exactly one expected labeled image appeared, and its marker file matched the owned TEST payload",
+        "admin_auth": "The fresh pinned Lucky 3.0.0 instance accepted its default disposable admin login through GET /api/login/challenge plus RSA-encrypted POST /api/login; the returned admin token was used only in process memory through Lucky-Admin-Token and Bearer headers to enable the disposable OpenToken",
+        "cleanup": "The temporary Lucky container and all image IDs created after the probe baseline were removed; the Docker image-ID baseline matched exactly at the end"
+      },
+      "security": "This probe refuses to run outside GitHub Actions, requires RUNNER_TEMP, pins the exact Lucky image digest already verified by the project, binds the admin port only to runner loopback, mounts only the runner Docker socket plus owned temporary paths, uses FROM scratch contexts, substitutes a local fake clone for external Git access, never invokes prune and never runs against the RS production Docker daemon. Generated admin/OpenToken values, image IDs and marker values are not retained in evidence."
+    },
     "security_group_webauth_behavior": {
       "confidence": "runtime-verified",
       "model": {
@@ -3763,14 +3782,18 @@
       "method": "POST",
       "risk": "mutating",
       "request_body_schema": {"type": "object", "properties": {"git_url": {"type": "string"}}, "required": ["git_url"]},
-      "schema_evidence": "authorized validation probe: {} and tag-only bodies were rejected; git_url alone passed request validation and reached git clone, which then failed because git is absent from the Lucky container. url and repo_url aliases were rejected"
+      "response_schema": {"type": "object", "properties": {"ret": {"type": "integer"}, "output": {"type": "string"}}},
+      "schema_evidence": "earlier validation established git_url as the required request field; a later GitHub-hosted disposable Lucky 3.0.0 probe supplied a local fake clone source, completed the real clone-to-Docker-build handler, observed exact {ret,output} success with output:string and verified the resulting owned image marker before full cleanup",
+      "confidence": "runtime-verified"
     },
     {
       "path": "/api/docker/images/build-from-zip",
       "method": "POST",
       "risk": "mutating",
       "request_body_schema": {"type": "object", "properties": {"zip_path": {"type": "string"}}, "required": ["zip_path"]},
-      "schema_evidence": "authorized validation probe: {} and tag-only bodies were rejected; zip_path alone passed request validation and the backend attempted to open that path. path and file aliases were rejected"
+      "response_schema": {"type": "object", "properties": {"ret": {"type": "integer"}, "output": {"type": "string"}}},
+      "schema_evidence": "earlier validation established zip_path as the required request field; a later GitHub-hosted disposable Lucky 3.0.0 probe built a two-file FROM scratch ZIP context, observed exact {ret,output} success with output:string and verified the resulting owned image marker before full cleanup",
+      "confidence": "runtime-verified"
     },
     {
       "path": "/api/docker/images/import",

@@ -277,7 +277,7 @@ WebDAV、SMB 与 FileBrowser 已完成 localhost 完整闭环；DLNA 已在一�
 
 ## P4 — Docker 剩余覆盖
 
-当前 Docker 已有较深的 disposable BusyBox 生命周期实践，但 Compose 和少数 image handler 仍不完整。
+当前 Docker 已有较深的 disposable 生命周期实践；Compose、image import/load 以及三个 image build 入口的安全隔离闭环均已完成。生产 Docker prune 仍明确禁止。
 
 ### Compose
 
@@ -299,10 +299,10 @@ WebDAV、SMB 与 FileBrowser 已完成 localhost 完整闭环；DLNA 已在一�
 - [x] 验证 import：Lucky-visible 单文件 rootfs tar 只创建 1 个 disposable image
 - [x] 验证 tag + `save.withoutcompression`：TEST image 导出为真实 `application/x-tar`
 - [x] 恢复 current-UI `upload-temp -> load(cleanup=true)` 协议；真实 multipart handler 命中，但当前实例因未配置 `temp_operation_path` 被业务层阻断，不修改全局 Docker 设置绕过
-- [ ] 验证本地 context build：**禁止在 RS 生产 Docker daemon 上为了覆盖率构建**，改用 temporary Lucky + mock Docker 或 GitHub Actions 隔离环境
-- [ ] ZIP/Git build 只在 temporary Lucky / mock Docker / GitHub Actions 完全隔离上下文验证
+- [x] 验证直接 Dockerfile-text build：当前 `/api/docker/images/build` 不是宿主目录 context 参数，而是 `{dockerfile:<Dockerfile 文本>}`；已在隔离 disposable image probe 中真实构建成功
+- [x] ZIP/Git build：`tools/lucky_docker_build_ci_probe.py` 仅允许 GitHub Actions，使用 pinned Lucky 3.0.0 + runner 临时 Docker daemon；ZIP 为两文件 `FROM scratch` context，Git 用只读 fixture + fake `git clone`，不访问外部 Git 服务
 - [x] 删除所有 TEST image/tag，并恢复 image + helper Cron/path 基线
-- [x] 固化 probe / evidence：`tools/lucky_docker_image_import_probe.py` / `docker_image_import_load_behavior`
+- [x] 固化 probe / evidence：`tools/lucky_docker_image_import_probe.py` / `docker_image_import_load_behavior`；`tools/lucky_docker_build_ci_probe.py` / `docker_image_build_behavior`
 
 ### Prune
 
