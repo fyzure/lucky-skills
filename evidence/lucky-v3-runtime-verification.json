@@ -4752,11 +4752,6 @@
     },
     {
       "path": "/api/wol/devices", "method": "GET",
-      "at": ["properties", "list", "items", "properties", "BroadcastIPs", "items"], "value": {"type": "string"},
-      "evidence": "BroadcastIPs contains broadcast-address strings in the WOL device model"
-    },
-    {
-      "path": "/api/wol/devices", "method": "GET",
       "at": ["properties", "list", "items", "properties", "ProbeTargets", "items"], "value": {"type": "string"},
       "evidence": "ProbeTargets contains network target strings in the WOL device model"
     },
