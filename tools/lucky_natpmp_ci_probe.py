@@ -645,11 +645,6 @@ def main() -> int:
             if version != EXPECTED_LUCKY_VERSION:
                 raise ProbeError(f"unexpected Lucky version: {version!r}")
 
-            baseline_keys = {rule_key(row) for row in stun_rows(base_url, open_token) if rule_key(row)}
-            report["baseline_empty"] = not baseline_keys
-            if not report["baseline_empty"]:
-                raise ProbeError("fresh Lucky STUN rule baseline was not empty")
-
             module_response = api_json(base_url, open_token, "/api/stun/configure")
             configure = module_response.get("configure")
             if not isinstance(configure, dict):
@@ -673,6 +668,14 @@ def main() -> int:
             )
             if not report["module_enabled_for_probe"]:
                 raise ProbeError("STUN module did not become enabled in disposable Lucky")
+
+            # Fresh Lucky returns ret=-10 from /api/stunrulelist while the STUN
+            # module is disabled, so establish the rule baseline only after the
+            # disposable module has been enabled through its API.
+            baseline_keys = {rule_key(row) for row in stun_rows(base_url, open_token) if rule_key(row)}
+            report["baseline_empty"] = not baseline_keys
+            if not report["baseline_empty"]:
+                raise ProbeError("fresh Lucky STUN rule baseline was not empty")
 
             listen_port = 20000 + secrets.randbelow(25000)
             create = api_json(
