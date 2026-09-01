@@ -206,6 +206,43 @@ def login_browser_admin(
     return token, opener, cookie_names
 
 
+def oauth_login_with_tmpcode(
+    base_url: str,
+    tmp_code: str,
+    workdir: Path,
+) -> dict[str, Any]:
+    """Replay Lucky 3.0.0 frontend OAuth-login challenge/RSA flow."""
+
+    opener = urllib.request.build_opener()
+    status, challenge = json_request(opener, base_url, "/api/login/challenge")
+    require_ret_zero(status, challenge, "OAuth login challenge")
+    required = ("challengeId", "nonce", "publicKey")
+    if not all(challenge.get(key) for key in required):
+        raise ProbeError("OAuth login challenge missing required fields")
+    plaintext = json.dumps(
+        {
+            "type": "oidc",
+            "token": tmp_code,
+            "twoFA": "",
+            "challengeId": challenge["challengeId"],
+            "nonce": challenge["nonce"],
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    cipher = rsa_encrypt_with_openssl(str(challenge["publicKey"]), plaintext, workdir)
+    status, response = json_request(
+        opener,
+        base_url,
+        "/api/oauth/login",
+        method="POST",
+        payload={"challengeId": challenge["challengeId"], "cipherText": cipher},
+    )
+    if status != 200 or not isinstance(response, dict):
+        raise ProbeError("OAuth login returned an invalid HTTP response")
+    return response
+
+
 def json_shape(value: Any) -> Any:
     if isinstance(value, dict):
         return {str(key): json_shape(item) for key, item in sorted(value.items())}
@@ -563,6 +600,7 @@ class FakeOidcProvider:
                     fixture.token_requests += 1
                     # Do not retain the authorization code or client values.
                     _ = urllib.parse.parse_qs(body.decode("utf-8", errors="replace"))
+                    fixture._access_token = "TEST-" + secrets.token_urlsafe(22)
                     self._json(
                         200,
                         {
@@ -664,6 +702,15 @@ def main() -> int:
         "oauth_userinfo_ret": None,
         "oauth_userinfo_msg": "",
         "oauth_userinfo_error": "",
+        "third_party_user_saved": False,
+        "third_party_user_disabled": False,
+        "third_party_user_reenabled": False,
+        "oauth_reauthorized": False,
+        "oauth_access_token_refreshed": False,
+        "oauth_user_refreshed": False,
+        "oauth_login_ret": None,
+        "oauth_login_token_present": False,
+        "third_party_user_revoked": False,
         "third_party_user_created": False,
         "config_restored": False,
         "user_baseline_restored": False,
@@ -694,6 +741,7 @@ def main() -> int:
         baseline_users: list[dict[str, Any]] = []
         baseline_webservice_keys: set[str] = set()
         oauth_relay_key = ""
+        saved_user_key = ""
         try:
             gateway_ip, _ = docker_network_values(network_name)
             report["network_internal"] = True
@@ -885,6 +933,212 @@ def main() -> int:
                 report["oauth_userinfo_msg"] = str(userinfo.get("msg") or "")[:240]
                 report["oauth_userinfo_error"] = str(userinfo.get("error") or "")[:400]
 
+                first_user_info = userinfo.get("userInfo")
+                if userinfo.get("ret") == 0 and isinstance(first_user_info, dict):
+                    user_payload = {
+                        "Key": "",
+                        "Type": "oidc",
+                        "Enable": True,
+                        "Remark": TEST_PREFIX + nonce,
+                        "ID": str(first_user_info.get("ID") or ""),
+                        "Name": str(first_user_info.get("Name") or ""),
+                        "Avatar": str(first_user_info.get("Avatar") or ""),
+                        "EMail": str(first_user_info.get("EMail") or ""),
+                        "Phone": str(first_user_info.get("Phone") or ""),
+                        "RefreshToken": str(first_user_info.get("RefreshToken") or ""),
+                        "AccessToken": str(first_user_info.get("AccessToken") or ""),
+                        "CreateTime": 0,
+                        "UpdateTime": 0,
+                        "TwoFAKey": "",
+                    }
+                    saved = admin_json(
+                        base_url,
+                        admin_token,
+                        "/api/thirdPartyAuthManager/list",
+                        method="POST",
+                        payload=user_payload,
+                        opener=browser_opener,
+                    )
+                    saved_user_key = str(saved.get("key") or "")
+                    report["third_party_user_saved"] = bool(saved_user_key)
+                    if saved_user_key:
+                        encoded_user_key = urllib.parse.quote(saved_user_key, safe="")
+                        detail = admin_json(
+                            base_url,
+                            admin_token,
+                            f"/api/thirdPartyAuthManager/list/{encoded_user_key}",
+                            opener=browser_opener,
+                        ).get("authUser")
+                        report["third_party_user_created"] = (
+                            isinstance(detail, dict)
+                            and detail.get("Enable") is True
+                            and detail.get("Type") == "oidc"
+                        )
+
+                        disabled_payload = dict(user_payload)
+                        disabled_payload["Key"] = saved_user_key
+                        disabled_payload["Enable"] = False
+                        admin_json(
+                            base_url,
+                            admin_token,
+                            "/api/thirdPartyAuthManager/list",
+                            method="PUT",
+                            payload=disabled_payload,
+                            opener=browser_opener,
+                        )
+                        disabled_detail = admin_json(
+                            base_url,
+                            admin_token,
+                            f"/api/thirdPartyAuthManager/list/{encoded_user_key}",
+                            opener=browser_opener,
+                        ).get("authUser")
+                        report["third_party_user_disabled"] = (
+                            isinstance(disabled_detail, dict)
+                            and disabled_detail.get("Enable") is False
+                        )
+
+                        enabled_payload = dict(disabled_payload)
+                        enabled_payload["Enable"] = True
+                        admin_json(
+                            base_url,
+                            admin_token,
+                            "/api/thirdPartyAuthManager/list",
+                            method="PUT",
+                            payload=enabled_payload,
+                            opener=browser_opener,
+                        )
+                        enabled_detail = admin_json(
+                            base_url,
+                            admin_token,
+                            f"/api/thirdPartyAuthManager/list/{encoded_user_key}",
+                            opener=browser_opener,
+                        ).get("authUser")
+                        report["third_party_user_reenabled"] = (
+                            isinstance(enabled_detail, dict)
+                            and enabled_detail.get("Enable") is True
+                        )
+
+                        first_access = str(first_user_info.get("AccessToken") or "")
+                        time.sleep(0.025)
+                        second_tmpcode = admin_json(
+                            base_url,
+                            admin_token,
+                            "/api/oauth/tmpcode?"
+                            + urllib.parse.urlencode(
+                                {"type": "oidc", "_": lucky_frontend_timestamp()}
+                            ),
+                            require_zero=False,
+                            opener=browser_opener,
+                        )
+                        second_code = second_tmpcode.get("tmpCode")
+                        second_auth_url = second_tmpcode.get("authUrl")
+                        if (
+                            second_tmpcode.get("ret") == 0
+                            and isinstance(second_code, str)
+                            and second_code
+                            and isinstance(second_auth_url, str)
+                            and second_auth_url
+                        ):
+                            token_count_before = provider.token_requests
+                            follow_authorization(second_auth_url, gateway_ip, provider.port)
+                            report["oauth_reauthorized"] = provider.token_requests > token_count_before
+                            deadline = time.time() + 12
+                            while time.time() < deadline:
+                                second_status = admin_json(
+                                    base_url,
+                                    admin_token,
+                                    "/api/oauth/status?"
+                                    + urllib.parse.urlencode(
+                                        {
+                                            "code": second_code,
+                                            "type": "oidc",
+                                            "_": lucky_frontend_timestamp(),
+                                        }
+                                    ),
+                                    require_zero=False,
+                                    opener=browser_opener,
+                                )
+                                if second_status.get("ret") == 0:
+                                    break
+                                time.sleep(0.5)
+                            second_userinfo = admin_json(
+                                base_url,
+                                admin_token,
+                                "/api/oauth/userinfo?"
+                                + urllib.parse.urlencode(
+                                    {
+                                        "code": second_code,
+                                        "type": "oidc",
+                                        "_": lucky_frontend_timestamp(),
+                                    }
+                                ),
+                                require_zero=False,
+                                opener=browser_opener,
+                            )
+                            second_user_info = second_userinfo.get("userInfo")
+                            if second_userinfo.get("ret") == 0 and isinstance(second_user_info, dict):
+                                second_access = str(second_user_info.get("AccessToken") or "")
+                                report["oauth_access_token_refreshed"] = (
+                                    bool(first_access)
+                                    and bool(second_access)
+                                    and first_access != second_access
+                                )
+                                refreshed_payload = dict(enabled_payload)
+                                for field in (
+                                    "ID",
+                                    "Name",
+                                    "Avatar",
+                                    "EMail",
+                                    "Phone",
+                                    "RefreshToken",
+                                    "AccessToken",
+                                ):
+                                    refreshed_payload[field] = str(second_user_info.get(field) or "")
+                                admin_json(
+                                    base_url,
+                                    admin_token,
+                                    "/api/thirdPartyAuthManager/list",
+                                    method="PUT",
+                                    payload=refreshed_payload,
+                                    opener=browser_opener,
+                                )
+                                refreshed_detail = admin_json(
+                                    base_url,
+                                    admin_token,
+                                    f"/api/thirdPartyAuthManager/list/{encoded_user_key}",
+                                    opener=browser_opener,
+                                ).get("authUser")
+                                report["oauth_user_refreshed"] = (
+                                    isinstance(refreshed_detail, dict)
+                                    and refreshed_detail.get("Enable") is True
+                                    and refreshed_detail.get("Type") == "oidc"
+                                )
+
+                                oauth_login = oauth_login_with_tmpcode(base_url, second_code, tmp)
+                                report["oauth_login_ret"] = oauth_login.get("ret")
+                                login_token = oauth_login.get("token")
+                                report["oauth_login_token_present"] = (
+                                    oauth_login.get("ret") == 0
+                                    and isinstance(login_token, str)
+                                    and bool(login_token.strip())
+                                )
+
+                        admin_json(
+                            base_url,
+                            admin_token,
+                            f"/api/thirdPartyAuthManager/list/{encoded_user_key}",
+                            method="DELETE",
+                            opener=browser_opener,
+                        )
+                        saved_user_key = ""
+                        remaining_users = admin_json(
+                            base_url,
+                            admin_token,
+                            "/api/thirdPartyAuthManager/list",
+                            opener=browser_opener,
+                        ).get("list") or []
+                        report["third_party_user_revoked"] = remaining_users == baseline_users
+
             report["authorization_query_keys"] = provider.authorization_query_keys
             report["authorization_client_id_matches"] = provider.client_id_matches
             report["authorization_redirect_uri_seen"] = provider.redirect_uri_seen
@@ -899,9 +1153,22 @@ def main() -> int:
             after_users = admin_json(
                 base_url, admin_token, "/api/thirdPartyAuthManager/list", opener=browser_opener
             ).get("list") or []
-            if isinstance(after_users, list):
+            if isinstance(after_users, list) and not report["third_party_user_saved"]:
                 report["third_party_user_created"] = len(after_users) > len(baseline_users)
         finally:
+            if base_url and admin_token and saved_user_key:
+                try:
+                    admin_json(
+                        base_url,
+                        admin_token,
+                        "/api/thirdPartyAuthManager/list/"
+                        + urllib.parse.quote(saved_user_key, safe=""),
+                        method="DELETE",
+                        opener=browser_opener if "browser_opener" in locals() else None,
+                    )
+                    saved_user_key = ""
+                except Exception:  # noqa: BLE001 - cleanup must continue
+                    pass
             if base_url and admin_token and oauth_relay_key:
                 try:
                     delete_webservice_rule(
@@ -977,6 +1244,15 @@ def main() -> int:
         "authorization_callback_completed",
         "authorization_client_id_matches",
         "authorization_redirect_uri_seen",
+        "third_party_user_saved",
+        "third_party_user_created",
+        "third_party_user_disabled",
+        "third_party_user_reenabled",
+        "oauth_reauthorized",
+        "oauth_access_token_refreshed",
+        "oauth_user_refreshed",
+        "oauth_login_token_present",
+        "third_party_user_revoked",
         "config_restored",
         "user_baseline_restored",
     )
