@@ -274,14 +274,45 @@ class FakeOidcProvider:
                 self.end_headers()
                 self.wfile.write(body)
 
-            def _record_other(self, parsed: urllib.parse.SplitResult, method: str) -> None:
+            def _record_other(
+                self,
+                parsed: urllib.parse.SplitResult,
+                method: str,
+                body: bytes = b"",
+            ) -> None:
                 if len(fixture.other_requests) >= 20:
                     return
+                content_type = self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+                body_keys: list[str] = []
+                body_kind = "empty"
+                if body:
+                    if content_type == "application/json":
+                        try:
+                            decoded = json.loads(body.decode("utf-8", errors="strict"))
+                        except (UnicodeDecodeError, json.JSONDecodeError):
+                            body_kind = "invalid-json"
+                        else:
+                            body_kind = "json"
+                            if isinstance(decoded, dict):
+                                body_keys = sorted(str(key) for key in decoded)
+                    elif content_type == "application/x-www-form-urlencoded":
+                        body_kind = "form"
+                        body_keys = sorted(
+                            urllib.parse.parse_qs(
+                                body.decode("utf-8", errors="replace"), keep_blank_values=True
+                            ).keys()
+                        )
+                    else:
+                        body_kind = "bytes"
                 fixture.other_requests.append(
                     {
                         "method": method,
                         "path": parsed.path,
                         "query_keys": sorted(urllib.parse.parse_qs(parsed.query).keys()),
+                        "content_type": content_type,
+                        "body_kind": body_kind,
+                        "body_keys": body_keys,
+                        "body_length": len(body),
                     }
                 )
 
@@ -356,7 +387,7 @@ class FakeOidcProvider:
                     fixture.callback_query_keys = sorted(query.keys())
                     self._json(200, {"ok": True})
                     return
-                fixture._record_other(parsed, "GET")
+                self._record_other(parsed, "GET")
                 self._json(404, {"error": "not_found"})
 
             def do_POST(self) -> None:  # noqa: N802 - stdlib handler name
@@ -376,7 +407,7 @@ class FakeOidcProvider:
                         },
                     )
                     return
-                fixture._record_other(parsed, "POST")
+                self._record_other(parsed, "POST", body)
                 self._json(404, {"error": "not_found"})
 
         self.server = http.server.ThreadingHTTPServer((bind_ip, 0), Handler)
@@ -432,6 +463,7 @@ def main() -> int:
         "oauth_test_client_configured": False,
         "tmpcode_ret": None,
         "tmpcode_msg": "",
+        "tmpcode_error": "",
         "tmpcode_response_shape": {},
         "frontend_runtime_snippets": {},
         "tmpcode_attempts": [],
@@ -593,6 +625,7 @@ def main() -> int:
             report["tmpcode_attempts"] = attempts
             report["tmpcode_ret"] = tmpcode.get("ret")
             report["tmpcode_msg"] = str(tmpcode.get("msg") or tmpcode.get("message") or "")[:240]
+            report["tmpcode_error"] = str(tmpcode.get("error") or "")[:400]
             report["tmpcode_response_shape"] = json_shape(tmpcode)
             tmp_code = tmpcode.get("tmpCode") or tmpcode.get("tmpcode") or tmpcode.get("code")
             auth_url = tmpcode.get("authUrl") or tmpcode.get("authurl")
