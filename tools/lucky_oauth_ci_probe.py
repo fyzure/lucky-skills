@@ -18,6 +18,7 @@ Lucky-specific relay step without changing the isolation model.
 from __future__ import annotations
 
 import http.server
+import http.cookiejar
 import json
 import os
 import re
@@ -42,10 +43,10 @@ from lucky_docker_build_ci_probe import (
     cleanup_root_owned_conf,
     docker,
     json_request,
-    login_default_admin,
     pull_pinned_image,
     require_github_hosted_runner,
     require_ret_zero,
+    rsa_encrypt_with_openssl,
     run,
     wait_for_lucky,
 )
@@ -67,9 +68,10 @@ def admin_json(
     method: str = "GET",
     payload: dict[str, Any] | None = None,
     require_zero: bool = True,
+    opener: urllib.request.OpenerDirector | None = None,
 ) -> dict[str, Any]:
     status, response = json_request(
-        urllib.request.build_opener(),
+        opener or urllib.request.build_opener(),
         base_url,
         path,
         method=method,
@@ -82,6 +84,43 @@ def admin_json(
     elif status != 200:
         raise ProbeError(f"{method} {path} returned HTTP {status}")
     return response
+
+
+def login_browser_admin(
+    base_url: str, workdir: Path
+) -> tuple[str, urllib.request.OpenerDirector, list[str]]:
+    jar = http.cookiejar.CookieJar()
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+    status, challenge = json_request(opener, base_url, "/api/login/challenge")
+    require_ret_zero(status, challenge, "login challenge")
+    required = ("challengeId", "nonce", "publicKey")
+    if not all(challenge.get(key) for key in required):
+        raise ProbeError("login challenge missing required fields")
+    plaintext = json.dumps(
+        {
+            "account": "666",
+            "password": "666",
+            "twoFA": "",
+            "challengeId": challenge["challengeId"],
+            "nonce": challenge["nonce"],
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    cipher = rsa_encrypt_with_openssl(str(challenge["publicKey"]), plaintext, workdir)
+    status, response = json_request(
+        opener,
+        base_url,
+        "/api/login",
+        method="POST",
+        payload={"challengeId": challenge["challengeId"], "cipherText": cipher},
+    )
+    require_ret_zero(status, response, "default admin login")
+    token = response.get("token")
+    if not isinstance(token, str) or not token.strip():
+        raise ProbeError("default admin login returned no admin token")
+    cookie_names = sorted({cookie.name for cookie in jar})
+    return token, opener, cookie_names
 
 
 def json_shape(value: Any) -> Any:
@@ -329,6 +368,7 @@ def main() -> int:
         "network_internal": False,
         "admin_port_unpublished": False,
         "default_admin_login": False,
+        "browser_cookie_names": [],
         "oauth_config_baseline_empty": False,
         "oauth_user_baseline_empty": False,
         "oauth_test_client_configured": False,
@@ -404,10 +444,11 @@ def main() -> int:
             report["admin_port_unpublished"] = admin_port_is_unpublished(container_name)
             if not report["admin_port_unpublished"]:
                 raise ProbeError("temporary Lucky admin port was unexpectedly published")
-            admin_token = login_default_admin(base_url, tmp)
+            admin_token, browser_opener, cookie_names = login_browser_admin(base_url, tmp)
             report["default_admin_login"] = True
+            report["browser_cookie_names"] = cookie_names
 
-            info = admin_json(base_url, admin_token, "/api/info").get("info")
+            info = admin_json(base_url, admin_token, "/api/info", opener=browser_opener).get("info")
             if not isinstance(info, dict):
                 raise ProbeError("Lucky info response missing info object")
             report["lucky_version"] = str(info.get("Version") or "")
@@ -415,7 +456,9 @@ def main() -> int:
                 raise ProbeError(f"unexpected Lucky version: {report['lucky_version']!r}")
             report["frontend_tmpcode_snippet"] = frontend_oauth_snippet(base_url)
 
-            config_response = admin_json(base_url, admin_token, "/api/thirdPartyAuthManager/config")
+            config_response = admin_json(
+                base_url, admin_token, "/api/thirdPartyAuthManager/config", opener=browser_opener
+            )
             baseline_config = config_response.get("config")
             if not isinstance(baseline_config, dict):
                 raise ProbeError("third-party auth config missing config object")
@@ -423,7 +466,9 @@ def main() -> int:
                 not baseline_config.get(key)
                 for key in ("OIDCRedirectURI", "OIDCClientID", "OIDCAuthorizationEndpoint")
             )
-            users_response = admin_json(base_url, admin_token, "/api/thirdPartyAuthManager/list")
+            users_response = admin_json(
+                base_url, admin_token, "/api/thirdPartyAuthManager/list", opener=browser_opener
+            )
             raw_users = users_response.get("list") or []
             if not isinstance(raw_users, list) or not all(isinstance(row, dict) for row in raw_users):
                 raise ProbeError("third-party auth list has unexpected shape")
@@ -443,8 +488,11 @@ def main() -> int:
                 "/api/thirdPartyAuthManager/config",
                 method="PUT",
                 payload=updated,
+                opener=browser_opener,
             )
-            live_config = admin_json(base_url, admin_token, "/api/thirdPartyAuthManager/config").get("config")
+            live_config = admin_json(
+                base_url, admin_token, "/api/thirdPartyAuthManager/config", opener=browser_opener
+            ).get("config")
             report["oauth_test_client_configured"] = (
                 isinstance(live_config, dict)
                 and live_config.get("OIDCAuthorizationEndpoint") == updated["OIDCAuthorizationEndpoint"]
@@ -457,6 +505,7 @@ def main() -> int:
                 admin_token,
                 "/api/oauth/tmpcode?type=oidc",
                 require_zero=False,
+                opener=browser_opener,
             )
             report["tmpcode_ret"] = tmpcode.get("ret")
             report["tmpcode_msg"] = str(tmpcode.get("msg") or tmpcode.get("message") or "")[:240]
@@ -492,6 +541,7 @@ def main() -> int:
                         admin_token,
                         f"/api/oauth/status?code={encoded_code}&type=oidc",
                         require_zero=False,
+                        opener=browser_opener,
                     )
                     ret = last_status.get("ret")
                     if ret not in seen_rets:
@@ -506,6 +556,7 @@ def main() -> int:
                     admin_token,
                     f"/api/oauth/userinfo?code={encoded_code}&type=oidc",
                     require_zero=False,
+                    opener=browser_opener,
                 )
                 report["oauth_userinfo_ret"] = userinfo.get("ret")
                 report["oauth_userinfo_shape"] = json_shape(userinfo)
@@ -520,7 +571,9 @@ def main() -> int:
             report["provider_userinfo_requests"] = provider.userinfo_requests
             report["provider_other_requests"] = provider.other_requests
 
-            after_users = admin_json(base_url, admin_token, "/api/thirdPartyAuthManager/list").get("list") or []
+            after_users = admin_json(
+                base_url, admin_token, "/api/thirdPartyAuthManager/list", opener=browser_opener
+            ).get("list") or []
             if isinstance(after_users, list):
                 report["third_party_user_created"] = len(after_users) > len(baseline_users)
         finally:
@@ -532,10 +585,21 @@ def main() -> int:
                         "/api/thirdPartyAuthManager/config",
                         method="PUT",
                         payload=baseline_config,
+                        opener=browser_opener if "browser_opener" in locals() else None,
                     )
-                    restored = admin_json(base_url, admin_token, "/api/thirdPartyAuthManager/config").get("config")
+                    restored = admin_json(
+                        base_url,
+                        admin_token,
+                        "/api/thirdPartyAuthManager/config",
+                        opener=browser_opener if "browser_opener" in locals() else None,
+                    ).get("config")
                     report["config_restored"] = restored == baseline_config
-                    restored_users = admin_json(base_url, admin_token, "/api/thirdPartyAuthManager/list").get("list") or []
+                    restored_users = admin_json(
+                        base_url,
+                        admin_token,
+                        "/api/thirdPartyAuthManager/list",
+                        opener=browser_opener if "browser_opener" in locals() else None,
+                    ).get("list") or []
                     report["user_baseline_restored"] = restored_users == baseline_users
                 except Exception:  # noqa: BLE001 - cleanup must continue
                     pass
