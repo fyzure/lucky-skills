@@ -19,6 +19,7 @@ from __future__ import annotations
 import copy
 import json
 import os
+import re
 import secrets
 import socket
 import sys
@@ -47,6 +48,7 @@ from lucky_docker_build_ci_probe import (
 
 
 TEST_PREFIX = "TEST-lucky-skills-rclone-mount-ci-"
+RCLONE_FRONTEND_ASSET = "/assets/lucky_rclone-sFF3mpk8.js"
 
 
 def choose_loopback_port() -> int:
@@ -238,6 +240,39 @@ def remote_detail(base_url: str, token: str, key: str) -> dict[str, Any]:
     if not isinstance(remote, dict):
         raise ProbeError("Rclone remote detail missing remote object")
     return remote
+
+
+def frontend_mount_snippets(base_url: str) -> dict[str, str]:
+    """Extract public Lucky 3.0.0 Rclone UI context for mount field semantics."""
+
+    request = urllib.request.Request(
+        base_url + RCLONE_FRONTEND_ASSET,
+        headers={"User-Agent": "lucky-skills-rclone-mount-ci-inspector/1"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            raw = response.read(4 * 1024 * 1024)
+    except Exception as error:  # noqa: BLE001 - failure diagnostic only
+        return {"fetch_error": type(error).__name__}
+    text = raw.decode("utf-8", errors="replace")
+    snippets: dict[str, str] = {}
+    for needle in (
+        "MountType",
+        "OnleyCreateVFS",
+        "MountPoint",
+        "SystemMount",
+        "AllowOther",
+    ):
+        positions = [match.start() for match in re.finditer(needle, text)]
+        if not positions:
+            continue
+        chunks = []
+        for position in positions[:4]:
+            start = max(0, position - 1000)
+            end = min(len(text), position + 1800)
+            chunks.append(" ".join(text[start:end].split()))
+        snippets[needle] = " || ".join(chunks)[:9000]
+    return snippets
 
 
 def wait_mount_ready(
@@ -511,10 +546,12 @@ def main() -> int:
             report["mount_visible"] = mounted
             report["mount_msg_empty"] = not mount_msg
             if not mounted:
+                frontend_diagnostic = frontend_mount_snippets(base_url)
                 raise ProbeError(
                     "Rclone SystemMount did not become visible; "
                     f"MountMsg={mount_msg[:240]!r}; "
-                    f"readback={json.dumps(mount_diagnostic, ensure_ascii=False, sort_keys=True)}"
+                    f"readback={json.dumps(mount_diagnostic, ensure_ascii=False, sort_keys=True)}; "
+                    f"frontend={json.dumps(frontend_diagnostic, ensure_ascii=False, sort_keys=True)[:18000]}"
                 )
 
             if helper is None:
