@@ -258,6 +258,7 @@
         "real_sync": "POST /api/rclone/sync/run/{Key} executed a real local-to-local sync and propagated a source-only empty directory to the destination when CreateEmptyDirs=true",
         "file_copy": "The same SyncMode=sync run copied a real TEST file from source to destination. A short-lived owned Cron shell helper created a random marker file before the run and, after the run, verified that source and destination contents were byte-equivalent before deleting its own task/group. The current Lucky 3.0.0 UI exposes sync and bisync modes, not a separate copy mode",
         "stop": "POST /api/rclone/sync/stop/{Key} was verified against an actually running owned local task. A 1 MiB TEST file plus BandwidthLimit=32K/Transfers=1 made running observable; stop returned ret=0 and the task exited running. Current 3.0.0 then reported State.Status=success with empty LastError although the destination file was absent, so post-stop success is a terminal-state label rather than proof that the transfer completed",
+        "system_mount_boundary": "A bounded SystemMount attempt started from empty remote/sync baselines, temporarily pointed Rclone global cache/upload paths at one owned /tmp TEST tree, and created an enabled local TEST remote with an owned mount point. Remote creation returned ret=0 and SystemMount was requested, but MountMsg remained non-empty and the owned mount point stayed empty. The only TEST-tagged Rclone log recorded unmountConflictFail: operation not permitted. Read-only inspection of the Lucky container then confirmed Privileged=false, no SYS_ADMIN capability and no /dev/fuse device mapping. No successful mount/unmount behavior is claimed for this deployment",
         "dry_run": "After PUT-updating the same task to DryRun=true, a second successful run did not create a newly added source-only directory or the post-sync verification marker on the destination",
         "state": "The compact sync list exposes State with Status/Progress/counters, while GET /api/rclone/sync/{Key} exposes the full execution options",
         "scope": "No Rclone remote, cloud credential, network service or system mount is required for the verified local-to-local behavior"
@@ -267,11 +268,12 @@
         "real_run": "State.Status reached success and the destination contained the propagated empty directory",
         "file_copy": "The destination contained the copied TEST file, and the post-run Cron helper created its verification marker only after both source and destination file contents matched the random in-memory marker",
         "stop": "A separate bounded task was observed in State.Status=running, stop returned ret=0, and the next terminal state was success with no LastError while the throttled destination file remained absent",
+        "system_mount_blocked": "The TEST remote was created and enabled with SystemMount=true, but MountMsg reported a mount failure and the TEST source directory never appeared at the owned mount point. Disabling/deleting the remote, restoring the originally empty Rclone global config, and deleting the TEST tree all succeeded",
         "dry_run": "State.Status reached success but the new destination directory and post-sync verification marker remained absent",
         "detail_vs_list": "The compact list omits DryRun/CreateEmptyDirs, while GET /api/rclone/sync/{Key} returned the complete task options including those fields",
         "cleanup": "No TEST sync task, Cron helper task/group or TEST path remained; Rclone and Cron task/group Key baselines were restored"
       },
-      "security": "The file-copy probe uses only unique /tmp TEST directories, one TEST sync task and one short-lived manual-only Cron helper task/group. The stop probe separately uses exactly 1 MiB of owned local data, Transfers=1 and BandwidthLimit=32K only long enough to observe running before immediately stopping. Helper scripts write/read only owned TEST paths and never call the network or business services. Neither probe configures remotes, credentials, schedules, bisync, system mounts or network listeners, and cleanup restores Rclone/Cron task/group baselines."
+      "security": "The file-copy probe uses only unique /tmp TEST directories, one TEST sync task and one short-lived manual-only Cron helper task/group. The stop probe separately uses exactly 1 MiB of owned local data, Transfers=1 and BandwidthLimit=32K only long enough to observe running before immediately stopping. The bounded SystemMount attempt was allowed only because both Rclone remote and sync baselines were empty; global cache/upload paths were moved only to owned TEST directories and restored under an ownership guard. The failed mount did not trigger any container privilege, capability or device change. Helper scripts write/read only owned TEST paths and never call the network or business services. No remote credential, schedule, bisync or network listener is introduced."
     },
     "cron_shell_behavior": {
       "confidence": "runtime-verified",
@@ -1925,7 +1927,8 @@
       "risk": "mutating",
       "body_keys": ["DefaultCaCheDir", "UploadFileTmpDir"],
       "request_body_schema": {"type": "object", "properties": {"DefaultCaCheDir": {"type": "string"}, "UploadFileTmpDir": {"type": "string"}}},
-      "schema_evidence": "frontend passes the global settings object directly + authorized GET /api/rclone/globalconfig observed these field names and primitive types; PUT request types are copied from the matching verified GET globalConfig model"
+      "response_schema": {"type":"object","properties":{"ret":{"type":"integer"}}},
+      "schema_evidence": "frontend passes the global settings object directly + authorized GET /api/rclone/globalconfig observed these field names and primitive types. During the bounded SystemMount attempt both originally empty values were temporarily set to owned /tmp TEST directories, PUT returned ret=0, readback matched exactly, and the original empty globalConfig was restored under an ownership guard. No live path is retained in evidence"
     },
     {
       "path": "/api/rclone/itemorderadjustment",

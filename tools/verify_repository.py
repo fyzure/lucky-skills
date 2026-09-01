@@ -633,6 +633,7 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         "real_sync",
         "file_copy",
         "stop",
+        "system_mount_boundary",
         "dry_run",
         "state",
         "scope",
@@ -643,6 +644,7 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         "real_run",
         "file_copy",
         "stop",
+        "system_mount_blocked",
         "dry_run",
         "detail_vs_list",
         "cleanup",
@@ -658,6 +660,9 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         fail("Rclone file-copy evidence must retain the owned Cron helper boundary")
     if "State.Status=success" not in str(rclone_model.get("stop")):
         fail("Rclone stop evidence must preserve the post-stop success-state caveat")
+    system_mount_boundary = str(rclone_model.get("system_mount_boundary"))
+    if "operation not permitted" not in system_mount_boundary or "SYS_ADMIN" not in system_mount_boundary:
+        fail("Rclone SystemMount blocked-runtime evidence regressed")
     if not (ROOT / "tools" / "lucky_rclone_stop_probe.py").is_file():
         fail("Rclone stop runtime probe tool is missing")
     if not (ROOT / "tools" / "lucky_rclone_sync_probe.py").is_file():
@@ -1295,6 +1300,8 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         fail("Rclone runtime stop response schema regressed")
     if rclone_stop.risk is not OperationRisk.DANGEROUS:
         fail("Rclone runtime stop must remain dangerous")
+    if merged_by_key[("PUT", "/api/rclone/globalconfig")].response_schema != rclone_ret_only:
+        fail("Rclone global-config runtime response schema regressed")
 
     rclone_remote_detail = merged_by_key[("GET", "/api/rclone/remote/{param}")].response_schema
     rclone_remote_props = (
@@ -3181,8 +3188,8 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         fail("Local Path Browser delete must remain classified dangerous")
 
     response_schema_count = sum(route.response_schema is not None for route in patched_merged.routes)
-    if response_schema_count < 345:
-        fail(f"response-schema coverage regressed below 345 routes: {response_schema_count}")
+    if response_schema_count < 346:
+        fail(f"response-schema coverage regressed below 346 routes: {response_schema_count}")
 
     icon_response = merged_by_key[("GET", "/api/iconlib/icon")]
     if icon_response.response_type != "blob" or icon_response.response_content_type != "image/png":

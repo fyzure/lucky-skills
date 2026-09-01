@@ -27170,11 +27170,16 @@
         ],
         "responses": {
           "200": {
-            "description": "Lucky JSON response; envelope shape varies by endpoint.",
+            "description": "Response schema observed from runtime evidence; see x-schema-evidence for provenance.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LuckyEnvelope"
+                  "type": "object",
+                  "properties": {
+                    "ret": {
+                      "type": "integer"
+                    }
+                  }
                 }
               }
             }
@@ -27195,7 +27200,7 @@
           "lucky_rclone-sFF3mpk8.js"
         ],
         "x-lucky-risk": "mutating",
-        "x-schema-evidence": "frontend passes the global settings object directly + authorized GET /api/rclone/globalconfig observed these field names and primitive types; PUT request types are copied from the matching verified GET globalConfig model",
+        "x-schema-evidence": "frontend passes the global settings object directly + authorized GET /api/rclone/globalconfig observed these field names and primitive types. During the bounded SystemMount attempt both originally empty values were temporarily set to owned /tmp TEST directories, PUT returned ret=0, readback matched exactly, and the original empty globalConfig was restored under an ownership guard. No live path is retained in evidence",
         "requestBody": {
           "required": true,
           "content": {

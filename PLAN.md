@@ -237,7 +237,7 @@ WebDAV 与 FileBrowser 已完成 localhost 完整闭环；FTP 当前配置没有
 - [x] DryRun 与真实运行结果对比
 - [x] 验证 task run / State / logs
 - [x] 验证运行中 task stop：1 MiB TEST 文件 + `BandwidthLimit=32K` / `Transfers=1`，观察 running 后立即 stop；当前 3.0.0 stop 后状态记为 `success`，但目标文件未完成
-- [ ] 如安全，验证临时 mount/unmount
+- [ ] 如安全，验证临时 mount/unmount（当前部署已做 bounded 尝试但被运行环境阻断：Lucky 容器 `Privileged=false`、无 `SYS_ADMIN`、无 `/dev/fuse` 映射；TEST mount 返回 `unmountConflictFail: operation not permitted`。不为覆盖率提升生产容器权限）
 - [x] 清理源/目标目录、TEST sync task、Cron helper task/group，并恢复 Rclone/Cron Key 基线
 - [x] 固化 probe / evidence / docs：`tools/lucky_rclone_sync_probe.py`
 
