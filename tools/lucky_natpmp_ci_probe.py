@@ -577,6 +577,55 @@ def mapped_udp_roundtrip(gateway_ip: str, external_port: int, marker: bytes) -> 
     return response == marker
 
 
+def direct_udp_roundtrip(
+    source_ip: str,
+    lucky_ip: str,
+    listen_port: int,
+    marker: bytes,
+) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as client:
+        client.bind((source_ip, 0))
+        client.settimeout(5)
+        client.sendto(marker, (lucky_ip, listen_port))
+        try:
+            response, _address = client.recvfrom(65535)
+        except socket.timeout:
+            return False
+    return response == marker
+
+
+def safe_log_samples(payload: Any, limit: int = 8) -> list[str]:
+    samples: list[str] = []
+
+    def visit(value: Any) -> None:
+        if len(samples) >= limit:
+            return
+        if isinstance(value, str):
+            text = value.strip()
+            if not text:
+                return
+            lowered = text.lower()
+            if not any(
+                keyword in lowered
+                for keyword in ("stun", "nat", "forward", "listen", "target", "udp", "error", "fail")
+            ):
+                return
+            text = text.replace(TEST_PUBLIC_IP, "<test-public-ip>")
+            text = text[:240]
+            if text not in samples:
+                samples.append(text)
+            return
+        if isinstance(value, dict):
+            for item in value.values():
+                visit(item)
+        elif isinstance(value, list):
+            for item in value:
+                visit(item)
+
+    visit(payload)
+    return samples
+
+
 def main() -> int:
     runner_temp = require_github_hosted_runner()
     if shutil.which("docker") is None or shutil.which("openssl") is None:
@@ -611,9 +660,11 @@ def main() -> int:
         "natpmp_udp_add_seen": False,
         "natpmp_internal_port_matches_listener": False,
         "natpmp_mapping_installed": False,
+        "direct_listener_roundtrip": False,
         "mapped_data_roundtrip": False,
         "echo_target_used": False,
         "rule_log_surface_read": False,
+        "rule_log_samples": [],
         "rule_disabled": False,
         "natpmp_delete_seen": False,
         "mapping_removed": False,
@@ -809,6 +860,13 @@ def main() -> int:
                 created_key,
             )
 
+            report["direct_listener_roundtrip"] = direct_udp_roundtrip(
+                gateway_ip,
+                lucky_ip,
+                listen_port,
+                marker,
+            )
+
             report["mapped_data_roundtrip"] = mapped_udp_roundtrip(
                 gateway_ip,
                 external_port,
@@ -818,6 +876,7 @@ def main() -> int:
 
             logs = api_json(base_url, open_token, f"/api/stun/{created_key}/lastlogs")
             report["rule_log_surface_read"] = logs.get("ret") == 0
+            report["rule_log_samples"] = safe_log_samples(logs)
 
             query = urllib.parse.urlencode({"key": created_key, "enable": "false"})
             api_json(base_url, open_token, f"/api/stunrule/enable?{query}")
