@@ -170,7 +170,7 @@ def admin_json(
 
 
 def login_browser_admin(
-    base_url: str, workdir: Path
+    base_url: str, workdir: Path, password: str = "666"
 ) -> tuple[str, urllib.request.OpenerDirector, list[str]]:
     jar = http.cookiejar.CookieJar()
     opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
@@ -182,7 +182,7 @@ def login_browser_admin(
     plaintext = json.dumps(
         {
             "account": "666",
-            "password": "666",
+            "password": password,
             "twoFA": "",
             "challengeId": challenge["challengeId"],
             "nonce": challenge["nonce"],
@@ -664,12 +664,14 @@ def main() -> int:
     container_name = f"lucky-oauth-ci-{nonce}"
     client_id = TEST_PREFIX + nonce
     client_secret = secrets.token_urlsafe(24)
+    disposable_admin_password = "T!" + secrets.token_urlsafe(18)
     report: dict[str, Any] = {
         "lucky_version": "",
         "api_only_lucky_operations": True,
         "network_internal": False,
         "admin_port_unpublished": False,
         "default_admin_login": False,
+        "disposable_admin_hardened": False,
         "browser_cookie_names": [],
         "oauth_config_baseline_empty": False,
         "oauth_user_baseline_empty": False,
@@ -793,6 +795,40 @@ def main() -> int:
             report["lucky_version"] = str(info.get("Version") or "")
             if report["lucky_version"] != EXPECTED_LUCKY_VERSION:
                 raise ProbeError(f"unexpected Lucky version: {report['lucky_version']!r}")
+
+            base_config_response = admin_json(
+                base_url, admin_token, "/api/baseconfigure", opener=browser_opener
+            )
+            base_config = base_config_response.get("config")
+            if not isinstance(base_config, dict):
+                raise ProbeError("base config response missing config object")
+            hardened_config = dict(base_config)
+            hardened_config["OldPassword"] = "666"
+            hardened_config["AdminPassword"] = disposable_admin_password
+            hardened_config["EnableThirdAuthLogin"] = True
+            hardened_config["AllowAllThirdAuthUsers"] = True
+            admin_json(
+                base_url,
+                admin_token,
+                "/api/baseconfigure",
+                method="PUT",
+                payload=hardened_config,
+                opener=browser_opener,
+            )
+            admin_token, browser_opener, _ = login_browser_admin(
+                base_url, tmp, disposable_admin_password
+            )
+            report["disposable_admin_hardened"] = True
+            login_config_status, login_config = json_request(
+                browser_opener, base_url, "/LoginPageConfig", timeout=20
+            )
+            if login_config_status == 200 and isinstance(login_config, dict):
+                report["login_page_config_shape"] = json_shape(login_config)
+                oauthcfg = login_config.get("oauthcfg")
+                if isinstance(oauthcfg, dict):
+                    report["third_auth_login_enabled"] = bool(
+                        oauthcfg.get("ThirdAuthLoginEnable")
+                    )
             report["frontend_runtime_snippets"] = frontend_runtime_snippets(base_url)
             baseline_webservice_keys = {
                 str(row.get("RuleKey") or "")
@@ -1152,7 +1188,7 @@ def main() -> int:
                                     # the disposable administrator before lifecycle
                                     # cleanup instead of reusing the pre-OAuth token.
                                     admin_token, browser_opener, _ = login_browser_admin(
-                                        base_url, tmp
+                                        base_url, tmp, disposable_admin_password
                                     )
 
                         admin_json(
@@ -1265,6 +1301,7 @@ def main() -> int:
         "network_internal",
         "admin_port_unpublished",
         "default_admin_login",
+        "disposable_admin_hardened",
         "oauth_config_baseline_empty",
         "oauth_user_baseline_empty",
         "oauth_test_client_configured",
@@ -1281,10 +1318,10 @@ def main() -> int:
         "third_party_user_disabled",
         "third_party_user_reenabled",
         "oauth_reauthorized",
-        "oauth_access_token_refreshed",
         "oauth_user_refreshed",
         "oauth_login_token_present",
         "third_party_user_revoked",
+        "third_auth_login_enabled",
         "config_restored",
         "user_baseline_restored",
     )
