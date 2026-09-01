@@ -487,6 +487,10 @@ def main() -> int:
         "lucky_version": "",
         "zip_build": False,
         "git_build": False,
+        "zip_response_keys": [],
+        "git_response_keys": [],
+        "zip_output_is_string": False,
+        "git_output_is_string": False,
         "cleanup": False,
         "network_scope": "runner-loopback",
         "git_source": "local-fake-clone",
@@ -546,24 +550,28 @@ def main() -> int:
             configure_docker_temp_path(base_url, open_token, "/tmp/lucky-skills-docker-build-ci")
 
             before_zip = image_ids()
-            call_build(
+            zip_response = call_build(
                 base_url,
                 open_token,
                 "/api/docker/images/build-from-zip",
                 {"zip_path": "/ci/context.zip"},
             )
+            report["zip_response_keys"] = sorted(zip_response)
+            report["zip_output_is_string"] = isinstance(zip_response.get("output"), str)
             zip_image, zip_new = select_built_image(before_zip, label_key, zip_label)
             created_images.update(zip_new)
             marker_from_image(zip_image, zip_marker, temp_dir, nonce)
             report["zip_build"] = True
 
             before_git = image_ids()
-            call_build(
+            git_response = call_build(
                 base_url,
                 open_token,
                 "/api/docker/images/build-from-git",
                 {"git_url": "https://example.invalid/TEST-lucky-skills.git"},
             )
+            report["git_response_keys"] = sorted(git_response)
+            report["git_output_is_string"] = isinstance(git_response.get("output"), str)
             git_image, git_new = select_built_image(before_git, label_key, git_label)
             created_images.update(git_new)
             marker_from_image(git_image, git_marker, temp_dir, nonce)
