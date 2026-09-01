@@ -895,7 +895,8 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
             fail(f"Docker image build evidence field is missing: {field}")
     if "GitHub Actions" not in str(docker_build_evidence.get("security")):
         fail("Docker image build evidence lost its GitHub Actions-only safety boundary")
-    if "fake clone" not in str(docker_build_model.get("git_context")):
+    git_context_evidence = str(docker_build_model.get("git_context"))
+    if not all(marker in git_context_evidence for marker in ("fake git", "clone", "external Git")):
         fail("Docker image build evidence lost its no-external-Git isolation model")
     if not (ROOT / "tools" / "lucky_docker_build_ci_probe.py").is_file():
         fail("Docker image build CI probe tool is missing")
