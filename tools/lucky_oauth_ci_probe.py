@@ -824,7 +824,6 @@ def main() -> int:
                 payload=hardened_config,
                 opener=browser_opener,
             )
-            base_url = base_url.rstrip("/") + "/" + disposable_safe_entry
             admin_token, browser_opener, _ = login_browser_admin(
                 base_url,
                 tmp,
