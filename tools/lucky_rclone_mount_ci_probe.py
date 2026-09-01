@@ -17,6 +17,7 @@ is touched.
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import os
 import re
@@ -25,6 +26,7 @@ import socket
 import sys
 import tempfile
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -48,6 +50,8 @@ from lucky_docker_build_ci_probe import (
 
 
 TEST_PREFIX = "TEST-lucky-skills-rclone-mount-ci-"
+RCLONE_CHUNK_NAME = "lucky_rclone-sFF3mpk8.js"
+RCLONE_CHUNK_SHA256 = "4365a2c1a90971e77d2ec96b3a412a98246e5997c15e0dfd1932e6359013f773"
 
 
 def choose_loopback_port() -> int:
@@ -245,12 +249,57 @@ def frontend_mount_snippets(base_url: str) -> dict[str, str]:
     """Extract public Lucky 3.0.0 Rclone UI context for mount field semantics."""
 
     snippets: dict[str, str] = {}
+    asset_attempts: dict[str, Any] = {}
+    for candidate_path in (
+        f"/static/js/{RCLONE_CHUNK_NAME}",
+        f"/static/{RCLONE_CHUNK_NAME}",
+        f"/assets/{RCLONE_CHUNK_NAME}",
+        f"/js/{RCLONE_CHUNK_NAME}",
+        f"/{RCLONE_CHUNK_NAME}",
+        f"/lucky/static/js/{RCLONE_CHUNK_NAME}",
+    ):
+        request = urllib.request.Request(
+            base_url + candidate_path,
+            headers={"User-Agent": "lucky-skills-rclone-mount-ci-inspector/1"},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=8) as response:
+                raw = response.read(16 * 1024 * 1024)
+                status = int(response.status)
+        except urllib.error.HTTPError as error:
+            asset_attempts[candidate_path] = {"status": int(error.code)}
+            continue
+        except Exception as error:  # noqa: BLE001 - failure diagnostic only
+            asset_attempts[candidate_path] = {"error": type(error).__name__}
+            continue
+        digest = hashlib.sha256(raw).hexdigest()
+        asset_attempts[candidate_path] = {
+            "status": status,
+            "bytes": len(raw),
+            "sha256": digest,
+            "expected_hash": digest == RCLONE_CHUNK_SHA256,
+        }
+        text = raw.decode("utf-8", errors="replace")
+        for needle in ("MountType", "OnleyCreateVFS", "MountPoint", "SystemMount", "AllowOther"):
+            positions = [match.start() for match in re.finditer(needle, text)]
+            if not positions:
+                continue
+            chunks = []
+            for position in positions[:6]:
+                start = max(0, position - 1400)
+                end = min(len(text), position + 2400)
+                chunks.append(" ".join(text[start:end].split()))
+            snippets[f"{candidate_path}:{needle}"] = " || ".join(chunks)[:14000]
+        if digest == RCLONE_CHUNK_SHA256:
+            break
+    snippets["_asset_attempts"] = json.dumps(asset_attempts, sort_keys=True)
+
     origin = urllib.parse.urlsplit(base_url)
     # The static endpoint inventory records the 3.0.0 chunk basename.  The
     # live admin UI serves chunks below /static/js/, so probe it first and
     # retain the crawl fallback in case a future pinned artifact changes the
     # chunk hash.
-    queue = ["/static/js/lucky_rclone-sFF3mpk8.js", "/"]
+    queue = [f"/static/js/{RCLONE_CHUNK_NAME}", "/"]
     seen: set[str] = set()
     fetched = 0
     max_bytes = 24 * 1024 * 1024
