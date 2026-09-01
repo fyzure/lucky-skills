@@ -7130,11 +7130,25 @@
         ],
         "responses": {
           "200": {
-            "description": "Lucky JSON response; envelope shape varies by endpoint.",
+            "description": "Response schema observed from runtime evidence; see x-schema-evidence for provenance.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LuckyEnvelope"
+                  "type": "object",
+                  "properties": {
+                    "ret": {
+                      "type": "integer"
+                    },
+                    "content": {
+                      "type": "string"
+                    },
+                    "filename": {
+                      "type": "string"
+                    },
+                    "msg": {
+                      "type": "string"
+                    }
+                  }
                 }
               }
             }
@@ -7150,12 +7164,12 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_docker-BCN-OILs.js"
         ],
         "x-lucky-risk": "mutating",
-        "x-schema-evidence": "frontend-call body carries project_path; its string type is cross-checked against runtime-verified Compose project path metadata, and the config handler was not executed",
+        "x-schema-evidence": "frontend body carries project_path; runtime execution against the owned TEST project verified project_path as string and ret/content/filename/msg response fields",
         "requestBody": {
           "required": true,
           "content": {
@@ -7375,11 +7389,16 @@
         ],
         "responses": {
           "200": {
-            "description": "Lucky JSON response; envelope shape varies by endpoint.",
+            "description": "Response schema observed from runtime evidence; see x-schema-evidence for provenance.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LuckyEnvelope"
+                  "type": "object",
+                  "properties": {
+                    "ret": {
+                      "type": "integer"
+                    }
+                  }
                 }
               }
             }
@@ -7395,12 +7414,12 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_docker-BCN-OILs.js"
         ],
         "x-lucky-risk": "dangerous",
-        "x-schema-evidence": "wrapper passes request object directly; async sibling UI calls show project_name/project_path/config_file_name/remove_volumes, with project identity strings cross-checked against runtime-verified Compose project name/path/configFileName and remove_volumes coming from the frontend boolean delete option; synchronous handler was not executed",
+        "x-schema-evidence": "wrapper passes the request object directly; the bounded TEST lifecycle verified the project identity/remove_volumes request and ret-only success response",
         "requestBody": {
           "required": true,
           "content": {
@@ -7442,11 +7461,19 @@
         ],
         "responses": {
           "200": {
-            "description": "Lucky JSON response; envelope shape varies by endpoint.",
+            "description": "Response schema observed from runtime evidence; see x-schema-evidence for provenance.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LuckyEnvelope"
+                  "type": "object",
+                  "properties": {
+                    "ret": {
+                      "type": "integer"
+                    },
+                    "task_id": {
+                      "type": "string"
+                    }
+                  }
                 }
               }
             }
@@ -7462,12 +7489,12 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_docker-BCN-OILs.js"
         ],
         "x-lucky-risk": "mutating",
-        "x-schema-evidence": "frontend Compose delete actions construct project_name/project_path and optionally config_file_name/remove_volumes before apiComposeDownAsync; project identity strings are cross-checked against runtime-verified Compose project summaries and remove_volumes is a frontend boolean option",
+        "x-schema-evidence": "frontend Compose delete action constructs the project identity/remove_volumes body; runtime execution verified the request and ret/task_id success envelope",
         "requestBody": {
           "required": true,
           "content": {
@@ -7583,12 +7610,12 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_docker-BCN-OILs.js"
         ],
         "x-lucky-risk": "read-only",
-        "x-schema-evidence": "authorized GET /api/docker/compose/projects observed project summary types; a later read-only refresh populated containerDetails and verified its name/state string fields. Project/container names, paths and config filenames were not retained"
+        "x-schema-evidence": "authorized GET observed project summary types; the disposable lifecycle populated containerDetails and verified status/count transitions plus name/state string fields without retaining project/container identifiers"
       }
     },
     "/api/docker/compose/read-file": {
@@ -7667,11 +7694,16 @@
         ],
         "responses": {
           "200": {
-            "description": "Lucky JSON response; envelope shape varies by endpoint.",
+            "description": "Response schema observed from runtime evidence; see x-schema-evidence for provenance.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LuckyEnvelope"
+                  "type": "object",
+                  "properties": {
+                    "ret": {
+                      "type": "integer"
+                    }
+                  }
                 }
               }
             }
@@ -7687,12 +7719,12 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_docker-BCN-OILs.js"
         ],
         "x-lucky-risk": "dangerous",
-        "x-schema-evidence": "wrapper passes a Compose project request object directly; runtime-verified Compose project summaries establish name/path/configFileName as strings, and no authenticated restart was executed",
+        "x-schema-evidence": "wrapper passes a Compose project identity object directly; bounded runtime execution verified the string request model and ret-only success response",
         "requestBody": {
           "required": true,
           "content": {
@@ -7802,11 +7834,16 @@
         ],
         "responses": {
           "200": {
-            "description": "Lucky JSON response; envelope shape varies by endpoint.",
+            "description": "Response schema observed from runtime evidence; see x-schema-evidence for provenance.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LuckyEnvelope"
+                  "type": "object",
+                  "properties": {
+                    "ret": {
+                      "type": "integer"
+                    }
+                  }
                 }
               }
             }
@@ -7822,12 +7859,12 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_docker-BCN-OILs.js"
         ],
         "x-lucky-risk": "dangerous",
-        "x-schema-evidence": "wrapper passes request object directly; current Compose UI uses equivalent project identity fields on async start paths, and runtime-verified Compose project summaries establish name/path/configFileName as strings; handler was not executed",
+        "x-schema-evidence": "wrapper passes the project identity request directly; runtime execution verified string identity fields and a ret-only success response",
         "requestBody": {
           "required": true,
           "content": {
@@ -7930,11 +7967,19 @@
         ],
         "responses": {
           "200": {
-            "description": "Lucky JSON response; envelope shape varies by endpoint.",
+            "description": "Response schema observed from runtime evidence; see x-schema-evidence for provenance.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LuckyEnvelope"
+                  "type": "object",
+                  "properties": {
+                    "ret": {
+                      "type": "integer"
+                    },
+                    "task_id": {
+                      "type": "string"
+                    }
+                  }
                 }
               }
             }
@@ -7950,12 +7995,12 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_docker-BCN-OILs.js"
         ],
         "x-lucky-risk": "mutating",
-        "x-schema-evidence": "frontend Compose stop actions construct project_name/project_path/config_file_name before apiComposeStopAsync; field types are cross-checked against runtime-verified Compose project name/path/configFileName strings",
+        "x-schema-evidence": "frontend Compose stop action constructs the project identity body; runtime execution verified the request and ret/task_id success envelope",
         "requestBody": {
           "required": true,
           "content": {
@@ -7994,11 +8039,16 @@
         ],
         "responses": {
           "200": {
-            "description": "Lucky JSON response; envelope shape varies by endpoint.",
+            "description": "Response schema observed from runtime evidence; see x-schema-evidence for provenance.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LuckyEnvelope"
+                  "type": "object",
+                  "properties": {
+                    "ret": {
+                      "type": "integer"
+                    }
+                  }
                 }
               }
             }
@@ -8014,12 +8064,12 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_docker-BCN-OILs.js"
         ],
         "x-lucky-risk": "mutating",
-        "x-schema-evidence": "wrapper passes request object directly; authorized parser-only probes verified project_name/project_path/working_dir/compose_content strings and force_recreate/build booleans before handler execution. Although the backend decoder permissively accepted heterogeneous JSON for config_file_name, the current Compose UI uses this field as a filename string across start/stop/down/restore flows and runtime-verified project summaries expose configFileName as string, so the documented client contract is string",
+        "x-schema-evidence": "wrapper passes the request object directly; the bounded fresh-project runtime probe verified the current string/bool client model and a ret-only success response without pulling/building an image",
         "requestBody": {
           "required": true,
           "content": {
@@ -8070,11 +8120,19 @@
         ],
         "responses": {
           "200": {
-            "description": "Lucky JSON response; envelope shape varies by endpoint.",
+            "description": "Response schema observed from runtime evidence; see x-schema-evidence for provenance.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LuckyEnvelope"
+                  "type": "object",
+                  "properties": {
+                    "ret": {
+                      "type": "integer"
+                    },
+                    "task_id": {
+                      "type": "string"
+                    }
+                  }
                 }
               }
             }
@@ -8090,12 +8148,12 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_docker-BCN-OILs.js"
         ],
         "x-lucky-risk": "mutating",
-        "x-schema-evidence": "frontend Compose create/start/rebuild actions construct these fields before apiComposeUpAsync; request types reuse the parser-verified synchronous Compose-up model, while config_file_name follows the same string client contract used by sibling Compose actions and runtime project summaries. The async handler was not executed for schema discovery",
+        "x-schema-evidence": "frontend Compose create action constructs this model before apiComposeUpAsync; bounded runtime execution verified the request contract and ret/task_id success envelope",
         "requestBody": {
           "required": true,
           "content": {
@@ -8729,12 +8787,12 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_docker-BCN-OILs.js"
         ],
         "x-lucky-risk": "mutating",
-        "x-schema-evidence": "frontend Compose log dialog constructs this explicit request object; authorized requests against the existing project verified project_name/project_path strings, services string[], tail string, timestamps/follow booleans, and ret/logs:string[] response types without retaining log contents",
+        "x-schema-evidence": "frontend Compose log dialog constructs this explicit request object; the isolated TEST project verified project_name/project_path strings, services string[], tail string, timestamps/follow booleans and ret/logs:string[] response types",
         "parameters": [
           {
             "name": "param",
@@ -8846,12 +8904,12 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_docker-BCN-OILs.js"
         ],
         "x-lucky-risk": "read-only",
-        "x-schema-evidence": "authorized GET compose ps for one existing project observed container summary field names/types only; project/container identifiers and names were not retained",
+        "x-schema-evidence": "the disposable TEST project verified the compose ps container summary fields Health, ID, Name, Project, Service and State as strings; identifiers and names were not retained",
         "parameters": [
           {
             "name": "param",

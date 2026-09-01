@@ -279,15 +279,17 @@ WebDAV 已完成 localhost 完整闭环；FTP 当前配置没有 `ListenIP`，�
 
 ### Compose
 
-- [ ] 使用最小 BusyBox/hello-world 风格 Compose 项目
-- [ ] 验证 compose config
-- [ ] 验证 `up`
-- [ ] 验证 `ps`
-- [ ] 验证 stop/start/restart
-- [ ] 验证 logs
-- [ ] 验证 down
-- [ ] 验证 async up/down/status（如有）
-- [ ] 清理 project/container/network
+- [x] 使用无端口、无 volume、`network_mode: none` 的最小 TEST Compose 项目；复用预存在镜像，不 pull/build
+- [x] 验证 compose config
+- [x] 验证 fresh synchronous `up`；确认同名已存在 project 不会幂等 re-up，而是返回名称已存在错误
+- [x] 验证 `ps`
+- [x] 验证 async stop + synchronous start/restart
+- [x] 验证 logs
+- [x] 验证 synchronous / async down
+- [x] 验证 current-UI `up-async` / `stop-async` / `down-async` + `/api/docker/tasks/{id}` status
+- [x] 验证 completed task history：单 task DELETE 仅用于 active cancel；全局 clear 仅在 baseline=0 + exact-ID ownership gate 下执行
+- [x] 清理 project/container/task/path；image/network/volume identity 基线保持不变
+- [x] 固化 probe / evidence / docs：`tools/lucky_docker_compose_probe.py`
 
 ### Image load/import/build
 
@@ -342,6 +344,7 @@ WebDAV 已完成 localhost 完整闭环；FTP 当前配置没有 `ListenIP`，�
 - [x] WebTerminal local connection CRUD
 - [x] ThirdPartyAuthManager disabled mapping CRUD
 - [x] Docker disposable BusyBox 生命周期相关覆盖
+- [x] Docker Compose isolated sync/async lifecycle + task-history cleanup semantics
 
 ---
 

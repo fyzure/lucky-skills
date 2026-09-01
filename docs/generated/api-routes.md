@@ -142,21 +142,21 @@ pageClass: api-routes-page
 |---|---|---|---|---|---|---|
 | `POST` | `/api/docker/compose/backup` | `dangerous` | — | `project_name`, `project_path` | `json` | `frontend-call` |
 | `GET` | `/api/docker/compose/backup/status` | `read-only` | — | — | `json` | `frontend-call` |
-| `POST` | `/api/docker/compose/config` | `mutating` | — | `project_path` | `json` | `frontend-call` |
+| `POST` | `/api/docker/compose/config` | `mutating` | — | `project_path` | `json` | `runtime-verified` |
 | `GET` | `/api/docker/compose/containers-for-cron` | `read-only` | — | — | `json` | `frontend-call` |
 | `POST` | `/api/docker/compose/discover` | `mutating` | — | `scan_path` | `json` | `frontend-call` |
 | `POST` | `/api/docker/compose/dockerfile` | `mutating` | — | `project_path` | `json` | `frontend-call` |
-| `POST` | `/api/docker/compose/down` | `dangerous` | — | `project_name`, `project_path`, `config_file_name`, `remove_volumes` | `json` | `frontend-call` |
-| `POST` | `/api/docker/compose/down-async` | `mutating` | — | `project_name`, `project_path`, `config_file_name`, `remove_volumes` | `json` | `frontend-call` |
-| `GET` | `/api/docker/compose/projects` | `read-only` | — | — | `json` | `frontend-call` |
+| `POST` | `/api/docker/compose/down` | `dangerous` | — | `project_name`, `project_path`, `config_file_name`, `remove_volumes` | `json` | `runtime-verified` |
+| `POST` | `/api/docker/compose/down-async` | `mutating` | — | `project_name`, `project_path`, `config_file_name`, `remove_volumes` | `json` | `runtime-verified` |
+| `GET` | `/api/docker/compose/projects` | `read-only` | — | — | `json` | `runtime-verified` |
 | `POST` | `/api/docker/compose/read-file` | `mutating` | — | `filename`, `working_dir` | `json` | `frontend-call` |
-| `POST` | `/api/docker/compose/restart` | `dangerous` | — | `project_name`, `project_path`, `config_file_name` | `json` | `frontend-call` |
+| `POST` | `/api/docker/compose/restart` | `dangerous` | — | `project_name`, `project_path`, `config_file_name` | `json` | `runtime-verified` |
 | `POST` | `/api/docker/compose/restore` | `dangerous` | — | `file`, `target_path`, `project_name`, `auto_start`, `config_file_name` | `json` | `frontend-call` |
-| `POST` | `/api/docker/compose/start` | `dangerous` | — | `project_name`, `project_path`, `config_file_name` | `json` | `frontend-call` |
+| `POST` | `/api/docker/compose/start` | `dangerous` | — | `project_name`, `project_path`, `config_file_name` | `json` | `runtime-verified` |
 | `POST` | `/api/docker/compose/stop` | `dangerous` | — | `project_name`, `project_path`, `config_file_name` | `json` | `frontend-call` |
-| `POST` | `/api/docker/compose/stop-async` | `mutating` | — | `project_name`, `project_path`, `config_file_name` | `json` | `frontend-call` |
-| `POST` | `/api/docker/compose/up` | `mutating` | — | `project_name`, `project_path`, `config_file_name`, `working_dir`, `compose_content`, `force_recreate`, `build` | `json` | `frontend-call` |
-| `POST` | `/api/docker/compose/up-async` | `mutating` | — | `project_name`, `project_path`, `config_file_name`, `working_dir`, `compose_content`, `force_recreate`, `build` | `json` | `frontend-call` |
+| `POST` | `/api/docker/compose/stop-async` | `mutating` | — | `project_name`, `project_path`, `config_file_name` | `json` | `runtime-verified` |
+| `POST` | `/api/docker/compose/up` | `mutating` | — | `project_name`, `project_path`, `config_file_name`, `working_dir`, `compose_content`, `force_recreate`, `build` | `json` | `runtime-verified` |
+| `POST` | `/api/docker/compose/up-async` | `mutating` | — | `project_name`, `project_path`, `config_file_name`, `working_dir`, `compose_content`, `force_recreate`, `build` | `json` | `runtime-verified` |
 | `POST` | `/api/docker/compose/update-config` | `mutating` | — | `content`, `project_path` | `json` | `frontend-call` |
 | `POST` | `/api/docker/compose/update-dockerfile` | `mutating` | — | `content`, `project_path` | `json` | `frontend-call` |
 | `DELETE` | `/api/docker/compose/{param}/backup/cancel` | `dangerous` | — | — | `json` | `frontend-call` |
@@ -166,8 +166,8 @@ pageClass: api-routes-page
 | `GET` | `/api/docker/compose/{param}/backups/download.tar.gz` | `read-only` | `backup` | — | `blob` | `frontend-call` |
 | `POST` | `/api/docker/compose/{param}/backups/restore` | `dangerous` | — | `backup` | `json` | `frontend-call` |
 | `POST` | `/api/docker/compose/{param}/backups/upload` | `dangerous` | — | `file` | `json` | `frontend-call` |
-| `POST` | `/api/docker/compose/{param}/logs` | `mutating` | — | `project_name`, `project_path`, `services`, `tail`, `timestamps`, `follow` | `json` | `frontend-call` |
-| `GET` | `/api/docker/compose/{param}/ps` | `read-only` | `name`, `path` | — | `json` | `frontend-call` |
+| `POST` | `/api/docker/compose/{param}/logs` | `mutating` | — | `project_name`, `project_path`, `services`, `tail`, `timestamps`, `follow` | `json` | `runtime-verified` |
+| `GET` | `/api/docker/compose/{param}/ps` | `read-only` | `name`, `path` | — | `json` | `runtime-verified` |
 | `GET` | `/api/docker/config` | `read-only` | — | — | `json` | `frontend-call` |
 | `POST` | `/api/docker/config` | `mutating` | — | `docker_host`, `volume_backup_path`, `volume_backup_default_max`, `volume_backup_max_per_volume`, `volume_backup_stop_containers`, `volume_backup_stop_containers_per_volume`, `compose_backup_path`, `compose_backup_default_max`, `compose_backup_max_per_project`, `compose_discover_path`, `temp_operation_path`, `quick_access_host`, `container_view_mode`, `container_show_stopped`, `container_selected_custom_group` | `json` | `frontend-call` |
 | `DELETE` | `/api/docker/container-groups` | `mutating` | `key` | — | `json` | `frontend-call` |

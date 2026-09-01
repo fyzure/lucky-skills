@@ -131,6 +131,12 @@ FTP is not equivalent from a safety perspective. The current FTP configuration e
 
 The compact `/api/rclone/sync/list` response intentionally omits many execution options. Use `GET /api/rclone/sync/{Key}` when validating `DryRun`, `CreateEmptyDirs`, filters, bandwidth or other detailed task fields. Do not add cloud remotes, schedules, bisync or system mounts to this probe solely for coverage.
 
+## Docker Compose behavior
+
+Use `tools/lucky_docker_compose_probe.py` for bounded Compose lifecycle verification. It requires an empty Docker-task baseline, reuses a pre-existing image, creates only unique `/tmp/TEST-*` projects, sets `network_mode: none`, publishes no ports, declares no volumes, and never requests image pull/build or Docker prune. One fresh project verifies synchronous `up → down`; a second project follows the current Lucky 3.0.0 UI flow through `up-async`, task polling, `ps/config/logs`, `stop-async`, synchronous start/restart and `down-async`.
+
+Do not treat synchronous `/api/docker/compose/up` as an idempotent re-up operation: runtime verification shows that an already existing project name returns a project-name-already-exists business error. Also distinguish Docker task cancellation from completed-history cleanup. `DELETE /api/docker/tasks/{id}` cancels an active task and cannot remove a completed task. The global `DELETE /api/docker/tasks` may clear completed history only when the pre-probe task baseline is empty and the current task-ID set exactly equals the IDs issued to the probe. Otherwise refuse the clear and preserve operator tasks.
+
 ## Cron shell behavior
 
 `tools/lucky_cron_probe.py` verifies Cron execution without touching business tasks or external services. It requires clean TEST-prefixed ownership, creates one disposable group plus two TEST tasks, and writes only inside one Lucky-visible `/tmp/TEST-*` directory. The verified shell subtask shape is `{Type:"shell_option", Options:{shell_content:<script>}, Remark:<label>}`. `Type=8` is used for manual-only tasks, while `Type=4` with a numeric-seconds string in `TypeParams` is the current every-N-seconds schedule model.

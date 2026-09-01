@@ -268,6 +268,26 @@
         "cleanup": "Two TEST tasks, one TEST group and the TEST /tmp directory were removed; no TEST task/group remained and both key baselines were restored"
       },
       "security": "The probe executes shell code only inside a unique Lucky-visible /tmp TEST directory, never calls the network, never targets existing Cron resources, and refuses to mix ownership when a pre-existing TEST-prefixed task/group is present. Cleanup disables and deletes only uniquely prefixed TEST tasks before deleting the TEST group/path."
+    },
+    "docker_compose_behavior": {
+      "confidence": "runtime-verified",
+      "model": {
+        "fresh_sync_create": "POST /api/docker/compose/up successfully creates a fresh project, but a second synchronous up against an already existing project name returns a project-name-already-exists business error rather than acting as an idempotent re-up operation",
+        "current_ui_async_flow": "The current Lucky 3.0.0 UI creates Compose projects through POST /api/docker/compose/up-async; the success response includes task_id and GET /api/docker/tasks/{id} reaches type=compose_up,status=success",
+        "lifecycle": "A TEST project completed stop-async -> stopped, synchronous start -> running, synchronous restart -> running, and down-async -> compose_down success with the TEST container removed",
+        "inspection": "GET projects and compose ps exposed the TEST project/container state; POST compose config returned the generated compose content/filename and POST compose logs returned a string-array log envelope",
+        "task_history": "DELETE /api/docker/tasks/{id} is an active-task cancel endpoint and rejects already completed tasks; completed task history is removed by DELETE /api/docker/tasks, so the probe permits that global clear only when the pre-probe task baseline is empty and the current task-ID set exactly equals the IDs created by the probe",
+        "isolation": "The probe reuses a pre-existing image, sets network_mode=none, publishes no ports, declares no volumes, requests no build/pull, and requires project/container/task/image/network/volume baselines to match exactly after cleanup"
+      },
+      "verification": "A bounded Lucky 3.0.0 Docker Compose probe used two unique TEST projects under /tmp. The first exercised fresh synchronous up/down. The second followed the current UI's async create flow, waited for compose_up task success, verified project/container state plus ps/config/logs, stopped through an async compose_stop task, synchronously started and restarted the project, then removed it through an async compose_down task. Both containers used network_mode=none with zero published ports and no declared volumes. The probe reused an existing image and did not pull or build. Both TEST paths were removed; project, container, Docker task, image, network and volume identity baselines were restored exactly.",
+      "observations": {
+        "sync_name_collision": "A synchronous up against an already existing TEST project name returned the project-name-already-exists business error; fresh synchronous up succeeded when given a separate name",
+        "async_tasks": "up-async, stop-async and down-async each returned a task_id whose task reached success with types compose_up, compose_stop and compose_down respectively",
+        "container_isolation": "Runtime container readback reported network_mode=none, zero published ports and zero mounts for the TEST Compose container",
+        "read_paths": "projects, compose ps, compose config and compose logs all returned successful runtime data for the owned TEST project",
+        "cleanup": "No TEST project/container/path remained; completed probe task history was cleared only after the exact-ID ownership gate passed, and all six Docker resource identity baselines were restored"
+      },
+      "security": "The probe refuses to run with a non-empty Docker task baseline or any pre-existing TEST-prefixed Compose resource. It uses only unique /tmp paths, a pre-existing image, network_mode=none, no ports, no volumes and no build/pull. It never invokes Docker prune and never clears task history unless the current completed task IDs are exactly the IDs issued to this probe."
     }
   },
   "routes": [
@@ -1239,7 +1259,10 @@
       "risk": "mutating",
       "body_keys": ["project_name", "project_path", "config_file_name", "working_dir", "compose_content", "force_recreate", "build"],
       "request_body_schema": {"type":"object","properties":{"project_name":{"type":"string"},"project_path":{"type":"string"},"config_file_name":{"type":"string"},"working_dir":{"type":"string"},"compose_content":{"type":"string"},"force_recreate":{"type":"boolean"},"build":{"type":"boolean"}}},
-      "schema_evidence": "wrapper passes request object directly; authorized parser-only probes verified project_name/project_path/working_dir/compose_content strings and force_recreate/build booleans before handler execution. Although the backend decoder permissively accepted heterogeneous JSON for config_file_name, the current Compose UI uses this field as a filename string across start/stop/down/restore flows and runtime-verified project summaries expose configFileName as string, so the documented client contract is string"
+      "response_schema": {"type":"object","properties":{"ret":{"type":"integer"}}},
+      "confidence": "runtime-verified",
+      "verification": "A fresh uniquely named TEST project was created through synchronous compose up, became running with one isolated TEST container, and was later removed through synchronous compose down. A separate experiment also confirmed that reusing an already existing project name returns a business error rather than performing an idempotent re-up.",
+      "schema_evidence": "wrapper passes the request object directly; the bounded fresh-project runtime probe verified the current string/bool client model and a ret-only success response without pulling/building an image"
     },
     {
       "path": "/api/docker/compose/up-async",
@@ -1247,7 +1270,10 @@
       "risk": "mutating",
       "body_keys": ["project_name", "project_path", "config_file_name", "working_dir", "compose_content", "force_recreate", "build"],
       "request_body_schema": {"type":"object","properties":{"project_name":{"type":"string"},"project_path":{"type":"string"},"config_file_name":{"type":"string"},"working_dir":{"type":"string"},"compose_content":{"type":"string"},"force_recreate":{"type":"boolean"},"build":{"type":"boolean"}}},
-      "schema_evidence": "frontend Compose create/start/rebuild actions construct these fields before apiComposeUpAsync; request types reuse the parser-verified synchronous Compose-up model, while config_file_name follows the same string client contract used by sibling Compose actions and runtime project summaries. The async handler was not executed for schema discovery"
+      "response_schema": {"type":"object","properties":{"ret":{"type":"integer"},"task_id":{"type":"string"}}},
+      "confidence": "runtime-verified",
+      "verification": "The current-UI-style TEST create returned ret=0 plus task_id; GET /api/docker/tasks/{id} reached status=success,type=compose_up and the project became running with one isolated container.",
+      "schema_evidence": "frontend Compose create action constructs this model before apiComposeUpAsync; bounded runtime execution verified the request contract and ret/task_id success envelope"
     },
     {
       "path": "/api/docker/compose/down",
@@ -1255,7 +1281,10 @@
       "risk": "dangerous",
       "body_keys": ["project_name", "project_path", "config_file_name", "remove_volumes"],
       "request_body_schema": {"type": "object", "properties": {"project_name": {"type": "string"}, "project_path": {"type": "string"}, "config_file_name": {"type": "string"}, "remove_volumes": {"type": "boolean"}}},
-      "schema_evidence": "wrapper passes request object directly; async sibling UI calls show project_name/project_path/config_file_name/remove_volumes, with project identity strings cross-checked against runtime-verified Compose project name/path/configFileName and remove_volumes coming from the frontend boolean delete option; synchronous handler was not executed"
+      "response_schema": {"type":"object","properties":{"ret":{"type":"integer"}}},
+      "confidence": "runtime-verified",
+      "verification": "The fresh synchronous TEST project was removed through compose down with remove_volumes=false; its container disappeared and cleanup subsequently removed only the owned TEST path.",
+      "schema_evidence": "wrapper passes the request object directly; the bounded TEST lifecycle verified the project identity/remove_volumes request and ret-only success response"
     },
     {
       "path": "/api/docker/compose/down-async",
@@ -1263,7 +1292,10 @@
       "risk": "mutating",
       "body_keys": ["project_name", "project_path", "config_file_name", "remove_volumes"],
       "request_body_schema": {"type": "object", "properties": {"project_name": {"type": "string"}, "project_path": {"type": "string"}, "config_file_name": {"type": "string"}, "remove_volumes": {"type": "boolean"}}},
-      "schema_evidence": "frontend Compose delete actions construct project_name/project_path and optionally config_file_name/remove_volumes before apiComposeDownAsync; project identity strings are cross-checked against runtime-verified Compose project summaries and remove_volumes is a frontend boolean option"
+      "response_schema": {"type":"object","properties":{"ret":{"type":"integer"},"task_id":{"type":"string"}}},
+      "confidence": "runtime-verified",
+      "verification": "The async TEST project was dispatched through down-async with remove_volumes=false; the returned task_id reached status=success,type=compose_down and the TEST container was absent afterward.",
+      "schema_evidence": "frontend Compose delete action constructs the project identity/remove_volumes body; runtime execution verified the request and ret/task_id success envelope"
     },
     {
       "path": "/api/docker/compose/start",
@@ -1271,7 +1303,10 @@
       "risk": "dangerous",
       "body_keys": ["project_name", "project_path", "config_file_name"],
       "request_body_schema": {"type": "object", "properties": {"project_name": {"type": "string"}, "project_path": {"type": "string"}, "config_file_name": {"type": "string"}}},
-      "schema_evidence": "wrapper passes request object directly; current Compose UI uses equivalent project identity fields on async start paths, and runtime-verified Compose project summaries establish name/path/configFileName as strings; handler was not executed"
+      "response_schema": {"type":"object","properties":{"ret":{"type":"integer"}}},
+      "confidence": "runtime-verified",
+      "verification": "After async stop completed, synchronous compose start returned ret=0 and the owned TEST project returned to a one-container running state.",
+      "schema_evidence": "wrapper passes the project identity request directly; runtime execution verified string identity fields and a ret-only success response"
     },
     {
       "path": "/api/docker/compose/stop",
@@ -1287,7 +1322,10 @@
       "risk": "mutating",
       "body_keys": ["project_name", "project_path", "config_file_name"],
       "request_body_schema": {"type": "object", "properties": {"project_name": {"type": "string"}, "project_path": {"type": "string"}, "config_file_name": {"type": "string"}}},
-      "schema_evidence": "frontend Compose stop actions construct project_name/project_path/config_file_name before apiComposeStopAsync; field types are cross-checked against runtime-verified Compose project name/path/configFileName strings"
+      "response_schema": {"type":"object","properties":{"ret":{"type":"integer"},"task_id":{"type":"string"}}},
+      "confidence": "runtime-verified",
+      "verification": "The running TEST project was dispatched through stop-async; ret=0 plus task_id was returned, the task reached status=success,type=compose_stop and project readback reached zero running containers.",
+      "schema_evidence": "frontend Compose stop action constructs the project identity body; runtime execution verified the request and ret/task_id success envelope"
     },
     {
       "path": "/api/docker/compose/restart",
@@ -1295,7 +1333,10 @@
       "risk": "dangerous",
       "body_keys": ["project_name", "project_path", "config_file_name"],
       "request_body_schema": {"type": "object", "properties": {"project_name": {"type": "string"}, "project_path": {"type": "string"}, "config_file_name": {"type": "string"}}},
-      "schema_evidence": "wrapper passes a Compose project request object directly; runtime-verified Compose project summaries establish name/path/configFileName as strings, and no authenticated restart was executed"
+      "response_schema": {"type":"object","properties":{"ret":{"type":"integer"}}},
+      "confidence": "runtime-verified",
+      "verification": "Synchronous compose restart returned ret=0 for the owned TEST project and subsequent project readback remained in the one-container running state.",
+      "schema_evidence": "wrapper passes a Compose project identity object directly; bounded runtime execution verified the string request model and ret-only success response"
     },
     {
       "path": "/api/docker/compose/restore",
@@ -1328,7 +1369,9 @@
       "body_keys": ["project_name", "project_path", "services", "tail", "timestamps", "follow"],
       "request_body_schema": {"type":"object","properties":{"project_name":{"type":"string"},"project_path":{"type":"string"},"services":{"type":"array","items":{"type":"string"}},"tail":{"type":"string"},"timestamps":{"type":"boolean"},"follow":{"type":"boolean"}}},
       "response_schema": {"type":"object","properties":{"ret":{"type":"integer"},"logs":{"type":"array","items":{"type":"string"}}}},
-      "schema_evidence": "frontend Compose log dialog constructs this explicit request object; authorized requests against the existing project verified project_name/project_path strings, services string[], tail string, timestamps/follow booleans, and ret/logs:string[] response types without retaining log contents"
+      "confidence": "runtime-verified",
+      "verification": "The owned TEST Compose project returned a successful non-following service-log request with a string-array logs field; log contents were not retained.",
+      "schema_evidence": "frontend Compose log dialog constructs this explicit request object; the isolated TEST project verified project_name/project_path strings, services string[], tail string, timestamps/follow booleans and ret/logs:string[] response types"
     },
     {
       "path": "/api/docker/config",
@@ -1559,7 +1602,10 @@
       "method": "POST",
       "risk": "mutating",
       "request_body_schema": {"type": "object", "properties": {"project_path": {"type": "string"}}},
-      "schema_evidence": "frontend-call body carries project_path; its string type is cross-checked against runtime-verified Compose project path metadata, and the config handler was not executed"
+      "response_schema": {"type": "object", "properties": {"ret": {"type": "integer"}, "content": {"type": "string"}, "filename": {"type": "string"}, "msg": {"type": "string"}}},
+      "confidence": "runtime-verified",
+      "verification": "The isolated TEST project returned ret=0, its generated compose content and the expected compose filename through POST /api/docker/compose/config; content itself was not retained in evidence.",
+      "schema_evidence": "frontend body carries project_path; runtime execution against the owned TEST project verified project_path as string and ret/content/filename/msg response fields"
     },
     {
       "path": "/api/docker/compose/discover",
@@ -2799,7 +2845,9 @@
       "method": "GET",
       "risk": "read-only",
       "response_schema": {"type": "object", "properties": {"ret": {"type": "integer"}, "projects": {"type": "array", "items": {"type": "object", "properties": {"name": {"type": "string"}, "path": {"type": "string"}, "configFileName": {"type": "string"}, "status": {"type": "string"}, "containers": {"type": "integer"}, "runningContainers": {"type": "integer"}, "stoppedContainers": {"type": "integer"}, "containerNames": {"type": "array", "items": {"type": "string"}}, "containerDetails": {"type": "array", "items": {"type": "object", "properties": {"name": {"type": "string"}, "state": {"type": "string"}}}}}}}}},
-      "schema_evidence": "authorized GET /api/docker/compose/projects observed project summary types; a later read-only refresh populated containerDetails and verified its name/state string fields. Project/container names, paths and config filenames were not retained"
+      "confidence": "runtime-verified",
+      "verification": "During the isolated lifecycle, project readback exposed the owned TEST project as running(1), then as stopped after async stop, and later running again after start/restart. TEST names and paths were not retained in evidence.",
+      "schema_evidence": "authorized GET observed project summary types; the disposable lifecycle populated containerDetails and verified status/count transitions plus name/state string fields without retaining project/container identifiers"
     },
     {
       "path": "/api/docker/container-groups",
@@ -3032,7 +3080,9 @@
       "method": "GET",
       "risk": "read-only",
       "response_schema": {"type": "object", "properties": {"ret": {"type": "integer"}, "containers": {"type": "array", "items": {"type": "object", "properties": {"Health": {"type": "string"}, "ID": {"type": "string"}, "Name": {"type": "string"}, "Project": {"type": "string"}, "Service": {"type": "string"}, "State": {"type": "string"}}}}}},
-      "schema_evidence": "authorized GET compose ps for one existing project observed container summary field names/types only; project/container identifiers and names were not retained"
+      "confidence": "runtime-verified",
+      "verification": "GET compose ps for the owned TEST project returned one container while the project was running; only the safe field names/types were retained.",
+      "schema_evidence": "the disposable TEST project verified the compose ps container summary fields Health, ID, Name, Project, Service and State as strings; identifiers and names were not retained"
     },
     {
       "path": "/api/docker/labels/{param}/containers",

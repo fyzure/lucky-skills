@@ -91,6 +91,10 @@ FTP 当前仍保持未启动。Lucky 3.0.0 的 FTP 配置只有 `Network + Port 
 
 OpenToken 能调用这些端点时，实际权限接近 Docker daemon 权限，通常等价于宿主机 root。生产自动化应使用独立代理层只暴露允许的操作，而不是把 OpenToken 直接交给业务代码。
 
+Docker Compose 的核心生命周期已通过 `tools/lucky_docker_compose_probe.py` 完成隔离行为验证。probe 复用一个已经存在的镜像，不执行 pull/build；两个唯一 TEST project 都放在 Lucky 可见的 `/tmp/TEST-*` 下，容器使用 `network_mode: none`，不发布端口、不声明 volume。一个 fresh project 验证 synchronous `up → down`；另一个按当前 Lucky 3.0.0 UI 的真实流程验证 `up-async → compose_up task success → projects/ps/config/logs → stop-async → compose_stop task success → start → restart → down-async → compose_down task success`。实测还确认 synchronous `up` 不是对已存在 project 的幂等 re-up：同名 project 会返回名称已存在错误。
+
+Docker async task 的清理语义需要特别区分：`DELETE /api/docker/tasks/{id}` 是 active-task cancel，completed task 会被拒绝；completed history 由 `DELETE /api/docker/tasks` 清理。因此 runtime probe 只有在 task baseline 原本为 0、且当前 task ID 集合与本次 probe 获得的 ID **完全相等**时才允许全局 clear。probe 结束后 project/container/task/image/network/volume identity 基线全部恢复，两个 TEST path 均删除。生产环境仍禁止为了覆盖率执行真实 Docker prune。
+
 ## Web 终端
 
 `webterminal` 提供本地 Shell、SSH/Telnet 连接、会话、SFTP、分屏与快捷指令。连接和附加接口使用 WebSocket。该模块可执行命令与传输文件，是最高风险区域之一。

@@ -651,6 +651,37 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
     if not (ROOT / "tools" / "lucky_cron_probe.py").is_file():
         fail("Cron shell runtime probe tool is missing")
 
+    compose_evidence = model_evidence.get("docker_compose_behavior")
+    if not isinstance(compose_evidence, dict):
+        fail("Docker Compose behavior evidence is missing")
+    if compose_evidence.get("confidence") != "runtime-verified":
+        fail("Docker Compose behavior evidence must remain runtime-verified")
+    compose_model = compose_evidence.get("model")
+    if not isinstance(compose_model, dict) or set(compose_model) != {
+        "fresh_sync_create",
+        "current_ui_async_flow",
+        "lifecycle",
+        "inspection",
+        "task_history",
+        "isolation",
+    }:
+        fail("Docker Compose behavior model regressed")
+    compose_observations = compose_evidence.get("observations")
+    if not isinstance(compose_observations, dict) or set(compose_observations) != {
+        "sync_name_collision",
+        "async_tasks",
+        "container_isolation",
+        "read_paths",
+        "cleanup",
+    }:
+        fail("Docker Compose runtime observations regressed")
+    for field in ("verification", "security"):
+        value = compose_evidence.get(field)
+        if not isinstance(value, str) or not value.strip():
+            fail(f"Docker Compose evidence field is missing: {field}")
+    if not (ROOT / "tools" / "lucky_docker_compose_probe.py").is_file():
+        fail("Docker Compose runtime probe tool is missing")
+
     ddns_evidence = model_evidence.get("ddns_cloudflare_behavior")
     if not isinstance(ddns_evidence, dict):
         fail("DDNS Cloudflare behavior evidence is missing")
@@ -1351,7 +1382,16 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
             "force_recreate": {"type": "boolean"}, "build": {"type": "boolean"},
         },
     }
-    for route_key in {("POST", "/api/docker/compose/up"), ("POST", "/api/docker/compose/up-async")}:
+    compose_ret_only = {"type": "object", "properties": {"ret": {"type": "integer"}}}
+    compose_task_response = {
+        "type": "object",
+        "properties": {"ret": {"type": "integer"}, "task_id": {"type": "string"}},
+    }
+    compose_up_responses = {
+        ("POST", "/api/docker/compose/up"): compose_ret_only,
+        ("POST", "/api/docker/compose/up-async"): compose_task_response,
+    }
+    for route_key, expected_response in compose_up_responses.items():
         route = merged_by_key[route_key]
         if route.request_body_schema != docker_compose_up_request:
             fail(f"Docker Compose-up request schema regressed for {route_key}")
@@ -1359,8 +1399,8 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
             fail(f"Docker Compose-up request schema must cover exactly the frontend body fields for {route_key}")
         if route.request_body_schema["properties"]["config_file_name"] != {"type": "string"}:
             fail("Docker Compose-up config_file_name client contract must remain string")
-        if route.response_schema is not None:
-            fail(f"Docker Compose-up parser-only evidence must not claim a success response for {route_key}")
+        if route.response_schema != expected_response:
+            fail(f"Docker Compose-up runtime response schema regressed for {route_key}")
 
     docker_backup_restore = {"type": "object", "properties": {"backup": {"type": "string"}}}
     for route_key in {("POST", "/api/docker/compose/{param}/backups/restore"), ("POST", "/api/docker/volumes/{param}/backups/restore")}:
@@ -1390,6 +1430,8 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         fail("Docker Compose logs request schema regressed")
     if docker_compose_logs.response_schema != expected_compose_logs_response:
         fail("Docker Compose logs response schema regressed")
+    if docker_compose_logs.confidence != "runtime-verified":
+        fail("Docker Compose logs must remain runtime-verified")
 
     docker_upgrade_request = {
         "type": "object",
@@ -2563,22 +2605,33 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
             "remove_volumes": {"type": "boolean"},
         },
     }
-    for route_key in {
-        ("POST", "/api/docker/compose/restart"),
-        ("POST", "/api/docker/compose/start"),
-        ("POST", "/api/docker/compose/stop"),
-        ("POST", "/api/docker/compose/stop-async"),
-    }:
-        if merged_by_key[route_key].request_body_schema != compose_identity_schema:
+    compose_identity_responses = {
+        ("POST", "/api/docker/compose/restart"): compose_ret_only,
+        ("POST", "/api/docker/compose/start"): compose_ret_only,
+        ("POST", "/api/docker/compose/stop"): None,
+        ("POST", "/api/docker/compose/stop-async"): compose_task_response,
+    }
+    for route_key, expected_response in compose_identity_responses.items():
+        route = merged_by_key[route_key]
+        if route.request_body_schema != compose_identity_schema:
             fail(f"Docker Compose project identity request schema regressed for {route_key}")
-    for route_key in {
-        ("POST", "/api/docker/compose/down"),
-        ("POST", "/api/docker/compose/down-async"),
-    }:
-        if merged_by_key[route_key].request_body_schema != compose_down_schema:
+        if route.response_schema != expected_response:
+            fail(f"Docker Compose project identity response schema regressed for {route_key}")
+    compose_down_responses = {
+        ("POST", "/api/docker/compose/down"): compose_ret_only,
+        ("POST", "/api/docker/compose/down-async"): compose_task_response,
+    }
+    for route_key, expected_response in compose_down_responses.items():
+        route = merged_by_key[route_key]
+        if route.request_body_schema != compose_down_schema:
             fail(f"Docker Compose down request schema regressed for {route_key}")
+        if route.response_schema != expected_response:
+            fail(f"Docker Compose down response schema regressed for {route_key}")
 
-    compose_projects = merged_by_key[("GET", "/api/docker/compose/projects")].response_schema
+    compose_projects_route = merged_by_key[("GET", "/api/docker/compose/projects")]
+    if compose_projects_route.confidence != "runtime-verified":
+        fail("Docker Compose projects readback must remain runtime-verified")
+    compose_projects = compose_projects_route.response_schema
     compose_project_props = (
         compose_projects.get("properties", {}).get("projects", {}).get("items", {}).get("properties", {})
         if isinstance(compose_projects, dict)
@@ -2595,6 +2648,9 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         "state": {"type": "string"},
     }:
         fail("Docker Compose containerDetails response schema regressed")
+    compose_ps_route = merged_by_key[("GET", "/api/docker/compose/{param}/ps")]
+    if compose_ps_route.confidence != "runtime-verified":
+        fail("Docker Compose ps readback must remain runtime-verified")
 
     compose_file_request_schemas = {
         ("POST", "/api/docker/compose/backup"): {
@@ -2625,6 +2681,20 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
             fail(f"Docker Compose file request schema regressed for {route_key}")
         if isinstance(request_schema, dict) and "required" in request_schema:
             fail(f"Docker Compose file request schema must not invent required fields for {route_key}")
+    compose_config_response = {
+        "type": "object",
+        "properties": {
+            "ret": {"type": "integer"},
+            "content": {"type": "string"},
+            "filename": {"type": "string"},
+            "msg": {"type": "string"},
+        },
+    }
+    compose_config_route = merged_by_key[("POST", "/api/docker/compose/config")]
+    if compose_config_route.response_schema != compose_config_response:
+        fail("Docker Compose config runtime response schema regressed")
+    if compose_config_route.confidence != "runtime-verified":
+        fail("Docker Compose config must remain runtime-verified")
 
     local_path_list = merged_by_key[("GET", "/api/local-path-browser/list")].response_schema
     local_path_data = (
@@ -2922,8 +2992,8 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         fail("Local Path Browser delete must remain classified dangerous")
 
     response_schema_count = sum(route.response_schema is not None for route in patched_merged.routes)
-    if response_schema_count < 324:
-        fail(f"response-schema coverage regressed below 324 routes: {response_schema_count}")
+    if response_schema_count < 338:
+        fail(f"response-schema coverage regressed below 338 routes: {response_schema_count}")
 
     icon_response = merged_by_key[("GET", "/api/iconlib/icon")]
     if icon_response.response_type != "blob" or icon_response.response_content_type != "image/png":
