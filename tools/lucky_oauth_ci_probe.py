@@ -218,7 +218,12 @@ def oauth_login_with_tmpcode(
     """Replay Lucky 3.0.0 frontend OAuth-login challenge/RSA flow."""
 
     opener = opener or urllib.request.build_opener()
-    status, challenge = json_request(opener, base_url, "/api/login/challenge")
+    status, challenge = json_request(
+        opener,
+        base_url,
+        "/api/login/challenge?"
+        + urllib.parse.urlencode({"_": lucky_frontend_timestamp()}),
+    )
     require_ret_zero(status, challenge, "OAuth login challenge")
     required = ("challengeId", "nonce", "publicKey")
     if not all(challenge.get(key) for key in required):
@@ -238,7 +243,8 @@ def oauth_login_with_tmpcode(
     status, response = json_request(
         opener,
         base_url,
-        "/api/oauth/login",
+        "/api/oauth/login?"
+        + urllib.parse.urlencode({"_": lucky_frontend_timestamp()}),
         method="POST",
         payload={"challengeId": challenge["challengeId"], "cipherText": cipher},
     )
