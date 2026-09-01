@@ -260,6 +260,7 @@ class FakeOidcProvider:
         self._access_token = "TEST-" + secrets.token_urlsafe(22)
         self._relay_code = "TEST-" + secrets.token_urlsafe(20)
         self.relay_response_labels = [
+            "echo-request",
             "empty-200",
             "json-ret0",
             "json-code",
@@ -288,7 +289,7 @@ class FakeOidcProvider:
                 self.end_headers()
                 self.wfile.write(body)
 
-            def _relay_response(self) -> None:
+            def _relay_response(self, request_body: bytes) -> None:
                 index = len(fixture.relay_responses_used)
                 label = (
                     fixture.relay_response_labels[index]
@@ -296,7 +297,9 @@ class FakeOidcProvider:
                     else "json-ret0-code"
                 )
                 fixture.relay_responses_used.append(label)
-                if label == "empty-200":
+                if label == "echo-request":
+                    self._raw(200, request_body)
+                elif label == "empty-200":
                     self._raw(200, b"")
                 elif label == "json-ret0":
                     self._json(200, {"ret": 0})
@@ -447,7 +450,7 @@ class FakeOidcProvider:
                     fixture.callback_requests += 1
                     fixture.callback_path = parsed.path
                     self._record_other(parsed, "POST", body)
-                    self._relay_response()
+                    self._relay_response(body)
                     return
                 self._record_other(parsed, "POST", body)
                 self._json(404, {"error": "not_found"})
