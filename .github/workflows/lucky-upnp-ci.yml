@@ -1,0 +1,34 @@
+name: lucky-upnp-ci
+
+on:
+  push:
+    paths:
+      - ".github/workflows/lucky-upnp-ci.yml"
+      - "tools/lucky_upnp_ci_probe.py"
+      - "tools/lucky_natpmp_ci_probe.py"
+      - "tools/lucky_docker_build_ci_probe.py"
+  pull_request:
+    paths:
+      - ".github/workflows/lucky-upnp-ci.yml"
+      - "tools/lucky_upnp_ci_probe.py"
+      - "tools/lucky_natpmp_ci_probe.py"
+      - "tools/lucky_docker_build_ci_probe.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  upnp-behavior:
+    name: Lucky isolated UPnP mapping behavior
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Show Docker runtime
+        run: docker version
+
+      - name: Run isolated Lucky UPnP probe
+        run: sudo -E python3 tools/lucky_upnp_ci_probe.py
