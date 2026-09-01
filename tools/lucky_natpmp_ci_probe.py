@@ -513,7 +513,11 @@ def rule_payload(
         "UPnpLocalHost": "",
         "UPnPInternalClientIP": "",
         "UpnPDiyControlAPIUrl": "",
-        "DisableStunAvalidCheck": False,
+        # The CI STUN responder intentionally advertises a documentation-range
+        # public address on a Docker --internal network. Disable Lucky's
+        # external reachability check so the test exercises the isolated UDP
+        # forwarding data plane instead of requiring an Internet-routable IP.
+        "DisableStunAvalidCheck": True,
         "DisablePortForward": False,
         "TargetAddressList": [gateway_ip],
         "TargetPort": target_port,
