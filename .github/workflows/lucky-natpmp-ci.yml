@@ -1,0 +1,32 @@
+name: lucky-natpmp-ci
+
+on:
+  push:
+    paths:
+      - ".github/workflows/lucky-natpmp-ci.yml"
+      - "tools/lucky_natpmp_ci_probe.py"
+      - "tools/lucky_docker_build_ci_probe.py"
+  pull_request:
+    paths:
+      - ".github/workflows/lucky-natpmp-ci.yml"
+      - "tools/lucky_natpmp_ci_probe.py"
+      - "tools/lucky_docker_build_ci_probe.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  natpmp-behavior:
+    name: Lucky isolated NAT-PMP behavior
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Show Docker runtime
+        run: docker version
+
+      - name: Run isolated Lucky NAT-PMP probe
+        run: python3 tools/lucky_natpmp_ci_probe.py
