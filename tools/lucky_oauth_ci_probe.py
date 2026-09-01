@@ -636,7 +636,12 @@ def main() -> int:
 
             tmpcode: dict[str, Any] = {}
             attempts: list[dict[str, Any]] = []
-            for response_label in provider.relay_response_labels:
+            for attempt_index, response_label in enumerate(provider.relay_response_labels):
+                if attempt_index:
+                    # ao() truncates the millisecond clock to 10 ms before
+                    # appending its checksum. Lucky also rejects a reused `_`,
+                    # so keep each black-box probe in a distinct time bucket.
+                    time.sleep(0.025)
                 tmpcode_query = urllib.parse.urlencode(
                     {"type": "oidc", "_": lucky_frontend_timestamp()}
                 )
@@ -652,6 +657,8 @@ def main() -> int:
                         "relay_response": response_label,
                         "ret": candidate.get("ret"),
                         "has_error": bool(candidate.get("error")),
+                        "msg": str(candidate.get("msg") or "")[:160],
+                        "error": str(candidate.get("error") or "")[:240],
                     }
                 )
                 tmpcode = candidate
