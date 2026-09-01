@@ -289,6 +289,7 @@ def frontend_runtime_snippets(base_url: str) -> dict[str, str]:
         "window.open",
         "oidc",
         "FetchTmpCodeOrOpenAuthFailed",
+        "ThirdAuthLoginEnable",
         "interceptors.request.use",
         "Lucky-Admin-Token",
     )
@@ -418,6 +419,7 @@ class FakeOidcProvider:
                 "preferred_username": "lucky-skills-oauth-ci",
                 "iat": now,
                 "exp": now + 300,
+                "jti": secrets.token_urlsafe(12),
             }
             if fixture._nonce:
                 claims["nonce"] = fixture._nonce
@@ -709,7 +711,13 @@ def main() -> int:
         "oauth_access_token_refreshed": False,
         "oauth_user_refreshed": False,
         "oauth_login_ret": None,
+        "oauth_login_shape": {},
+        "oauth_login_msg": "",
+        "oauth_login_error": "",
+        "oauth_login_need_2fa": False,
         "oauth_login_token_present": False,
+        "login_page_config_shape": {},
+        "third_auth_login_enabled": None,
         "third_party_user_revoked": False,
         "third_party_user_created": False,
         "config_restored": False,
@@ -768,6 +776,16 @@ def main() -> int:
             admin_token, browser_opener, cookie_names = login_browser_admin(base_url, tmp)
             report["default_admin_login"] = True
             report["browser_cookie_names"] = cookie_names
+
+            login_config_status, login_config = json_request(
+                browser_opener, base_url, "/LoginPageConfig", timeout=20
+            )
+            if login_config_status == 200 and isinstance(login_config, dict):
+                report["login_page_config_shape"] = json_shape(login_config)
+                if "ThirdAuthLoginEnable" in login_config:
+                    report["third_auth_login_enabled"] = bool(
+                        login_config.get("ThirdAuthLoginEnable")
+                    )
 
             info = admin_json(base_url, admin_token, "/api/info", opener=browser_opener).get("info")
             if not isinstance(info, dict):
@@ -1116,6 +1134,12 @@ def main() -> int:
 
                                 oauth_login = oauth_login_with_tmpcode(base_url, second_code, tmp)
                                 report["oauth_login_ret"] = oauth_login.get("ret")
+                                report["oauth_login_shape"] = json_shape(oauth_login)
+                                report["oauth_login_msg"] = str(oauth_login.get("msg") or "")[:240]
+                                report["oauth_login_error"] = str(oauth_login.get("error") or "")[:400]
+                                report["oauth_login_need_2fa"] = bool(
+                                    oauth_login.get("need2FA")
+                                )
                                 login_token = oauth_login.get("token")
                                 report["oauth_login_token_present"] = (
                                     oauth_login.get("ret") == 0
