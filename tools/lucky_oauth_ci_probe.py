@@ -139,6 +139,15 @@ def json_shape(value: Any) -> Any:
     return "string"
 
 
+def lucky_frontend_timestamp() -> str:
+    """Reproduce Lucky 3.0.0 frontend ao() anti-replay query value."""
+
+    raw = str(int(time.time() * 1000))
+    core = raw[:-1]
+    checksum = sum(int(char) for char in core) % 8
+    return core + str(checksum)
+
+
 def frontend_runtime_snippets(base_url: str) -> dict[str, str]:
     """Read Lucky's own served frontend and return selected runtime call vicinities."""
 
@@ -214,7 +223,8 @@ def tmpcode_browser_attempt(
         headers["Referer"] = base_url + "/#/thirdPartyAuthManager"
     if include_xrw:
         headers["X-Requested-With"] = "XMLHttpRequest"
-    request = urllib.request.Request(base_url + "/api/oauth/tmpcode?type=oidc", headers=headers)
+    query = urllib.parse.urlencode({"type": "oidc", "_": lucky_frontend_timestamp()})
+    request = urllib.request.Request(base_url + "/api/oauth/tmpcode?" + query, headers=headers)
     try:
         with opener.open(request, timeout=10) as response:
             raw = response.read(1024 * 1024)
@@ -549,10 +559,13 @@ def main() -> int:
                 and live_config.get("OIDCRedirectURI") == updated["OIDCRedirectURI"]
             )
 
+            tmpcode_query = urllib.parse.urlencode(
+                {"type": "oidc", "_": lucky_frontend_timestamp()}
+            )
             tmpcode = admin_json(
                 base_url,
                 admin_token,
-                "/api/oauth/tmpcode?type=oidc",
+                "/api/oauth/tmpcode?" + tmpcode_query,
                 require_zero=False,
                 opener=browser_opener,
             )
@@ -602,15 +615,21 @@ def main() -> int:
             # Give the fixture redirect a moment to settle, then poll exactly as
             # the frontend does.  No raw temporary code is reported.
             if report["tmpcode_available"]:
-                encoded_code = urllib.parse.quote(str(tmp_code), safe="")
                 seen_rets: list[Any] = []
                 last_status: dict[str, Any] = {}
                 deadline = time.time() + 12
                 while time.time() < deadline:
+                    status_query = urllib.parse.urlencode(
+                        {
+                            "code": str(tmp_code),
+                            "type": "oidc",
+                            "_": lucky_frontend_timestamp(),
+                        }
+                    )
                     last_status = admin_json(
                         base_url,
                         admin_token,
-                        f"/api/oauth/status?code={encoded_code}&type=oidc",
+                        "/api/oauth/status?" + status_query,
                         require_zero=False,
                         opener=browser_opener,
                     )
@@ -622,10 +641,17 @@ def main() -> int:
                     time.sleep(0.5)
                 report["oauth_status_ret_values"] = seen_rets
                 report["oauth_status_shape"] = json_shape(last_status)
+                userinfo_query = urllib.parse.urlencode(
+                    {
+                        "code": str(tmp_code),
+                        "type": "oidc",
+                        "_": lucky_frontend_timestamp(),
+                    }
+                )
                 userinfo = admin_json(
                     base_url,
                     admin_token,
-                    f"/api/oauth/userinfo?code={encoded_code}&type=oidc",
+                    "/api/oauth/userinfo?" + userinfo_query,
                     require_zero=False,
                     opener=browser_opener,
                 )
