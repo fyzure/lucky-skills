@@ -113,6 +113,10 @@ localhost SSH 还验证了首次 host-key 流程：connection test 返回 `ret=4
 
 `thirdPartyAuthManager`、`oauth`、`security-groups` 和 `webservice/webauth` 共同管理第三方身份、授权用户和会话。不要记录临时 code、回调参数、用户标识或会话票据。
 
+Security Group + WebService Auth 的核心链路已通过 `tools/lucky_security_group_probe.py` 完成隔离 E2E。probe 创建唯一 TEST group、组内 local user、无 group local user，以及不携带真实 provider token 的 disabled third-party/OAuth mapping；随后只向现有 WebService 父规则 append 两条 TEST 子规则。BasicAuth 对未认证/错误密码返回 401，正确组内 local user 能到达 loopback marker origin。WebAuth 则实际恢复并执行了 challenge + RSA 登录协议：先取 `challengeId/nonce/publicKey`，再对 `{account,password,twoFA,challengeId,nonce}` 做分块 RSA 加密并提交，成功 session 能到达 upstream，而无 group 用户不能获得同等访问。
+
+成功 WebAuth 授权会生成 runtime Security Group grant；当前运行时/前端确认真实主键字段为 `GrantKey`。早期 probe 在显式删除时曾错误使用通用 `Key`，修正为 `GrantKey` 后没有为了覆盖率再重复整套生产 listener E2E，所以仓库只宣称 grant **生成**以及最终 principal cleanup 后 grant baseline 恢复，不宣称修正后的显式 grant-delete 已再次验证。对于 `AuthSource=securityGroup` 的 BasicAuth/WebAuth，当前前端会把 `SecurityGroupAccessMode` 置为 `disabled`；`strict/append` 是另一套授权叠加模式，不应混为一谈。清理后所有 TEST principals/subrules 消失，原 WebService 业务子规则对象级保持不变。
+
 ## 其他模块
 
 `iconlib`、`frontend-preferences`、`about-content`、`natdetect`、`describeviewtree` 等用于界面偏好、图标源、说明内容、NAT 检测和诊断视图。即使看似只影响前端，也应先确认是否会从外部 URL 下载内容或写入配置。

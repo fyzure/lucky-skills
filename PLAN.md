@@ -47,7 +47,7 @@
 
 ### Security Groups + WebService Auth
 
-当前：group / local user / OAuth user / grant schema 已恢复，但当前列表为空，尚未真实创建；WebService 的 BasicAuth/WebAuth/SecurityGroup 联动未做 E2E。
+当前：TEST group / local user / OAuth-user mapping 已真实创建；BasicAuth、WebAuth challenge + RSA 登录、group session 放行、无 group 用户拒绝、runtime grant 生成与 WebService 联动均已完成 E2E。`GrantKey` 已确认是 grant 主键字段；修正该字段后的显式 grant DELETE 未重复强测，因此 evidence 只宣称 grant 创建与最终 baseline 恢复。
 
 - [x] 创建 TEST Security Group
 - [x] 创建 TEST local user
@@ -62,7 +62,7 @@
 - [x] 验证 SecurityGroup + WebService 联动
 - [x] 清理所有 TEST user/group/grant/webservice 资源
 - [x] 验证列表和业务 WebService 回到基线
-- [ ] 固化为 probe / evidence / docs
+- [x] 固化为 probe / evidence / docs：`tools/lucky_security_group_probe.py` / `security_group_webauth_behavior`
 
 ### SSL / ACME
 

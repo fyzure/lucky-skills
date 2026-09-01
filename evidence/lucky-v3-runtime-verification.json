@@ -307,6 +307,26 @@
         "cleanup": "No TEST image tag, helper Cron task or TEST path remained; Docker image and Cron task baselines were restored"
       },
       "security": "All mutable resources use unique TEST prefixes. The raw rootfs contains one harmless text file; the helper Cron task writes only inside its owned /tmp directory except for a cleanup fallback aimed at the exact temporary path returned by this probe's own upload request. No image is pulled or built, no business image is retagged/deleted, no container/network/volume is created, and Docker prune/global Docker settings are never changed."
+    },
+    "security_group_webauth_behavior": {
+      "confidence": "runtime-verified",
+      "model": {
+        "principals": "Security Groups, local users, disabled third-party identities and OAuth-user mappings can be created as uniquely prefixed disposable resources; local users and OAuth-user mappings carry GrantSecurityGroups membership",
+        "basic_auth": "A temporary WebService reverse-proxy subrule using AuthSource=securityGroup rejected unauthenticated and wrong-password requests with HTTP 401 while the correct local group user reached the loopback upstream",
+        "webauth_login": "A temporary WebAuth subrule using AuthSource=securityGroup exposed Lucky's login surface. The current login protocol first requests a challenge, then RSA-encrypts plaintext {account,password,twoFA,challengeId,nonce} in UTF-8 chunks no larger than 120 bytes and POSTs {challengeId,cipherText} to the WebAuth login API",
+        "authorization": "The correct enabled local user assigned to the TEST group completed WebAuth login and the resulting session reached the upstream; an enabled local user without that group did not receive upstream access",
+        "grant_runtime": "Successful WebAuth authorization generated a runtime security-group grant. Runtime/frontend evidence establishes GrantKey as the grant identifier field; explicit grant deletion after the GrantKey correction was not re-run, so only grant creation plus final grant-baseline restoration is claimed",
+        "access_mode": "For BasicAuth/WebAuth with AuthSource=securityGroup, the current frontend forces SecurityGroupAccessMode=disabled; strict/append access mode is a distinct authorization-composition mechanism and is not conflated with the security-group credential source"
+      },
+      "verification": "A bounded Lucky 3.0.0 probe created one TEST Security Group, an in-group local user, a no-group local user, a disabled third-party identity and a corresponding OAuth-user mapping, then appended only two uniquely prefixed subrules to the latest existing WebService parent: one BasicAuth route and one WebAuth route backed by a loopback marker origin. BasicAuth rejected missing/wrong credentials and accepted the in-group local user. WebAuth exposed its login application, the probe recovered the challenge/RSA protocol from the served frontend asset, completed a real challenge and encrypted local-user login, observed the authenticated session reach the loopback upstream, observed a new runtime security-group grant, and confirmed the no-group user was denied upstream access. Cleanup removed only the TEST subrules/principals, runtime grants returned to baseline, and all pre-existing WebService subrules remained object-for-object unchanged.",
+      "observations": {
+        "basic_auth": "Missing credentials and a wrong password returned 401 without the upstream marker; the correct TEST local-user password returned 200 with the marker",
+        "webauth_protocol": "The served login application exposed the webauth API prefix, challenge endpoint and RSA encrypted-login flow; a real challenge returned challengeId/nonce/publicKey and encrypted submission returned the normal login success envelope",
+        "group_enforcement": "The TEST user granted the Security Group obtained a session that reached upstream, while the otherwise valid TEST user with no group assignment was denied",
+        "grant": "A new runtime grant appeared after successful WebAuth authorization; GrantKey is the real identifier field. Final cleanup returned the grant list to its original baseline",
+        "cleanup": "All uniquely prefixed group/local-user/OAuth-user/third-party/subrule resources were removed; principal baselines were restored and the original WebService business subrule set was unchanged"
+      },
+      "security": "The probe uses random disposable credentials that are never written to evidence, a loopback-only marker origin, uniquely prefixed principals and subrules, and latest-parent read/modify/write semantics. It never replaces the WebService parent with a stale snapshot and cleanup removes only resources carrying the probe's ownership markers. Third-party/OAuth mappings are disabled and use no real provider token."
     }
   },
   "routes": [
