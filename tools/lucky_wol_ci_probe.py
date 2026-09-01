@@ -91,6 +91,17 @@ def container_ipv4(container_name: str, network_name: str) -> str:
     return value
 
 
+def admin_port_is_unpublished(container_name: str) -> bool:
+    raw = docker("inspect", container_name, timeout=30)
+    rows = json.loads(raw)
+    if not isinstance(rows, list) or len(rows) != 1:
+        raise ProbeError("unexpected Docker container inspect response")
+    bindings = rows[0].get("HostConfig", {}).get("PortBindings", {})
+    if not isinstance(bindings, dict):
+        raise ProbeError("Docker inspect missing HostConfig.PortBindings")
+    return not bindings.get(f"{ADMIN_PORT}/tcp")
+
+
 def api_json(
     base_url: str,
     token: str,
@@ -198,8 +209,7 @@ def main() -> int:
             lucky_ip = container_ipv4(container_name, network_name)
             base_url = f"http://{lucky_ip}:{ADMIN_PORT}"
             wait_for_lucky(base_url, container_name)
-            published = docker("port", container_name, f"{ADMIN_PORT}/tcp", timeout=30)
-            report["admin_port_unpublished"] = not published.strip()
+            report["admin_port_unpublished"] = admin_port_is_unpublished(container_name)
             report["admin_reachable_on_internal_bridge"] = True
             if not report["admin_port_unpublished"]:
                 raise ProbeError("temporary Lucky admin port was unexpectedly published")
