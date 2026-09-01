@@ -201,11 +201,11 @@
 
 ### StorageManagement
 
-当前：local storage 注册生命周期已经真实闭环；POST 会把新建 item 规范化为 `Enable=true`，显式 disable 后会从 `litelist` 消失，重新 enable 后恢复。实际 consumer 的读写权限执行与 `SystemMount` 仍未实践。
+当前：local storage 注册生命周期已经真实闭环；POST 会把新建 item 规范化为 `Enable=true`，显式 disable 后会从 `litelist` 消失，重新 enable 后恢复。`Writable` 已通过 localhost WebDAV consumer 做真实读写验证；`SystemMount` 仍未实践。
 
 - [x] 使用 `/tmp/TEST-lucky-skills-storage-*` 创建 local storage
 - [x] 验证 POST / PUT / DELETE
-- [ ] 验证 writable/read-only 的实际 consumer 执行行为（当前仅验证 `Writable` 持久化）
+- [x] 验证 writable/read-only 的实际 consumer 执行行为：WebDAV 可写 mount PUT/GET/DELETE 成功，只读 mount PUT 被拒绝且底层文件未出现
 - [x] 验证 list/litelist 与 enable/disable 联动
 - [ ] 验证 SystemMount 最小闭环（仅在可安全卸载的临时目录）
 - [x] 清理 TEST storage / TEST path，并验证完整列表/litelist 基线恢复
@@ -213,14 +213,15 @@
 
 ### FTP / WebDAV / SMB / DLNA / FileBrowser
 
-- [ ] 为每个服务建立独立临时 root 目录
-- [ ] 保存并启用 TEST 配置
-- [ ] 创建 TEST 用户（适用时）
-- [ ] localhost 实际连接
-- [ ] 验证读/写/列目录
-- [ ] 验证 status/logs
-- [ ] 停止服务并恢复原配置
-- [ ] 删除临时目录、用户和测试文件
+WebDAV 已完成 localhost 完整闭环；FTP 当前配置没有 `ListenIP`，启动会监听所选 network 的全部地址，因此不为了覆盖率临时暴露控制/PASV 端口，留待隔离 network namespace/专用测试环境。SMB/DLNA/FileBrowser 仍待实践。
+
+- [x] WebDAV：独立 TEST root/storage、TEST 用户、127.0.0.1 高位端口
+- [x] WebDAV：OPTIONS / PROPFIND / 可写 PUT-GET-DELETE / 只读写拒绝
+- [x] WebDAV：status/logs、停止并恢复原配置、删除 TEST 用户/storage/path
+- [ ] FTP：隔离网络环境下真实登录/列目录/上传下载（当前不启动公网可见随机端口）
+- [ ] SMB：独立临时 root、用户、localhost 客户端读写
+- [ ] DLNA：独立临时媒体 root 与 localhost HTTP/UPnP 行为
+- [ ] FileBrowser：临时 root、服务生命周期与文件行为
 
 ---
 
@@ -228,14 +229,16 @@
 
 ### Rclone
 
-当前：remote / sync task CRUD 已实践，任务 disabled / DryRun。
+当前：remote / sync task CRUD 已实践；local → local `sync` 已真实运行，空目录同步成功，随后切换 `DryRun=true` 再运行并确认目标不落盘。
 
 - [ ] local → local 实际 copy
-- [ ] local → local sync
-- [ ] DryRun 与真实运行结果对比
-- [ ] 验证 task run / stop
+- [x] local → local sync（`CreateEmptyDirs=true` 的源空目录真实传播到目标）
+- [x] DryRun 与真实运行结果对比
+- [x] 验证 task run / State / logs
+- [ ] 验证运行中 task stop（当前任务完成过快，没有为了覆盖率制造大任务）
 - [ ] 如安全，验证临时 mount/unmount
-- [ ] 清理目标目录和 TEST remote/task
+- [x] 清理源/目标目录和 TEST task，sync Key 基线恢复
+- [x] 固化 probe / evidence / docs：`tools/lucky_rclone_sync_probe.py`
 
 ### Cron
 

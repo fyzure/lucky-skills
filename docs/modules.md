@@ -70,7 +70,13 @@ IPDB 在 Lucky 3.0.0 上已经完成 `behavior-runtime` 闭环。`tools/lucky_ip
 
 这些接口可暴露或修改宿主机数据。路径参数应由服务端白名单约束，不能直接接受最终用户输入。网盘授权 URL、refresh token 和挂载配置都应脱敏。
 
-StorageManagement 的 local storage 注册生命周期已在 Lucky 3.0.0 上完成隔离实践。`tools/lucky_storage_probe.py` 先通过 Lucky 自己的 `local-path-browser` 创建唯一 `/tmp/TEST-*` 目录，再验证 `GET /api/storagemanagement/list`、POST / PUT / DELETE、`GET /api/storagemanagement/enable` 和 `litelist`。一个重要实测语义是：POST 请求即使显式带 `Enable=false`，新建 local item 首次回读仍会被 Lucky 规范化为 `Enable=true`；如需初始禁用，创建后必须再显式 disable。disabled item 会从 `litelist` 消失，重新 enable 后再次出现。当前 probe 只验证 `Writable` 字段可持久化，尚未通过 FTP/WebDAV/SMB 等 consumer 验证真实读写权限执行；`SystemMount` 也始终保持关闭，不能据此宣称系统挂载已经实践。
+StorageManagement 的 local storage 注册生命周期已在 Lucky 3.0.0 上完成隔离实践。`tools/lucky_storage_probe.py` 先通过 Lucky 自己的 `local-path-browser` 创建唯一 `/tmp/TEST-*` 目录，再验证当前前端的 GET list、POST / PUT / DELETE、`GET /api/storagemanagement/enable` 和 `litelist`。一个重要实测语义是：POST 请求即使显式带 `Enable=false`，新建 local item 首次回读仍会被 Lucky 规范化为 `Enable=true`；如需初始禁用，创建后必须再显式 disable。disabled item 会从 `litelist` 消失，重新 enable 后再次出现。
+
+`Writable` 不再只是配置字段证据：`tools/lucky_webdav_probe.py` 使用两个 TEST storage 作为 localhost WebDAV 的 `store` mount，真实验证可写 mount 的 PUT / GET / DELETE 成功，而只读 mount 的 PUT 被拒绝且 backing path 没有生成目标文件。WebDAV probe 仅在原服务为 stopped 且 `Users` 为空时运行，临时绑定 `127.0.0.1` 高位端口、关闭 TLS 和 AutoFirewall，并在恢复前重新检查唯一 TEST 用户/端口 ownership marker，避免用旧快照覆盖并发配置。`SystemMount` 仍始终保持关闭，不能据此宣称系统挂载已经实践。
+
+Rclone 的 local → local sync 也已完成真实行为验证。`tools/lucky_rclone_sync_probe.py` 创建唯一源/目标 `/tmp/TEST-*` 目录和一个 sync task；`CreateEmptyDirs=true` 的真实 run 把源侧空目录传播到目标侧并以 `State.Status=success` 结束。随后同一 task 经 PUT 切换到 `DryRun=true`，新增第二个源目录再次运行成功，但目标侧没有生成对应目录。compact `sync/list` 只返回路径、状态等摘要，完整的 `DryRun`、`CreateEmptyDirs`、过滤/性能选项应从 `GET /api/rclone/sync/{Key}` detail 读取。该闭环没有配置 remote、云盘凭据、bisync、schedule、network listener 或 system mount。
+
+FTP 当前仍保持未启动。Lucky 3.0.0 的 FTP 配置只有 `Network + Port + PassivePortStart/End`，没有 WebDAV 那样的 `ListenIP`；为了行为覆盖而临时启动会使随机控制/PASV 端口监听所选 network 的全部地址。因此当前实例不为测试启动 FTP，也不修改宿主防火墙来人为制造隔离；真实 FTP 登录/传输应放在 network namespace 或专用隔离环境中完成。
 
 ## Docker
 

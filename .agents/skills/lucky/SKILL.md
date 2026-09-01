@@ -115,7 +115,21 @@ Two Lucky 3.0.0 upload routes are currently verified **failures**, not supported
 
 Lucky 3.0.0 local StorageManagement has a bounded runtime probe at `tools/lucky_storage_probe.py`. The verified registry lifecycle is `GET /api/storagemanagement/list`, POST/PUT/DELETE on `/api/storagemanagement/list`, the mutating GET `/api/storagemanagement/enable`, and read-only `litelist`. A newly POSTed local item was normalized to `Enable=true` even when the candidate explicitly requested `Enable=false`; if a disabled initial state is required, explicitly disable the generated item after creation. Disabled items are absent from `litelist` and reappear after enable.
 
-The storage probe uses only a unique Lucky-visible `/tmp/TEST-*` directory created through `local-path-browser`, keeps `SystemMount.Enable=false`, and removes the TEST item/path before checking list/litelist baselines. `Writable` persistence is verified, but actual consumer-side read/write enforcement is not; do not infer FTP/WebDAV/SMB permissions from the storage flag alone. Likewise, do not claim `SystemMount` behavior until a separate safely unmounted TEST mount is practiced.
+The storage probe uses only a unique Lucky-visible `/tmp/TEST-*` directory created through `local-path-browser`, keeps `SystemMount.Enable=false`, and removes the TEST item/path before checking list/litelist baselines. `Writable` is also behavior-verified through the loopback-only WebDAV probe described below; `SystemMount` remains unverified until a separate safely unmounted TEST mount is practiced.
+
+## WebDAV + Storage permission behavior
+
+`tools/lucky_webdav_probe.py` is the preferred file-service consumer probe because Lucky 3.0.0 WebDAV supports an explicit `ListenIP`. It refuses to run unless the current WebDAV service is stopped and has no configured users, then binds a random high port on `127.0.0.1`, disables TLS and firewall automation, and creates one disposable Basic-auth principal. Two unique local StorageManagement TEST items are exposed as `store` mounts: one writable and one read-only. Runtime verification covers OPTIONS/PROPFIND, writable PUT/GET/DELETE, read-only PUT rejection, service status/logs and full cleanup.
+
+Before restoring the baseline WebDAV configuration, the probe re-reads the live configuration and verifies its unique TEST username plus listener address/port. Refuse restoration if those ownership markers no longer match; never overwrite a concurrent operator change with a stale snapshot. Passwords and test file bodies must never appear in evidence.
+
+FTP is not equivalent from a safety perspective. The current FTP configuration exposes `Network`, control `Port` and passive port range but no loopback `ListenIP`. Do not start a temporary FTP listener on a production host merely for coverage and do not modify the host firewall to manufacture isolation. Practice real FTP login/transfer only in a network namespace or dedicated isolated instance.
+
+## Rclone local sync behavior
+
+`tools/lucky_rclone_sync_probe.py` verifies Rclone's execution engine without remotes or credentials. It creates unique Lucky-visible source/destination `/tmp/TEST-*` trees and one TEST task with `SourceType=local`, `DestType=local`, `SyncMode=sync` and `CreateEmptyDirs=true`. A real run must reach success and propagate a source-only empty directory. The same task is then PUT-updated to `DryRun=true`; a second source-only directory must remain absent from the destination after another successful run.
+
+The compact `/api/rclone/sync/list` response intentionally omits many execution options. Use `GET /api/rclone/sync/{Key}` when validating `DryRun`, `CreateEmptyDirs`, filters, bandwidth or other detailed task fields. Do not add cloud remotes, schedules, bisync or system mounts to this probe solely for coverage.
 
 ## Report results
 

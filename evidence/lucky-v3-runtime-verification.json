@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "verified_at": "2026-09-01T05:23:54Z",
+  "verified_at": "2026-09-01T05:36:30Z",
   "target": {
     "product": "Lucky",
     "version": "3.0.0"
@@ -211,7 +211,43 @@
         "litelist_filter": "The disabled TEST item was absent from litelist and the enabled TEST item appeared with Detail, Key, Remark and Writable fields",
         "cleanup": "Zero TEST storage items remained, the Lucky-visible TEST path was removed, and both full-list and litelist Key baselines were restored"
       },
-      "security": "The probe creates only a unique Lucky-visible /tmp directory and one TEST local storage item. It never enables SystemMount, never changes existing storage items, and deletes only its own TEST item/path. Actual consumer read/write enforcement and OS mounting remain separate unverified behaviors."
+      "security": "The probe creates only a unique Lucky-visible /tmp directory and one TEST local storage item. It never enables SystemMount, never changes existing storage items, and deletes only its own TEST item/path. WebDAV behavior testing separately verifies consumer-side Writable enforcement; OS mounting remains unverified."
+    },
+    "webdav_storage_behavior": {
+      "confidence": "runtime-verified",
+      "model": {
+        "service_lifecycle": "PUT /api/webdav/configure can start a temporary WebDAV service and a later guarded PUT restores the original stopped configuration",
+        "principal_model": "A WebDAV user uses Username, Password, Prefix, FrontType, Modify and MountList; the verified mount model uses Type, Param, DisplayName and Writable",
+        "protocol": "A loopback HTTP WebDAV listener answered OPTIONS with a DAV header and PROPFIND with a successful multi-status response exposing both TEST mounts",
+        "storage_writable_enforcement": "A store mount backed by Writable=true accepted PUT/GET/DELETE, while a store mount backed by Writable=false rejected PUT and left the underlying TEST path unchanged",
+        "isolation": "The verified service bound only 127.0.0.1 on a random high port with TLS disabled and AutoFirewall=false"
+      },
+      "verification": "With the existing WebDAV service stopped and Users empty, a bounded Lucky 3.0.0 probe created two unique local StorageManagement TEST items and paths, one writable and one read-only. It temporarily configured one disposable Basic-auth WebDAV user with store mounts named rw and ro, started WebDAV on 127.0.0.1, verified OPTIONS/PROPFIND, performed a real PUT/GET/DELETE against the writable mount, and verified PUT to the read-only mount was rejected with no file created. It read module logs, then restored the exact original WebDAV configuration only after re-checking that the live config still carried the probe's unique username/port ownership markers. WebDAV status/users, Storage keys and TEST paths all returned to baseline.",
+      "observations": {
+        "writable_mount": "PUT, GET and DELETE succeeded and the Lucky-visible backing path reflected create/remove operations",
+        "readonly_mount": "PUT returned HTTP 404 in the verified run and the backing path remained free of the attempted file",
+        "readback": "WebDAV user readback exposed Dir, FrontType, Modify, MountList, NoSniff, Password, Prefix and Username; mount readback exposed DisplayName, InvalidMsg, IsLocalDir, Param, Type and Writable",
+        "cleanup": "Original stopped WebDAV configuration and empty-user baseline were restored; two TEST storages and both TEST paths were removed"
+      },
+      "security": "The probe refuses to run when WebDAV is already active or has configured users, binds only loopback, disables firewall automation and TLS, uses a disposable random password, and never prints credentials or file content. Configuration restoration is ownership-guarded to avoid overwriting a concurrent change."
+    },
+    "rclone_local_sync_behavior": {
+      "confidence": "runtime-verified",
+      "model": {
+        "task_model": "A sync task supports local SourceType/DestType, SourcePath/DestPath, SyncMode=sync, DryRun and CreateEmptyDirs among the full detail fields returned by GET /api/rclone/sync/{Key}",
+        "real_sync": "POST /api/rclone/sync/run/{Key} executed a real local-to-local sync and propagated a source-only empty directory to the destination when CreateEmptyDirs=true",
+        "dry_run": "After PUT-updating the same task to DryRun=true, a second successful run did not create a newly added source-only directory on the destination",
+        "state": "The compact sync list exposes State with Status/Progress/counters, while GET /api/rclone/sync/{Key} exposes the full execution options",
+        "scope": "No Rclone remote, cloud credential, network service or system mount is required for the verified local-to-local behavior"
+      },
+      "verification": "Starting from an empty Rclone sync-task baseline, a bounded Lucky 3.0.0 probe created unique Lucky-visible source and destination directories and one enabled TEST sync task using SourceType=local, DestType=local, SyncMode=sync and CreateEmptyDirs=true. A real run completed with State.Status=success and created the source empty directory at the destination. The probe then created a second source-only directory, PUT-updated the task to DryRun=true, ran it again to success, and verified that second directory was not created at the destination. Logs were read, the TEST task was deleted, both TEST trees were removed and the sync Key baseline returned to empty.",
+      "observations": {
+        "real_run": "State.Status reached success and the destination contained the propagated empty directory",
+        "dry_run": "State.Status reached success but the new destination path remained absent",
+        "detail_vs_list": "The compact list omits DryRun/CreateEmptyDirs, while GET /api/rclone/sync/{Key} returned the complete task options including those fields",
+        "cleanup": "No TEST sync task remained and both Lucky-visible source/destination trees were removed"
+      },
+      "security": "The probe uses only unique /tmp TEST directories and one TEST sync task. It does not configure remotes, credentials, schedules, bisync, system mounts or network listeners, and cleanup deletes only resources bearing the unique TEST marker."
     }
   },
   "routes": [
@@ -2302,19 +2338,39 @@
       "path": "/api/storagemanagement/list",
       "method": "POST",
       "risk": "mutating",
+      "confidence": "runtime-verified",
       "body_keys": ["Type", "Enable", "Key", "Remark", "Writable", "Log", "Params", "SystemMount"],
       "request_body_schema": {"type":"object","properties":{"Type":{"type":"string"},"Enable":{"type":"boolean"},"Key":{"type":"string"},"Remark":{"type":"string"},"Writable":{"type":"boolean"},"Log":{"type":"boolean"},"Params":{"type":"object","additionalProperties":{}},"SystemMount":{"type":"object"}}},
       "response_schema": {"type":"object","properties":{"ret":{"type":"integer"}}},
-      "schema_evidence": "frontend storage editor initializes {Type,Enable,Key,Remark,Writable,Log,Params,SystemMount} and passes the normalized model directly to POST; an authorized bounded TEST local-storage create returned ret=0 and persisted a generated Key. Runtime readback also showed Lucky normalizes a new local item to Enable=true even when the create candidate explicitly contains Enable=false"
+      "schema_evidence": "frontend storage editor initializes {Type,Enable,Key,Remark,Writable,Log,Params,SystemMount} and passes the normalized model directly to POST; an authorized bounded TEST local-storage create returned ret=0 and persisted a generated Key. Runtime readback also showed Lucky normalizes a new local item to Enable=true even when the create candidate explicitly contains Enable=false",
+      "verification": "A unique TEST local storage backed by a Lucky-visible /tmp path was successfully created and later removed. The generated Key and persisted fields were observed through the current frontend GET list call; no existing storage item was modified."
     },
     {
       "path": "/api/storagemanagement/list",
       "method": "PUT",
       "risk": "mutating",
+      "confidence": "runtime-verified",
       "body_keys": ["Type", "Enable", "Key", "Remark", "Writable", "Log", "Params", "SystemMount"],
       "request_body_schema": {"type":"object","properties":{"Type":{"type":"string"},"Enable":{"type":"boolean"},"Key":{"type":"string"},"Remark":{"type":"string"},"Writable":{"type":"boolean"},"Log":{"type":"boolean"},"Params":{"type":"object","additionalProperties":{}},"SystemMount":{"type":"object"}}},
       "response_schema": {"type":"object","properties":{"ret":{"type":"integer"}}},
-      "schema_evidence": "frontend storage editor deep-merges the existing resource into the same normalized model and passes it directly to PUT; an authorized bounded TEST local-storage update changed Remark and Writable while the item remained explicitly disabled, returned ret=0, and the updated values were observed on subsequent GET /api/storagemanagement/list readback"
+      "schema_evidence": "frontend storage editor deep-merges the existing resource into the same normalized model and passes it directly to PUT; an authorized bounded TEST local-storage update changed Remark and Writable while the item remained explicitly disabled, returned ret=0, and the updated values were observed on subsequent GET /api/storagemanagement/list readback",
+      "verification": "PUT was executed only against the owned TEST storage item; Remark and Writable changes persisted while Enable remained false, and the TEST item was subsequently deleted."
+    },
+    {
+      "path": "/api/storagemanagement/enable",
+      "method": "GET",
+      "risk": "mutating",
+      "confidence": "runtime-verified",
+      "response_schema": {"type":"object","properties":{"ret":{"type":"integer"}}},
+      "verification": "The owned TEST local storage was explicitly disabled and enabled through key/enable query parameters. Full-list readback reflected the changed Enable state and litelist excluded the disabled item while including it after re-enable."
+    },
+    {
+      "path": "/api/storagemanagement/list",
+      "method": "DELETE",
+      "risk": "mutating",
+      "confidence": "runtime-verified",
+      "response_schema": {"type":"object","properties":{"ret":{"type":"integer"}}},
+      "verification": "DELETE with the generated TEST Key returned ret=0 and the item disappeared from subsequent storage list readback; the original storage Key baseline was restored."
     },
     {
       "path": "/api/thirdPartyAuthManager/config",

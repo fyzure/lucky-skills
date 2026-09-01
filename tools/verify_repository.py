@@ -562,6 +562,64 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
     if not (ROOT / "tools" / "lucky_storage_probe.py").is_file():
         fail("StorageManagement runtime probe tool is missing")
 
+    webdav_evidence = model_evidence.get("webdav_storage_behavior")
+    if not isinstance(webdav_evidence, dict):
+        fail("WebDAV + Storage behavior evidence is missing")
+    if webdav_evidence.get("confidence") != "runtime-verified":
+        fail("WebDAV + Storage behavior evidence must remain runtime-verified")
+    webdav_model = webdav_evidence.get("model")
+    if not isinstance(webdav_model, dict) or set(webdav_model) != {
+        "service_lifecycle",
+        "principal_model",
+        "protocol",
+        "storage_writable_enforcement",
+        "isolation",
+    }:
+        fail("WebDAV + Storage behavior model regressed")
+    webdav_observations = webdav_evidence.get("observations")
+    if not isinstance(webdav_observations, dict) or set(webdav_observations) != {
+        "writable_mount",
+        "readonly_mount",
+        "readback",
+        "cleanup",
+    }:
+        fail("WebDAV + Storage runtime observations regressed")
+    for field in ("verification", "security"):
+        value = webdav_evidence.get(field)
+        if not isinstance(value, str) or not value.strip():
+            fail(f"WebDAV + Storage evidence field is missing: {field}")
+    if not (ROOT / "tools" / "lucky_webdav_probe.py").is_file():
+        fail("WebDAV runtime probe tool is missing")
+
+    rclone_evidence = model_evidence.get("rclone_local_sync_behavior")
+    if not isinstance(rclone_evidence, dict):
+        fail("Rclone local sync behavior evidence is missing")
+    if rclone_evidence.get("confidence") != "runtime-verified":
+        fail("Rclone local sync behavior evidence must remain runtime-verified")
+    rclone_model = rclone_evidence.get("model")
+    if not isinstance(rclone_model, dict) or set(rclone_model) != {
+        "task_model",
+        "real_sync",
+        "dry_run",
+        "state",
+        "scope",
+    }:
+        fail("Rclone local sync behavior model regressed")
+    rclone_observations = rclone_evidence.get("observations")
+    if not isinstance(rclone_observations, dict) or set(rclone_observations) != {
+        "real_run",
+        "dry_run",
+        "detail_vs_list",
+        "cleanup",
+    }:
+        fail("Rclone local sync runtime observations regressed")
+    for field in ("verification", "security"):
+        value = rclone_evidence.get(field)
+        if not isinstance(value, str) or not value.strip():
+            fail(f"Rclone local sync evidence field is missing: {field}")
+    if not (ROOT / "tools" / "lucky_rclone_sync_probe.py").is_file():
+        fail("Rclone local sync runtime probe tool is missing")
+
     ddns_evidence = model_evidence.get("ddns_cloudflare_behavior")
     if not isinstance(ddns_evidence, dict):
         fail("DDNS Cloudflare behavior evidence is missing")
@@ -1096,20 +1154,30 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         if rclone_sync_props.get(field) != expected:
             fail(f"Rclone safe sync detail field regressed: {field}")
 
-    parser_models = {
+    storage_runtime_models = {
         ("POST", "/api/storagemanagement/list"): storage_item_request,
         ("PUT", "/api/storagemanagement/list"): storage_item_request,
     }
-    for route_key, expected in parser_models.items():
+    storage_success_response = {
+        "type": "object",
+        "properties": {"ret": {"type": "integer"}},
+    }
+    for route_key, expected in storage_runtime_models.items():
         route = merged_by_key[route_key]
         if route.request_body_schema != expected:
-            fail(f"parser-verified resource request schema regressed for {route_key}")
+            fail(f"StorageManagement resource request schema regressed for {route_key}")
         if set(route.body_keys) != set(expected["properties"]):
-            fail(f"parser-verified request schema must cover exactly the frontend body fields for {route_key}")
+            fail(f"StorageManagement request schema must cover exactly the frontend body fields for {route_key}")
         if isinstance(route.request_body_schema, dict) and "required" in route.request_body_schema:
-            fail(f"parser-verified request schema must not invent required fields for {route_key}")
-        if route.response_schema is not None:
-            fail(f"parser-only evidence must not claim a success response for {route_key}")
+            fail(f"StorageManagement request schema must not invent required fields for {route_key}")
+        if route.response_schema != storage_success_response:
+            fail(f"StorageManagement runtime success response regressed for {route_key}")
+    for route_key in {
+        ("GET", "/api/storagemanagement/enable"),
+        ("DELETE", "/api/storagemanagement/list"),
+    }:
+        if merged_by_key[route_key].response_schema != storage_success_response:
+            fail(f"StorageManagement runtime mutation response regressed for {route_key}")
 
     cron_item_request = {
         "type": "object",

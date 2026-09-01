@@ -25,7 +25,9 @@
 | SSL 证书映射 | 已验证 `MappingToPath` / `MappingPath` / `MappingChangeScript`，并确认映射文件随证书对象生成 |
 | SSL / ACME | 已验证 TEST 证书真实签发、CRUD/启停、MappingToPath、flush/manualsync 路径；sync-client 实际传输被当前实例 `u=0` 授权等级阻断 |
 | WebTerminal | 已验证 local WebSocket session、detach/attach、localhost SSH host-key 信任及 SFTP 核心文件/归档操作；两个 upload handler 已复现运行时失败 |
-| StorageManagement | 已验证 local storage GET/POST/PUT/DELETE、启停与 litelist 联动；创建会强制变为 enabled，SystemMount 尚未实践 |
+| StorageManagement | 已验证 local storage POST/PUT/DELETE、启停与 litelist 联动；创建会强制变为 enabled，Writable 已通过 WebDAV consumer 做真实读写验证，SystemMount 尚未实践 |
+| WebDAV | 已验证 127.0.0.1 临时服务、TEST 用户、OPTIONS/PROPFIND、store mount 可写/只读权限、日志与完整配置恢复 |
+| Rclone | 已验证 local → local sync 实际运行与 DryRun 对照，task detail / State / logs / 清理闭环 |
 | `UNKNOWN` 路由 | 当前默认合并目录为 0 |
 | OpenToken 鉴权 | 安全入口 + `openToken` 请求头 |
 | 状态接口限流 | 当前实例约 20 请求/秒 |
@@ -53,7 +55,7 @@ Lucky Skills 使用两层证据：
 - 显式 response schema 已覆盖 **324 条**路由；
 - response 侧未定型 `{}` 叶子已降到 **0**；request 侧仍有 **38** 个。
 
-目前重点覆盖 DDNS、WebService、Docker、FRP、SSL/ACME、Security Groups、IPFilter/PortTrap、PortForward、STUN、WebTerminal、StorageManagement，以及部分 Rclone、Cron、WOL、FileBrowser、Status、IPDB、Modules 等接口。DDNS 的 Cloudflare 核心链路已提升到 `behavior-runtime`：独立 TEST 任务完成 CRUD、URL 取 IPv4、真实 DNS A 更新、manualSync、Webhook test 与双边清理；provider 密钥和真实业务记录未写入证据。IPDB 也已完成隔离 MMDB 的上传、item CRUD、启停、IPv4/IPv6 查询、下载哈希校验、数据库文件切换和清理闭环；其中 `GET /api/ipdb/item/{key}/{bool}` 已确认具有写副作用。WebTerminal 已完成真实 ticketed WebSocket、raw shell I/O、resize、session detach/attach、localhost SSH host-key 信任与 SFTP mkdir/touch/write/read/rename/copy/chmod/remove、tar.gz compress/preview/decompress；multipart upload 在匹配当前前端 FormData 形状后仍返回 `SSH_FX_FAILURE`，streaming upload 则稳定复现 `closed pipe` / `BrokenPipe`，两项按 Lucky 3.0.0 运行时缺陷记录。StorageManagement 的 local item 也完成独立 TEST 生命周期：创建、PUT、启停、litelist 联动、日志读取与删除均已执行，并确认创建时 `Enable=false` 会被规范化为 enabled；SystemMount 与真实 consumer 读写权限仍保持未验证。
+目前重点覆盖 DDNS、WebService、Docker、FRP、SSL/ACME、Security Groups、IPFilter/PortTrap、PortForward、STUN、WebTerminal、StorageManagement、WebDAV、Rclone，以及部分 Cron、WOL、FileBrowser、Status、IPDB、Modules 等接口。DDNS 的 Cloudflare 核心链路已提升到 `behavior-runtime`：独立 TEST 任务完成 CRUD、URL 取 IPv4、真实 DNS A 更新、manualSync、Webhook test 与双边清理；provider 密钥和真实业务记录未写入证据。IPDB 也已完成隔离 MMDB 的上传、item CRUD、启停、IPv4/IPv6 查询、下载哈希校验、数据库文件切换和清理闭环；其中 `GET /api/ipdb/item/{key}/{bool}` 已确认具有写副作用。WebTerminal 已完成真实 ticketed WebSocket、raw shell I/O、resize、session detach/attach、localhost SSH host-key 信任与 SFTP mkdir/touch/write/read/rename/copy/chmod/remove、tar.gz compress/preview/decompress；multipart upload 在匹配当前前端 FormData 形状后仍返回 `SSH_FX_FAILURE`，streaming upload 则稳定复现 `closed pipe` / `BrokenPipe`，两项按 Lucky 3.0.0 运行时缺陷记录。StorageManagement 的 local item 已完成创建、PUT、启停、litelist 联动、日志读取与删除，并确认创建时 `Enable=false` 会被规范化为 enabled；其 `Writable` 现已通过 loopback WebDAV 的真实 PUT/GET/DELETE 与只读写拒绝验证。Rclone 也已完成 local → local sync 的真实运行与 DryRun 对照。`SystemMount`、FTP 公网监听场景以及其他文件服务仍保持未验证/隔离待办。
 
 ## 已知限制
 
@@ -64,6 +66,7 @@ Lucky Skills 使用两层证据：
 - 不同模块、镜像和 Lucky 后续版本可能改变接口集合和行为。
 - WebSocket 已在 NAT Detect 与 WebTerminal 上完成真实会话验证，但并非所有 WebSocket 路由都已恢复消息协议；当前 stdlib helper 已支持 HTTP 101 后同一 TCP read 内紧跟首个 WebSocket frame 的合法情况。
 - SSL sync-client 的配置、选择模型和授权拒绝已实测；当前实例 `/api/info` 为 `u=0`，`manualsync` 在真正 linuxssh 文件传输前返回 `PermissionDeniedCannotUseSyncFunction`，因此不能宣称 sync-client E2E 文件传输已完成。
+- FTP 当前配置没有 loopback `ListenIP` 字段，行为测试不会为了覆盖率在生产宿主临时开放控制/PASV 监听；应在隔离 network namespace 或专用测试环境继续。
 
 因此，接口目录是**经过验证的操作依据**，不是上游兼容性承诺。
 
