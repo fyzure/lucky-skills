@@ -246,7 +246,11 @@ def frontend_mount_snippets(base_url: str) -> dict[str, str]:
 
     snippets: dict[str, str] = {}
     origin = urllib.parse.urlsplit(base_url)
-    queue = ["/"]
+    # The static endpoint inventory records the 3.0.0 chunk basename.  The
+    # live admin UI serves chunks below /static/js/, so probe it first and
+    # retain the crawl fallback in case a future pinned artifact changes the
+    # chunk hash.
+    queue = ["/static/js/lucky_rclone-sFF3mpk8.js", "/"]
     seen: set[str] = set()
     fetched = 0
     max_bytes = 24 * 1024 * 1024
@@ -282,6 +286,9 @@ def frontend_mount_snippets(base_url: str) -> dict[str, str]:
             re.findall(r"(?:src=|href=)?[\"']([^\"']+\.js(?:\?[^\"']*)?)[\"']", text)
         )
         candidates.update(re.findall(r"(?:\.\/)?(assets/[A-Za-z0-9_./-]+\.js)", text))
+        candidates.update(
+            re.findall(r"(?:/)?(static/js/lucky_rclone-[A-Za-z0-9_.-]+\.js)", text)
+        )
         for candidate in candidates:
             resolved = urllib.parse.urljoin(base_url + path, candidate)
             parsed = urllib.parse.urlsplit(resolved)
@@ -289,7 +296,10 @@ def frontend_mount_snippets(base_url: str) -> dict[str, str]:
                 continue
             candidate_path = parsed.path
             if candidate_path.endswith(".js") and candidate_path not in seen:
-                queue.append(candidate_path)
+                if "lucky_rclone-" in candidate_path:
+                    queue.insert(0, candidate_path)
+                else:
+                    queue.append(candidate_path)
     if not snippets:
         snippets["crawl"] = f"no mount markers found; files={len(seen)} bytes={fetched}"
     return snippets
