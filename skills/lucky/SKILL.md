@@ -137,6 +137,12 @@ Use `tools/lucky_docker_compose_probe.py` for bounded Compose lifecycle verifica
 
 Do not treat synchronous `/api/docker/compose/up` as an idempotent re-up operation: runtime verification shows that an already existing project name returns a project-name-already-exists business error. Also distinguish Docker task cancellation from completed-history cleanup. `DELETE /api/docker/tasks/{id}` cancels an active task and cannot remove a completed task. The global `DELETE /api/docker/tasks` may clear completed history only when the pre-probe task baseline is empty and the current task-ID set exactly equals the IDs issued to the probe. Otherwise refuse the clear and preserve operator tasks.
 
+## Docker image import/load behavior
+
+Use `tools/lucky_docker_image_import_probe.py` for image import/load verification without pulling or building anything. It creates only a tiny raw rootfs tar inside a unique Lucky-visible `/tmp/TEST-*` directory, imports exactly one disposable image, applies a unique TEST tag, exports that owned image through `save.withoutcompression`, deletes it, then loads the saved Docker tar and requires the same image identity/tag to return. Cleanup must restore both the image inventory and helper Cron/path baselines; never retag or delete a pre-existing business image.
+
+The current Lucky 3.0.0 image-import UI first multipart-POSTs one `file` to `/api/docker/images/upload-temp`, then POSTs `{path,cleanup:true}` to `/api/docker/images/load`. Runtime verification reached `upload-temp`, but this instance returns `Temp operation path not configured`; do not change global Docker `temp_operation_path` solely for coverage. The probe therefore records that precondition and uses its already-owned Lucky `/tmp` tar to verify `load`. Do not run local Docker image build/build-from-zip/build-from-git against the production daemon for coverage; use temporary Lucky + mock Docker or GitHub Actions isolation instead.
+
 ## Cron shell behavior
 
 `tools/lucky_cron_probe.py` verifies Cron execution without touching business tasks or external services. It requires clean TEST-prefixed ownership, creates one disposable group plus two TEST tasks, and writes only inside one Lucky-visible `/tmp/TEST-*` directory. The verified shell subtask shape is `{Type:"shell_option", Options:{shell_content:<script>}, Remark:<label>}`. `Type=8` is used for manual-only tasks, while `Type=4` with a numeric-seconds string in `TypeParams` is the current every-N-seconds schedule model.

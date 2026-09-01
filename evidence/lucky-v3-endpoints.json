@@ -131,7 +131,7 @@
     "lucky_vendor-vue-i18n-BYt2dUW3.js": "a4e60ccbbd337f24bb53c098e33b4ca5b9aef4a63ddbc3be20f5e8e98ae1ed87",
     "lucky_vendor-vue-routing-hFdS9_mM.js": "22985c98e6c97e73dabcce034d56251feec69d4207f6b89205e01e2f5189cd9f"
   },
-  "route_count": 623,
+  "route_count": 624,
   "routes": [
     {
       "path": "/api/2fa/setting",
@@ -1444,9 +1444,11 @@
       "has_body": true,
       "response_type": "json",
       "evidence": [
-        "lucky_docker-BCN-OILs.js"
+        "lucky_docker-BCN-OILs.js",
+        "lucky_panel-0-0tkrNm.js"
       ],
-      "confidence": "frontend-call"
+      "confidence": "frontend-call",
+      "request_content_type": "multipart/form-data"
     },
     {
       "path": "/api/docker/compose/start",
@@ -1638,9 +1640,11 @@
       "has_body": true,
       "response_type": "json",
       "evidence": [
-        "lucky_docker-BCN-OILs.js"
+        "lucky_docker-BCN-OILs.js",
+        "lucky_panel-0-0tkrNm.js"
       ],
-      "confidence": "frontend-call"
+      "confidence": "frontend-call",
+      "request_content_type": "multipart/form-data"
     },
     {
       "path": "/api/docker/compose/{param}/logs",
@@ -2608,7 +2612,8 @@
       "has_body": true,
       "response_type": "json",
       "evidence": [
-        "lucky_docker-BCN-OILs.js"
+        "lucky_docker-BCN-OILs.js",
+        "lucky_panel-0-0tkrNm.js"
       ],
       "confidence": "frontend-call"
     },
@@ -2861,6 +2866,20 @@
         "lucky_docker-BCN-OILs.js"
       ],
       "confidence": "frontend-call"
+    },
+    {
+      "path": "/api/docker/images/upload-temp",
+      "method": "POST",
+      "module": "docker",
+      "query_keys": [],
+      "body_keys": [],
+      "has_body": true,
+      "response_type": "json",
+      "evidence": [
+        "lucky_panel-0-0tkrNm.js"
+      ],
+      "confidence": "frontend-call",
+      "request_content_type": "multipart/form-data"
     },
     {
       "path": "/api/docker/images/{param}",
@@ -3386,9 +3405,11 @@
       "has_body": true,
       "response_type": "json",
       "evidence": [
-        "lucky_docker-BCN-OILs.js"
+        "lucky_docker-BCN-OILs.js",
+        "lucky_panel-0-0tkrNm.js"
       ],
-      "confidence": "frontend-call"
+      "confidence": "frontend-call",
+      "request_content_type": "multipart/form-data"
     },
     {
       "path": "/api/frontend-preferences",

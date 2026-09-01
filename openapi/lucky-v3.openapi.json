@@ -7785,7 +7785,8 @@
         },
         "x-evidence-confidence": "frontend-call",
         "x-evidence-bundles": [
-          "lucky_docker-BCN-OILs.js"
+          "lucky_docker-BCN-OILs.js",
+          "lucky_panel-0-0tkrNm.js"
         ],
         "x-lucky-risk": "dangerous",
         "x-schema-evidence": "frontend restore dialog builds FormData with file,target_path,project_name,auto_start and optional config_file_name; restore handler was not executed",
@@ -8709,7 +8710,8 @@
         },
         "x-evidence-confidence": "frontend-call",
         "x-evidence-bundles": [
-          "lucky_docker-BCN-OILs.js"
+          "lucky_docker-BCN-OILs.js",
+          "lucky_panel-0-0tkrNm.js"
         ],
         "x-lucky-risk": "dangerous",
         "x-schema-evidence": "frontend Compose backup upload FormData contains only file; upload handler was not executed",
@@ -14247,11 +14249,16 @@
         ],
         "responses": {
           "200": {
-            "description": "Lucky JSON response; envelope shape varies by endpoint.",
+            "description": "Response schema observed from runtime evidence; see x-schema-evidence for provenance.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LuckyEnvelope"
+                  "type": "object",
+                  "properties": {
+                    "ret": {
+                      "type": "integer"
+                    }
+                  }
                 }
               }
             }
@@ -14267,12 +14274,12 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_docker-BCN-OILs.js"
         ],
         "x-lucky-risk": "dangerous",
-        "x-schema-evidence": "authorized validation probe: {} and repository/tag-only bodies were rejected; source alone passed request validation and the backend attempted to open that path. path and file_path aliases were rejected",
+        "x-schema-evidence": "earlier validation probes established source as the required string path; a later bounded runtime probe passed a unique Lucky-visible one-file rootfs tar, created exactly one new disposable image and observed successful ret semantics",
         "requestBody": {
           "required": true,
           "content": {
@@ -14308,11 +14315,16 @@
         ],
         "responses": {
           "200": {
-            "description": "Lucky JSON response; envelope shape varies by endpoint.",
+            "description": "Response schema observed from runtime evidence; see x-schema-evidence for provenance.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LuckyEnvelope"
+                  "type": "object",
+                  "properties": {
+                    "ret": {
+                      "type": "integer"
+                    }
+                  }
                 }
               }
             }
@@ -14328,12 +14340,13 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
-          "lucky_docker-BCN-OILs.js"
+          "lucky_docker-BCN-OILs.js",
+          "lucky_panel-0-0tkrNm.js"
         ],
         "x-lucky-risk": "mutating",
-        "x-schema-evidence": "current frontend uploads image to a temporary path, then POSTs JSON {path,cleanup:true} to images/load, establishing string path and boolean cleanup; wrapper also accepts FormData for backward compatibility and the load handler was not executed",
+        "x-schema-evidence": "current frontend uploads image to a temporary path, then POSTs JSON {path,cleanup:true} to images/load, establishing string path and boolean cleanup; a bounded disposable-image probe also executed the handler against an owned Lucky-visible Docker tar and observed successful ret semantics",
         "requestBody": {
           "required": true,
           "content": {
@@ -14823,9 +14836,9 @@
         ],
         "responses": {
           "200": {
-            "description": "Binary download inferred from the frontend responseType.",
+            "description": "Binary response with runtime-verified media type.",
             "content": {
-              "application/octet-stream": {
+              "application/x-tar": {
                 "schema": {
                   "type": "string",
                   "format": "binary"
@@ -15336,11 +15349,11 @@
         "x-schema-evidence": "authorized GET /api/docker/images/upgrade-status returned an empty dynamic data object; per-image value schema remains unspecified"
       }
     },
-    "/api/docker/images/{param}": {
-      "delete": {
-        "summary": "Lucky frontend call: DELETE /api/docker/images/{param}",
+    "/api/docker/images/upload-temp": {
+      "post": {
+        "summary": "Lucky frontend call: POST /api/docker/images/upload-temp",
         "description": "Reverse-documented from frontend and optional runtime evidence; schemas may still be incomplete.",
-        "operationId": "delete_api_docker_images_param",
+        "operationId": "post_api_docker_images_upload_temp",
         "tags": [
           "docker"
         ],
@@ -15371,7 +15384,71 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
+        "x-evidence-bundles": [
+          "lucky_panel-0-0tkrNm.js"
+        ],
+        "x-lucky-risk": "mutating",
+        "x-schema-evidence": "current Lucky 3.0.0 image-import UI builds FormData with one file field and posts it directly to upload-temp; a bounded multipart request using the owned TEST Docker tar reached the real handler",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/docker/images/{param}": {
+      "delete": {
+        "summary": "Lucky frontend call: DELETE /api/docker/images/{param}",
+        "description": "Reverse-documented from frontend and optional runtime evidence; schemas may still be incomplete.",
+        "operationId": "delete_api_docker_images_param",
+        "tags": [
+          "docker"
+        ],
+        "security": [
+          {
+            "OpenToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Response schema observed from runtime evidence; see x-schema-evidence for provenance.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ret": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "HTTP error or a Lucky business error (which may also use HTTP 200).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LuckyEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_docker-BCN-OILs.js"
         ],
@@ -15704,11 +15781,16 @@
         ],
         "responses": {
           "200": {
-            "description": "Lucky JSON response; envelope shape varies by endpoint.",
+            "description": "Response schema observed from runtime evidence; see x-schema-evidence for provenance.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LuckyEnvelope"
+                  "type": "object",
+                  "properties": {
+                    "ret": {
+                      "type": "integer"
+                    }
+                  }
                 }
               }
             }
@@ -15724,12 +15806,12 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_docker-BCN-OILs.js"
         ],
         "x-lucky-risk": "mutating",
-        "x-schema-evidence": "frontend image-tag request carries repository/tag text values; runtime-verified RepoTags and pull tag metadata are strings and no tag mutation was executed",
+        "x-schema-evidence": "frontend image-tag request carries repository/tag text values; a bounded disposable-image probe applied a unique TEST repository/tag to only the newly imported TEST image and observed the ret-only success envelope",
         "parameters": [
           {
             "name": "param",
@@ -18102,7 +18184,8 @@
         },
         "x-evidence-confidence": "frontend-call",
         "x-evidence-bundles": [
-          "lucky_docker-BCN-OILs.js"
+          "lucky_docker-BCN-OILs.js",
+          "lucky_panel-0-0tkrNm.js"
         ],
         "x-lucky-risk": "dangerous",
         "x-schema-evidence": "frontend volume backup upload FormData contains only file; handler was not executed",

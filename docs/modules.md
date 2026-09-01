@@ -95,6 +95,8 @@ Docker Compose 的核心生命周期已通过 `tools/lucky_docker_compose_probe.
 
 Docker async task 的清理语义需要特别区分：`DELETE /api/docker/tasks/{id}` 是 active-task cancel，completed task 会被拒绝；completed history 由 `DELETE /api/docker/tasks` 清理。因此 runtime probe 只有在 task baseline 原本为 0、且当前 task ID 集合与本次 probe 获得的 ID **完全相等**时才允许全局 clear。probe 结束后 project/container/task/image/network/volume identity 基线全部恢复，两个 TEST path 均删除。生产环境仍禁止为了覆盖率执行真实 Docker prune。
 
+Docker image 的 import/save/load 也已通过 `tools/lucky_docker_image_import_probe.py` 完成隔离验证，且没有执行 pull 或 build。probe 先用 owned Cron task 在 Lucky 自己的 `/tmp/TEST-*` 生成只含一个文本文件的 raw rootfs tar，`POST /api/docker/images/import` 实际只创建一个 disposable image；随后为它添加唯一 TEST tag，`save.withoutcompression` 返回真实 `application/x-tar`，删除 image 后再通过 `/api/docker/images/load` 恢复相同 image identity 与 TEST tag。当前 UI 的导入流程还会先 multipart POST `/api/docker/images/upload-temp`，再把返回 path 交给 load；这条 direct Axios route 已纳入静态 extractor。当前实例对真实 multipart 请求返回 `Temp operation path not configured`，与 UI 自身的 preflight 检查一致，因此没有为了覆盖率修改全局 Docker `temp_operation_path`。本地 context build、ZIP/Git build 仍不得在 RS 生产 Docker daemon 上执行，应放到 temporary Lucky + mock Docker 或 GitHub Actions 隔离环境。
+
 ## Web 终端
 
 `webterminal` 提供本地 Shell、SSH/Telnet 连接、会话、SFTP、分屏与快捷指令。连接和附加接口使用 WebSocket。该模块可执行命令与传输文件，是最高风险区域之一。

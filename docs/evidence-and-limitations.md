@@ -30,6 +30,7 @@
 | Rclone | 已验证 local → local sync 实际运行与 DryRun 对照，task detail / State / logs / 清理闭环 |
 | Cron | 已验证 `shell_option`、整任务手动 trigger、单 job trigger、每 2 秒真实调度、失败日志与 task/group/path 清理闭环 |
 | Docker Compose | 已验证 isolated fresh sync up/down、current-UI async up/stop/down task、ps/config/logs、start/restart、task-history ownership gate 与六类资源基线恢复 |
+| Docker image import/load | 已验证极小 rootfs tar import、TEST tag、`application/x-tar` save、删除后 load 恢复同一 image identity；`upload-temp` handler 已实测但被未配置 `temp_operation_path` 的实例前置条件阻断 |
 | `UNKNOWN` 路由 | 当前默认合并目录为 0 |
 | OpenToken 鉴权 | 安全入口 + `openToken` 请求头 |
 | 状态接口限流 | 当前实例约 20 请求/秒 |
@@ -51,13 +52,13 @@ Lucky Skills 使用两层证据：
 
 ## 当前覆盖情况
 
-- merged catalog 中共有 **242 条 POST / PUT / PATCH**；
-- **218 条**带请求体并生成 OpenAPI `requestBody`；
-- 这 218 条中仅剩 **1 条**仍含未类型化顶层属性；
-- 显式 response schema 已覆盖 **338 条**路由；
+- merged catalog 中共有 **243 条 POST / PUT / PATCH**；
+- **219 条**带请求体并生成 OpenAPI `requestBody`；
+- 这 219 条中仅剩 **1 条**仍含未类型化顶层属性；
+- 显式 response schema 已覆盖 **342 条**路由；
 - response 侧未定型 `{}` 叶子已降到 **0**；request 侧仍有 **38** 个。
 
-目前重点覆盖 DDNS、WebService、Docker、FRP、SSL/ACME、Security Groups、IPFilter/PortTrap、PortForward、STUN、WebTerminal、StorageManagement、WebDAV、Rclone、Cron，以及部分 WOL、FileBrowser、Status、IPDB、Modules 等接口。DDNS 的 Cloudflare 核心链路已提升到 `behavior-runtime`：独立 TEST 任务完成 CRUD、URL 取 IPv4、真实 DNS A 更新、manualSync、Webhook test 与双边清理；provider 密钥和真实业务记录未写入证据。IPDB 也已完成隔离 MMDB 的上传、item CRUD、启停、IPv4/IPv6 查询、下载哈希校验、数据库文件切换和清理闭环；其中 `GET /api/ipdb/item/{key}/{bool}` 已确认具有写副作用。WebTerminal 已完成真实 ticketed WebSocket、raw shell I/O、resize、session detach/attach、localhost SSH host-key 信任与 SFTP mkdir/touch/write/read/rename/copy/chmod/remove、tar.gz compress/preview/decompress；multipart upload 在匹配当前前端 FormData 形状后仍返回 `SSH_FX_FAILURE`，streaming upload 则稳定复现 `closed pipe` / `BrokenPipe`，两项按 Lucky 3.0.0 运行时缺陷记录。StorageManagement 的 local item 已完成创建、PUT、启停、litelist 联动、日志读取与删除，并确认创建时 `Enable=false` 会被规范化为 enabled；其 `Writable` 现已通过 loopback WebDAV 的真实 PUT/GET/DELETE 与只读写拒绝验证。Rclone 已完成 local → local sync 的真实运行与 DryRun 对照；Cron 也已完成 shell job 的整任务手动触发、单 job 触发、每 2 秒真实调度与失败日志闭环。Docker Compose 现已完成 fresh synchronous up/down 与 current-UI async up/stop/down task 生命周期，并验证 ps/config/logs、start/restart、`network_mode=none`、零端口/零 volume、completed-task 清理语义及 project/container/task/image/network/volume 六类 identity baseline 恢复；真实 Docker prune 仍保持禁止。`SystemMount`、FTP 公网监听场景以及其他文件服务仍保持未验证/隔离待办。
+目前重点覆盖 DDNS、WebService、Docker、FRP、SSL/ACME、Security Groups、IPFilter/PortTrap、PortForward、STUN、WebTerminal、StorageManagement、WebDAV、Rclone、Cron，以及部分 WOL、FileBrowser、Status、IPDB、Modules 等接口。DDNS 的 Cloudflare 核心链路已提升到 `behavior-runtime`：独立 TEST 任务完成 CRUD、URL 取 IPv4、真实 DNS A 更新、manualSync、Webhook test 与双边清理；provider 密钥和真实业务记录未写入证据。IPDB 也已完成隔离 MMDB 的上传、item CRUD、启停、IPv4/IPv6 查询、下载哈希校验、数据库文件切换和清理闭环；其中 `GET /api/ipdb/item/{key}/{bool}` 已确认具有写副作用。WebTerminal 已完成真实 ticketed WebSocket、raw shell I/O、resize、session detach/attach、localhost SSH host-key 信任与 SFTP mkdir/touch/write/read/rename/copy/chmod/remove、tar.gz compress/preview/decompress；multipart upload 在匹配当前前端 FormData 形状后仍返回 `SSH_FX_FAILURE`，streaming upload 则稳定复现 `closed pipe` / `BrokenPipe`，两项按 Lucky 3.0.0 运行时缺陷记录。StorageManagement 的 local item 已完成创建、PUT、启停、litelist 联动、日志读取与删除，并确认创建时 `Enable=false` 会被规范化为 enabled；其 `Writable` 现已通过 loopback WebDAV 的真实 PUT/GET/DELETE 与只读写拒绝验证。Rclone 已完成 local → local sync 的真实运行与 DryRun 对照；Cron 也已完成 shell job 的整任务手动触发、单 job 触发、每 2 秒真实调度与失败日志闭环。Docker Compose 现已完成 fresh synchronous up/down 与 current-UI async up/stop/down task 生命周期，并验证 ps/config/logs、start/restart、`network_mode=none`、零端口/零 volume、completed-task 清理语义及 project/container/task/image/network/volume 六类 identity baseline 恢复。Docker image 也完成独立 TEST rootfs tar 的 import → tag → save → delete → load 闭环，并确认 load 恢复同一 image identity；当前 UI 的 multipart `upload-temp` handler 已真实命中，但实例未配置 `temp_operation_path`，所以只记录该前置条件而不修改全局 Docker 设置。真实 Docker prune 与生产 daemon 上的 image build 仍保持禁止。`SystemMount`、FTP 公网监听场景以及其他文件服务仍保持未验证/隔离待办。
 
 ## 已知限制
 

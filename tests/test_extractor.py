@@ -19,6 +19,12 @@ class ExtractorTests(unittest.TestCase):
         self.assertEqual(containers["query_keys"], ["all", "includeStats"])
         update = routes[("/api/ddns/task/{key}", "PUT")]
         self.assertTrue(update["has_body"])
+        upload = routes[("/api/docker/images/upload-temp", "POST")]
+        self.assertTrue(upload["has_body"])
+        self.assertEqual(upload["request_content_type"], "multipart/form-data")
+        direct_delete = routes[("/api/docker/images/{param}", "DELETE")]
+        self.assertNotIn("request_content_type", direct_delete)
+        self.assertIn(("/api/docker/compose/{param}/backups/upload", "POST"), routes)
         self.assertIn(("/api/ddns/task", "UNKNOWN"), routes)
         self.assertIn(("/api/status/ws", "UNKNOWN"), routes)
         self.assertEqual(snapshot["bundle_count"], 1)

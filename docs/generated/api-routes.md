@@ -4,7 +4,7 @@ pageClass: api-routes-page
 
 # API 路由参考
 
-> 目标版本：Lucky 3.0.0。共收录 598 个“路径 + 方法”记录。
+> 目标版本：Lucky 3.0.0。共收录 599 个“路径 + 方法”记录。
 > 此表由前端构建产物静态证据与可选的版本绑定运行时验证合并生成，不代表上游承诺的稳定公共 API；`UNKNOWN` 表示仍只有路径字面量证据。
 
 ## `2fa`
@@ -231,8 +231,8 @@ pageClass: api-routes-page
 | `POST` | `/api/docker/images/build-from-git` | `mutating` | — | `git_url` | `json` | `frontend-call` |
 | `POST` | `/api/docker/images/build-from-zip` | `mutating` | — | `zip_path` | `json` | `frontend-call` |
 | `GET` | `/api/docker/images/containers` | `read-only` | `image_ref` | — | `json` | `frontend-call` |
-| `POST` | `/api/docker/images/import` | `dangerous` | — | `source` | `json` | `frontend-call` |
-| `POST` | `/api/docker/images/load` | `mutating` | — | `path`, `cleanup` | `json` | `frontend-call` |
+| `POST` | `/api/docker/images/import` | `dangerous` | — | `source` | `json` | `runtime-verified` |
+| `POST` | `/api/docker/images/load` | `mutating` | — | `path`, `cleanup` | `json` | `runtime-verified` |
 | `POST` | `/api/docker/images/pull` | `mutating` | — | `image`, `tag` | `json` | `frontend-call` |
 | `POST` | `/api/docker/images/pull-async` | `mutating` | — | `architecture`, `image`, `tag` | `json` | `frontend-call` |
 | `POST` | `/api/docker/images/pull-with-backup` | `mutating` | — | `architecture`, `backup_tag`, `image_ref` | `json` | `frontend-call` |
@@ -249,11 +249,12 @@ pageClass: api-routes-page
 | `POST` | `/api/docker/images/upgrade-dismiss` | `mutating` | — | `image_id`, `image_ref` | `json` | `frontend-call` |
 | `DELETE` | `/api/docker/images/upgrade-status` | `mutating` | — | — | `json` | `frontend-call` |
 | `GET` | `/api/docker/images/upgrade-status` | `read-only` | — | — | `json` | `frontend-call` |
-| `DELETE` | `/api/docker/images/{param}` | `mutating` | `force`, `noprune` | — | `json` | `frontend-call` |
+| `POST` | `/api/docker/images/upload-temp` | `mutating` | — | `file` | `json` | `runtime-verified` |
+| `DELETE` | `/api/docker/images/{param}` | `mutating` | `force`, `noprune` | — | `json` | `runtime-verified` |
 | `GET` | `/api/docker/images/{param}` | `read-only` | — | — | `json` | `frontend-call` |
 | `GET` | `/api/docker/images/{param}/filesystem` | `read-only` | `path` | — | `json` | `frontend-call` |
 | `GET` | `/api/docker/images/{param}/history` | `read-only` | — | — | `json` | `frontend-call` |
-| `POST` | `/api/docker/images/{param}/tag` | `mutating` | — | `repository`, `tag` | `json` | `frontend-call` |
+| `POST` | `/api/docker/images/{param}/tag` | `mutating` | — | `repository`, `tag` | `json` | `runtime-verified` |
 | `GET` | `/api/docker/images/{param}/tags` | `read-only` | — | — | `json` | `frontend-call` |
 | `GET` | `/api/docker/info` | `read-only` | — | — | `json` | `frontend-call` |
 | `GET` | `/api/docker/labels` | `read-only` | — | — | `json` | `frontend-call` |

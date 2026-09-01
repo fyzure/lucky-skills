@@ -293,11 +293,14 @@ WebDAV 已完成 localhost 完整闭环；FTP 当前配置没有 `ListenIP`，�
 
 ### Image load/import/build
 
-- [ ] 使用隔离、极小 tar 镜像验证 image load
-- [ ] 验证 import
-- [ ] 验证本地 context build
-- [ ] ZIP/Git build 只在完全隔离上下文验证
-- [ ] 删除所有 TEST image/tag
+- [x] 使用隔离、极小 tar 镜像验证 image load；删除后重新 load 恢复同一 image identity + TEST tag
+- [x] 验证 import：Lucky-visible 单文件 rootfs tar 只创建 1 个 disposable image
+- [x] 验证 tag + `save.withoutcompression`：TEST image 导出为真实 `application/x-tar`
+- [x] 恢复 current-UI `upload-temp -> load(cleanup=true)` 协议；真实 multipart handler 命中，但当前实例因未配置 `temp_operation_path` 被业务层阻断，不修改全局 Docker 设置绕过
+- [ ] 验证本地 context build：**禁止在 RS 生产 Docker daemon 上为了覆盖率构建**，改用 temporary Lucky + mock Docker 或 GitHub Actions 隔离环境
+- [ ] ZIP/Git build 只在 temporary Lucky / mock Docker / GitHub Actions 完全隔离上下文验证
+- [x] 删除所有 TEST image/tag，并恢复 image + helper Cron/path 基线
+- [x] 固化 probe / evidence：`tools/lucky_docker_image_import_probe.py` / `docker_image_import_load_behavior`
 
 ### Prune
 

@@ -5,7 +5,7 @@
     "product": "Lucky",
     "version": "3.0.0"
   },
-  "static_snapshot_sha256": "befce5dbe8a877651db34359a987c043b7be8bb5311110d4cabc62a00bb53f78",
+  "static_snapshot_sha256": "015fda0d7286b1312a771b44127a4bc194cf2da2a57b0a2b1b4236ec5a85ae18",
   "methodology": "Authorized runtime route and schema verification. HTTP method existence was primarily proven with unauthenticated GET/POST/PUT/DELETE/PATCH requests that stop at Lucky authentication; method discovery does not execute protected mutating handlers. Selected GET routes were additionally verified with the repository OpenToken client. Request schemas were recovered from frontend pass-through/object literals and, where applicable, cross-checked against authorized read-only GET shapes. For nested-schema enrichment, current Lucky 3.0.0 frontend bundles were inspected only in memory and authorized GET responses were reduced to field names/JSON types; live domains, identifiers, paths, addresses and secret values were not persisted. Where frontend/read-only evidence was insufficient and the instance owner explicitly authorized it, selected routes used bounded API write probes against newly created disposable resources, followed by immediate cleanup and baseline verification; each such route records its exact boundary in schema_evidence. Dangerous/global operations were not exercised against existing business resources. For the six Docker legacy wrappers that lacked current UI call sites, upgrade/build used dedicated disposable BusyBox resources, Git/ZIP/import used validation-failure paths, and prune was exercised only by a temporary Lucky instance connected to a non-destructive mock Docker API. No real Docker prune handler reached the production Docker daemon.",
   "suppress_literals": [
     "/api/cloudflared",
@@ -288,6 +288,25 @@
         "cleanup": "No TEST project/container/path remained; completed probe task history was cleared only after the exact-ID ownership gate passed, and all six Docker resource identity baselines were restored"
       },
       "security": "The probe refuses to run with a non-empty Docker task baseline or any pre-existing TEST-prefixed Compose resource. It uses only unique /tmp paths, a pre-existing image, network_mode=none, no ports, no volumes and no build/pull. It never invokes Docker prune and never clears task history unless the current completed task IDs are exactly the IDs issued to this probe."
+    },
+    "docker_image_import_load_behavior": {
+      "confidence": "runtime-verified",
+      "model": {
+        "import": "POST /api/docker/images/import with {source:<Lucky-visible tar path>} imported a tiny raw root-filesystem tar and created exactly one new disposable image",
+        "tag_and_save": "The imported image accepted a unique TEST repository/tag, and GET /api/docker/images/save.withoutcompression returned a non-empty application/x-tar Docker image archive for that owned tag",
+        "frontend_upload": "The current UI's direct multipart POST /api/docker/images/upload-temp route is now present in the static snapshot. A real multipart request reached its handler, which returned the expected Temp operation path not configured business error on this instance; the global Docker temp_operation_path setting was not changed solely for coverage",
+        "load": "After deleting the TEST image, POST /api/docker/images/load with a Lucky-visible saved Docker tar restored the same image identity and TEST tag",
+        "scope": "The probe performs no image pull/build, creates no container/network/volume, never invokes Docker prune, and requires both Docker image identity/tag state and the helper Cron task/path baselines to be restored"
+      },
+      "verification": "A bounded Lucky 3.0.0 probe created a one-file raw rootfs tar under a unique Lucky-visible /tmp path using an owned manual Cron shell task, imported it through /api/docker/images/import, verified exactly one new image, added a unique TEST tag, exported that image through save.withoutcompression, deleted it, and attempted the current frontend multipart upload-temp flow. upload-temp reached the real handler but was blocked because the instance has no Docker temp_operation_path configured, matching the frontend's own preflight requirement; the probe did not mutate that global setting. The previously exported Docker tar was therefore materialized inside the already-owned TEST path and loaded through /api/docker/images/load, which restored the same image identity and TEST tag. The TEST image/tag, Cron task and path were then removed and their original baselines restored.",
+      "observations": {
+        "import": "Import returned the normal success envelope and exactly one new image appeared",
+        "save": "The owned TEST image export returned HTTP 200 with application/x-tar and a non-empty body",
+        "upload_temp": "A real multipart file request reached upload-temp and returned ret=1 Temp operation path not configured before any successful temporary upload",
+        "load": "Load returned the normal success envelope and restored both the TEST tag and the same image identity observed before deletion",
+        "cleanup": "No TEST image tag, helper Cron task or TEST path remained; Docker image and Cron task baselines were restored"
+      },
+      "security": "All mutable resources use unique TEST prefixes. The raw rootfs contains one harmless text file; the helper Cron task writes only inside its owned /tmp directory except for a cleanup fallback aimed at the exact temporary path returned by this probe's own upload request. No image is pulled or built, no business image is retagged/deleted, no container/network/volume is created, and Docker prune/global Docker settings are never changed."
     }
   },
   "routes": [
@@ -315,8 +334,9 @@
         "imageid"
       ],
       "response_type": "blob",
+      "response_content_type": "application/x-tar",
       "confidence": "runtime-verified",
-      "verification": "Authenticated GET with no imageid returned Missing imageid parameter; no real image export was requested. Current Lucky 3.0.0 frontend obtains a temporary-access URL for this route and then fetches it as an image-export download, inspecting Content-Type/Content-Length/Content-Disposition and streaming the body to a .tar file, confirming binary download semantics."
+      "verification": "A bounded disposable-image probe exported its owned TEST tag through this route and received HTTP 200 application/x-tar with a non-empty Docker image archive. The archive bytes and image identifiers were not persisted in evidence; the TEST image was deleted and the image baseline restored."
     },
     {
       "path": "/api/docker/images/upgrade-check-ws",
@@ -1566,7 +1586,29 @@
       "method": "POST",
       "risk": "mutating",
       "request_body_schema": {"type": "object", "properties": {"repository": {"type": "string"}, "tag": {"type": "string"}}},
-      "schema_evidence": "frontend image-tag request carries repository/tag text values; runtime-verified RepoTags and pull tag metadata are strings and no tag mutation was executed"
+      "response_schema": {"type": "object", "properties": {"ret": {"type": "integer"}}},
+      "schema_evidence": "frontend image-tag request carries repository/tag text values; a bounded disposable-image probe applied a unique TEST repository/tag to only the newly imported TEST image and observed the ret-only success envelope",
+      "confidence": "runtime-verified",
+      "verification": "A unique TEST repository/tag was applied to the disposable imported image, became visible in image-list readback, and was removed with the TEST image during cleanup."
+    },
+    {
+      "path": "/api/docker/images/upload-temp",
+      "method": "POST",
+      "risk": "mutating",
+      "request_content_type": "multipart/form-data",
+      "request_body_schema": {"type": "object", "properties": {"file": {"type": "string", "format": "binary"}}},
+      "schema_evidence": "current Lucky 3.0.0 image-import UI builds FormData with one file field and posts it directly to upload-temp; a bounded multipart request using the owned TEST Docker tar reached the real handler",
+      "confidence": "runtime-verified",
+      "verification": "A real multipart upload using the owned TEST image tar reached the upload-temp handler, which returned ret=1 Temp operation path not configured on this instance. The global Docker temp_operation_path setting was deliberately not changed solely for coverage, so successful temporary-file creation is not claimed."
+    },
+    {
+      "path": "/api/docker/images/{param}",
+      "method": "DELETE",
+      "risk": "mutating",
+      "query_keys": ["force", "noprune"],
+      "response_schema": {"type": "object", "properties": {"ret": {"type": "integer"}}},
+      "confidence": "runtime-verified",
+      "verification": "The disposable-image probe deleted only its uniquely tagged TEST image with force=true,noprune=false, observed a ret-only success response, and verified the tag was absent before testing image load."
     },
     {
       "path": "/api/docker/containers/{param}/copy",
@@ -1796,7 +1838,10 @@
       "risk": "mutating",
       "body_keys": ["path", "cleanup"],
       "request_body_schema": {"type": "object", "properties": {"path": {"type": "string"}, "cleanup": {"type": "boolean"}}},
-      "schema_evidence": "current frontend uploads image to a temporary path, then POSTs JSON {path,cleanup:true} to images/load, establishing string path and boolean cleanup; wrapper also accepts FormData for backward compatibility and the load handler was not executed"
+      "response_schema": {"type": "object", "properties": {"ret": {"type": "integer"}}},
+      "schema_evidence": "current frontend uploads image to a temporary path, then POSTs JSON {path,cleanup:true} to images/load, establishing string path and boolean cleanup; a bounded disposable-image probe also executed the handler against an owned Lucky-visible Docker tar and observed successful ret semantics",
+      "confidence": "runtime-verified",
+      "verification": "After deleting the disposable imported image, the probe loaded its previously exported Docker tar from an owned Lucky-visible TEST path; the TEST tag reappeared with the same image identity and cleanup later restored the original image baseline."
     },
     {
       "path": "/api/docker/networks",
@@ -3583,7 +3628,10 @@
       "method": "POST",
       "risk": "dangerous",
       "request_body_schema": {"type": "object", "properties": {"source": {"type": "string"}}, "required": ["source"]},
-      "schema_evidence": "authorized validation probe: {} and repository/tag-only bodies were rejected; source alone passed request validation and the backend attempted to open that path. path and file_path aliases were rejected"
+      "response_schema": {"type": "object", "properties": {"ret": {"type": "integer"}}},
+      "schema_evidence": "earlier validation probes established source as the required string path; a later bounded runtime probe passed a unique Lucky-visible one-file rootfs tar, created exactly one new disposable image and observed successful ret semantics",
+      "confidence": "runtime-verified",
+      "verification": "POST import consumed only the probe-owned raw rootfs tar under a unique Lucky /tmp path and created exactly one new image. The image was immediately tagged for ownership tracking and ultimately deleted, restoring the pre-probe image baseline."
     },
     {
       "path": "/api/docker/prune",

@@ -682,6 +682,36 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
     if not (ROOT / "tools" / "lucky_docker_compose_probe.py").is_file():
         fail("Docker Compose runtime probe tool is missing")
 
+    docker_image_evidence = model_evidence.get("docker_image_import_load_behavior")
+    if not isinstance(docker_image_evidence, dict):
+        fail("Docker image import/load behavior evidence is missing")
+    if docker_image_evidence.get("confidence") != "runtime-verified":
+        fail("Docker image import/load behavior evidence must remain runtime-verified")
+    docker_image_model = docker_image_evidence.get("model")
+    if not isinstance(docker_image_model, dict) or set(docker_image_model) != {
+        "import",
+        "tag_and_save",
+        "frontend_upload",
+        "load",
+        "scope",
+    }:
+        fail("Docker image import/load behavior model regressed")
+    docker_image_observations = docker_image_evidence.get("observations")
+    if not isinstance(docker_image_observations, dict) or set(docker_image_observations) != {
+        "import",
+        "save",
+        "upload_temp",
+        "load",
+        "cleanup",
+    }:
+        fail("Docker image import/load runtime observations regressed")
+    for field in ("verification", "security"):
+        value = docker_image_evidence.get(field)
+        if not isinstance(value, str) or not value.strip():
+            fail(f"Docker image import/load evidence field is missing: {field}")
+    if not (ROOT / "tools" / "lucky_docker_image_import_probe.py").is_file():
+        fail("Docker image import/load runtime probe tool is missing")
+
     ddns_evidence = model_evidence.get("ddns_cloudflare_behavior")
     if not isinstance(ddns_evidence, dict):
         fail("DDNS Cloudflare behavior evidence is missing")
@@ -2227,6 +2257,40 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         if isinstance(request_schema, dict) and "required" in request_schema:
             fail(f"explicit small request schema must not invent required fields for {route_key}")
 
+    docker_image_upload_temp = merged_by_key[("POST", "/api/docker/images/upload-temp")]
+    if not docker_image_upload_temp.has_body:
+        fail("Docker image upload-temp direct frontend call must retain request body semantics")
+    if docker_image_upload_temp.request_content_type != "multipart/form-data":
+        fail("Docker image upload-temp direct frontend call must remain multipart/form-data")
+    if docker_image_upload_temp.request_body_schema != {
+        "type": "object",
+        "properties": {"file": {"type": "string", "format": "binary"}},
+    }:
+        fail("Docker image upload-temp multipart file schema regressed")
+    if docker_image_upload_temp.confidence != "runtime-verified":
+        fail("Docker image upload-temp handler evidence must remain runtime-verified")
+
+    docker_image_ret_only = {"type": "object", "properties": {"ret": {"type": "integer"}}}
+    for route_key in {
+        ("POST", "/api/docker/images/import"),
+        ("POST", "/api/docker/images/load"),
+        ("POST", "/api/docker/images/{param}/tag"),
+        ("DELETE", "/api/docker/images/{param}"),
+    }:
+        route = merged_by_key[route_key]
+        if route.confidence != "runtime-verified":
+            fail(f"Docker disposable image route must remain runtime-verified for {route_key}")
+        if route.response_schema != docker_image_ret_only:
+            fail(f"Docker disposable image ret-only response schema regressed for {route_key}")
+
+    docker_image_save = merged_by_key[("GET", "/api/docker/images/save.withoutcompression")]
+    if docker_image_save.response_type != "blob":
+        fail("Docker image save route must remain a binary response")
+    if docker_image_save.response_content_type != "application/x-tar":
+        fail("Docker image save runtime media type regressed")
+    if docker_image_save.confidence != "runtime-verified":
+        fail("Docker image save route must remain runtime-verified")
+
     frontend_preferences_response = {
         "type": "object",
         "properties": {
@@ -2992,8 +3056,8 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         fail("Local Path Browser delete must remain classified dangerous")
 
     response_schema_count = sum(route.response_schema is not None for route in patched_merged.routes)
-    if response_schema_count < 338:
-        fail(f"response-schema coverage regressed below 338 routes: {response_schema_count}")
+    if response_schema_count < 342:
+        fail(f"response-schema coverage regressed below 342 routes: {response_schema_count}")
 
     icon_response = merged_by_key[("GET", "/api/iconlib/icon")]
     if icon_response.response_type != "blob" or icon_response.response_content_type != "image/png":

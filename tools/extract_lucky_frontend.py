@@ -29,6 +29,12 @@ URL_CALL_RE = re.compile(
     r"method\s*:\s*[\"'](?P<method>get|post|put|delete|patch)[\"']",
     re.IGNORECASE | re.DOTALL,
 )
+DIRECT_METHOD_CALL_RE = re.compile(
+    r"[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\."
+    r"(?P<method>get|post|put|delete|patch)\(\s*"
+    r"(?P<expr>`(?:\\.|[^`]){1,600}`|\"(?:\\.|[^\"]){1,600}\"|'(?:\\.|[^']){1,600}')",
+    re.IGNORECASE | re.DOTALL,
+)
 ROUTE_LITERAL_RE = re.compile(r"/api/[A-Za-z0-9_./${}:-]+")
 PLACEHOLDER_RE = re.compile(r"\$\{([^}]+)\}")
 KEY_RE = re.compile(r"(?:^|,)\s*([A-Za-z_$][\w$-]*)\s*:")
@@ -104,6 +110,46 @@ def normalize_path_expression(expression: str) -> str | None:
     return path.rstrip("/") or "/api"
 
 
+def normalize_direct_method_path(expression: str) -> str | None:
+    """Normalize a literal/template first argument from ``client.post(...)``.
+
+    Lucky's current frontend occasionally bypasses the shared ``{url,method}``
+    wrapper and calls Axios directly with a runtime base prefix, for example
+    ``client.post(`${base}api/docker/images/upload-temp`, ...)``.  Keep this
+    parser deliberately conservative: the first argument must itself be a
+    quoted string/template and must contain a statically visible ``api/``
+    segment.  Everything before that segment is discarded as the HTTP base.
+    """
+
+    expression = expression.strip()
+    if len(expression) < 2 or expression[0] not in "'\"`" or expression[-1] != expression[0]:
+        return None
+    body = expression[1:-1]
+    marker = "/api/"
+    index = body.find(marker)
+    if index < 0:
+        marker = "api/"
+        index = body.find(marker)
+        if index < 0:
+            return None
+        if index > 0 and body[index - 1] not in "}/":
+            return None
+    path_expr = body[index:]
+    if not path_expr.startswith("/"):
+        path_expr = "/" + path_expr
+    placeholder_index = 0
+
+    def replace_direct_placeholder(_match: re.Match[str]) -> str:
+        nonlocal placeholder_index
+        placeholder_index += 1
+        name = "param" if placeholder_index == 1 else f"param{placeholder_index}"
+        return "{" + name + "}"
+
+    path_expr = PLACEHOLDER_RE.sub(replace_direct_placeholder, path_expr)
+    quote = "`" if "${" in path_expr else '"'
+    return normalize_path_expression(f"{quote}{path_expr}{quote}")
+
+
 def object_keys(snippet: str, field: str) -> list[str]:
     match = re.search(rf"\b{re.escape(field)}\s*:\s*\{{([^{{}}]{{0,500}})\}}", snippet)
     if not match:
@@ -138,6 +184,43 @@ def matching_brace(text: str, start: int) -> int | None:
         elif char == "{":
             depth += 1
         elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return index
+    return None
+
+
+def matching_paren(text: str, start: int) -> int | None:
+    """Return the closing parenthesis for one JavaScript call expression.
+
+    Direct Axios calls may sit immediately next to unrelated requests in a
+    minified bundle.  Metadata such as ``multipart/form-data`` must therefore
+    be inferred from the current call only, not from an arbitrary trailing
+    character window.  This scanner is intentionally small but quote-aware so
+    parentheses inside strings/templates do not terminate the call early.
+    """
+
+    if start < 0 or text[start] != "(":
+        return None
+    depth = 0
+    quote = ""
+    escaped = False
+    for index in range(start, min(len(text), start + 12000)):
+        char = text[index]
+        if escaped:
+            escaped = False
+            continue
+        if quote:
+            if char == "\\":
+                escaped = True
+            elif char == quote:
+                quote = ""
+            continue
+        if char in "'\"`":
+            quote = char
+        elif char == "(":
+            depth += 1
+        elif char == ")":
             depth -= 1
             if depth == 0:
                 return index
@@ -195,6 +278,39 @@ def extract(assets_dir: Path, version: str) -> dict:
             response_match = re.search(r"responseType\s*:\s*[\"']([^\"']+)", snippet)
             if response_match:
                 item["response_type"] = response_match.group(1)
+            if file_path.name not in item["evidence"]:
+                item["evidence"].append(file_path.name)
+
+        for match in DIRECT_METHOD_CALL_RE.finditer(text):
+            path = normalize_direct_method_path(match.group("expr"))
+            if not path:
+                continue
+            method = match.group("method").upper()
+            key = (path, method)
+            item = routes.setdefault(
+                key,
+                {
+                    "path": path,
+                    "method": method,
+                    "module": route_module(path),
+                    "query_keys": [],
+                    "body_keys": [],
+                    "has_body": method in {"POST", "PUT", "PATCH"},
+                    "response_type": "json",
+                    "evidence": [],
+                    "confidence": "frontend-call",
+                },
+            )
+            if method in {"POST", "PUT", "PATCH"}:
+                item["has_body"] = True
+            call_start = text.find("(", match.start(), match.end())
+            call_end = matching_paren(text, call_start)
+            if call_end is not None and call_end >= match.end():
+                snippet = text[match.start() : call_end + 1]
+            else:
+                snippet = text[match.start() : min(len(text), match.end() + 220)]
+            if "multipart/form-data" in snippet:
+                item["request_content_type"] = "multipart/form-data"
             if file_path.name not in item["evidence"]:
                 item["evidence"].append(file_path.name)
 
