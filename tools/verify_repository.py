@@ -757,6 +757,40 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
     if not (ROOT / ".github" / "workflows" / "lucky-upnp-ci.yml").is_file():
         fail("STUN UPnP CI workflow is missing")
 
+    oauth_evidence = model_evidence.get("oidc_oauth_ci_behavior")
+    if not isinstance(oauth_evidence, dict):
+        fail("OIDC OAuth CI behavior evidence is missing")
+    if oauth_evidence.get("confidence") != "runtime-verified":
+        fail("OIDC OAuth CI behavior evidence must remain runtime-verified")
+    oauth_model = oauth_evidence.get("model")
+    if not isinstance(oauth_model, dict) or set(oauth_model) != {
+        "topology", "relay", "provider_flow", "user_lifecycle", "admin_login", "cleanup",
+    }:
+        fail("OIDC OAuth CI behavior model regressed")
+    oauth_observations = oauth_evidence.get("observations")
+    if not isinstance(oauth_observations, dict) or set(oauth_observations) != {
+        "prerequisites", "authorization", "login", "cleanup",
+    }:
+        fail("OIDC OAuth CI behavior observations regressed")
+    for field in ("verification", "security"):
+        value = oauth_evidence.get(field)
+        if not isinstance(value, str) or not value.strip():
+            fail(f"OIDC OAuth CI behavior evidence field is missing: {field}")
+    if "WebService OAuth" not in str(oauth_model.get("relay")):
+        fail("OIDC OAuth relay evidence regressed")
+    if "status auth=true" not in str(oauth_model.get("provider_flow")):
+        fail("OIDC OAuth authorization evidence regressed")
+    if "ThirdAuthLoginUserList" not in str(oauth_model.get("user_lifecycle")):
+        fail("OIDC OAuth login-user allowlist evidence regressed")
+    if "/api/oauth/login" not in str(oauth_model.get("admin_login")) or "anti-replay" not in str(oauth_model.get("admin_login")):
+        fail("OIDC OAuth backend-login evidence regressed")
+    if "ret=0" not in str(oauth_observations.get("login")):
+        fail("OIDC OAuth successful-login observation regressed")
+    if not (ROOT / "tools" / "lucky_oauth_ci_probe.py").is_file():
+        fail("OIDC OAuth CI runtime probe tool is missing")
+    if not (ROOT / ".github" / "workflows" / "lucky-oauth-ci.yml").is_file():
+        fail("OIDC OAuth CI workflow is missing")
+
     smb_evidence = model_evidence.get("smb_loopback_behavior")
     if not isinstance(smb_evidence, dict):
         fail("SMB loopback behavior evidence is missing")

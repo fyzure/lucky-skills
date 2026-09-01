@@ -97,7 +97,7 @@
 
 ### WebService WAF / OAuth 认证联动
 
-当前：reverse proxy、NginxConf、路径、Header、SNI、WAF、WebAuth/BasicAuth/Security Group 已完成。第三方 OAuth 仍缺真实登录闭环；一次隔离 OIDC preflight 已确认三个公共 OIDC 字段可 PUT/readback/完整恢复，但正常 OpenToken 客户端调用 `GET /api/oauth/tmpcode?type=oidc` 仍返回 `ret=2`，且没有 `tmpCode/authUrl/authServer`。当前授权流依赖浏览器/管理员会话上下文，不能由 OpenToken-only 客户端替代，也不会使用 Playwright/Chromium 绕过。
+当前：reverse proxy、NginxConf、路径、Header、SNI、WAF、WebAuth/BasicAuth/Security Group 已完成；第三方 OIDC 也已在 GitHub-hosted disposable Lucky 3.0.0 中完成真实 E2E。CI 部署 Lucky WebService OAuth relay + owned OIDC Provider，验证 tmpCode/authUrl、callback、token/userinfo、用户映射、disable/re-enable、reauthorize/update、白名单后台登录、revoke 与完整 cleanup。OpenToken-only `tmpcode(type=oidc)` 仍会 `ret=2`，因此两种上下文不能混为一谈。
 
 - [x] 临时 WebService 绑定 Coraza TEST instance
 - [x] 正常请求应通过
@@ -106,7 +106,7 @@
 - [x] 验证 WebAuth
 - [x] 验证 BasicAuth
 - [x] 验证 Security Group 联动
-- [ ] 验证第三方 OAuth 登录流程（使用独立测试 client）
+- [x] 验证第三方 OAuth 登录流程（隔离 CI 独立 TEST client/provider）
 - [x] 清理 TEST WebService / Coraza / auth 资源
 - [x] 验证业务 WebService byte-level/对象级基线未变化
 
@@ -266,13 +266,13 @@ WebDAV、SMB 与 FileBrowser 已完成 localhost 完整闭环；DLNA 已在一�
 
 ### ThirdPartyAuthManager
 
-当前：disabled GitHub-type mapping CRUD 已实践，没有真实 OAuth 登录。OIDC 公共配置的隔离 PUT/readback/rollback 已验证；OpenToken-only `tmpcode(type=oidc)` 仍是 `ret=2`，因此实际授权要留给具备合法浏览器管理员会话的隔离环境，不在当前 API-only 生产实例强测。
+当前：disabled GitHub-type mapping CRUD 与真实 OIDC OAuth E2E 均已实践。真实授权在 GitHub Actions disposable Lucky 3.0.0 内完成：Lucky WebService OAuth relay + owned OIDC provider/client，后台管理链完成 userinfo/mapping/refresh/disable/re-enable/revoke，登录链用 fresh tmpCode + status(auth=true) + challenge/RSA `/api/oauth/login` 获得真实 Lucky 登录 token。生产/OpenToken-only 环境仍不强测交互授权。
 
-- [ ] 创建隔离 OAuth test client
-- [ ] 完成一次实际 OAuth login
-- [ ] 验证 callback/user mapping
-- [ ] 验证 refresh / disable / revoke 行为
-- [ ] 清理 test client 和 mapping
+- [x] 创建隔离 OAuth test client / owned OIDC provider / Lucky WebService OAuth relay
+- [x] 完成一次实际 OAuth login（`ret=0` + non-empty Lucky login token）
+- [x] 验证 callback / token exchange / userinfo / user mapping
+- [x] 验证 reauthorize/update / disable / re-enable / revoke 行为
+- [x] 清理 test client、relay、mapping，并验证配置/用户基线恢复
 
 ---
 

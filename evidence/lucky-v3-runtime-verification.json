@@ -309,6 +309,25 @@
       },
       "security": "The probe is GitHub-Actions-only and uses root solely for its disposable veth/network namespace and bridge-scoped SSDP socket binding. It does not touch production Lucky, a physical/LAN interface, a real IGD/router, Internet routing, iptables or sysctls. Lucky's admin port is not published, and generated addresses, ports and marker bytes are not retained as repository evidence."
     },
+    "oidc_oauth_ci_behavior": {
+      "confidence": "runtime-verified",
+      "model": {
+        "topology": "A fresh pinned Lucky 3.0.0 container and an owned stdlib OIDC provider run only on a Docker --internal network; Lucky's admin port is not host-published and the provider has no Internet dependency",
+        "relay": "Generic OIDC uses a disposable Lucky WebService OAuth rule as the callback/middleware relay. The rule holds the TEST client secret and points only to the owned provider while ThirdPartyAuthManager holds the public OIDC client/authorization/redirect metadata",
+        "provider_flow": "The verified flow obtains tmpCode/authUrl, follows authorization, completes the Lucky relay callback, exchanges an authorization code at the owned token endpoint, calls owned userinfo, observes /api/oauth/status auth=true and retrieves /api/oauth/userinfo for the management flow",
+        "user_lifecycle": "The returned TEST identity is saved as an enabled oidc third-party user, then disabled, re-enabled, re-authorized and updated. Its saved user Key is explicitly placed in ThirdAuthLoginUserList before backend-login verification",
+        "admin_login": "The login flow obtains a fresh OAuth tmpCode, waits for status auth=true, GETs /api/login/challenge, RSA-encrypts {type,token,twoFA,challengeId,nonce} with the frontend-compatible 120-byte UTF-8 chunking scheme, and POSTs {challengeId,cipherText} to /api/oauth/login. Lucky 3.0.0 requires the frontend anti-replay '_' query value on the challenge/login requests for this verified path; the final response had ret=0 and contained a non-empty login token",
+        "cleanup": "The TEST third-party user is revoked/deleted, the OAuth WebService relay is deleted, public OIDC configuration and user-list baselines are restored, and the disposable provider/container/network are removed"
+      },
+      "verification": "GitHub Actions run 33517965844 executed tools/lucky_oauth_ci_probe.py against a fresh pinned Lucky 3.0.0 container. After API-based bootstrap, the probe hardened the disposable default admin credentials, configured a random safe entry, enabled third-party login, created a Lucky WebService OAuth relay and an owned OIDC provider/client, then completed three isolated authorizations: initial user creation, reauthorization/update, and a fresh backend-login authorization. The final login ticket reached /api/oauth/status with auth=true; the frontend-compatible challenge/RSA request with anti-replay query returned /api/oauth/login ret=0 and a non-empty login token. User disable/re-enable, refresh/update, revoke, relay deletion, configuration restore and user baseline restore all succeeded; the report ended with failed=[].",
+      "observations": {
+        "prerequisites": "Lucky rejected third-party backend login while the default 666/666 administrator credentials were still active and also required a configured SafeURL. The disposable CI instance therefore uses random one-run admin credentials and a random safe entry before enabling the login test",
+        "authorization": "The successful run recorded three provider token exchanges and three provider userinfo requests, with oauth_login_status_authorized=true for the fresh login authorization",
+        "login": "The final successful report recorded oauth_login_ret=0 and oauth_login_token_present=true. The decisive request-level difference was matching Lucky's frontend interceptor by appending its '_' anti-replay timestamp/checksum query value to both /api/login/challenge and /api/oauth/login",
+        "cleanup": "third_party_user_revoked, config_restored, user_baseline_restored and oauth_relay_baseline_restored were all true"
+      },
+      "security": "The OAuth probe refuses execution outside GitHub Actions. The OIDC provider, client secret, authorization codes, tmpCodes, access/refresh tokens, Lucky login token, random administrator password and safe entry exist only in the disposable runner and are not persisted in evidence. No production Lucky configuration, real identity provider, external OAuth client, browser automation, Playwright/Chromium, internal Lucky state access or forged session is used."
+    },
     "smb_loopback_behavior": {
       "confidence": "runtime-verified",
       "model": {
@@ -592,7 +611,7 @@
       "risk": "dangerous",
       "response_type": "json",
       "confidence": "runtime-verified",
-      "verification": "An earlier unauthenticated GET reached the handler and returned ret=2 suspicious-request semantics. A later owner-authorized OIDC preflight first PUT three unique TEST public metadata fields (authorization endpoint, client ID and redirect URI), verified exact readback, then called GET /api/oauth/tmpcode?type=oidc through the normal OpenToken client. The handler again returned ret=2 with no tmpCode, authUrl or authServer, so current OpenToken-only access does not establish the browser/admin-session context required by this OAuth authorization flow. The three OIDC fields were restored under an ownership guard and the third-party user-list baseline remained unchanged; no temporary code, provider token or callback value is retained."
+      "verification": "OpenToken-only OIDC preflight still returns ret=2 with no tmpCode/authUrl/authServer, so OpenToken by itself is not a substitute for the interactive/session flow. Separately, GitHub Actions run 33517965844 used a fresh pinned Lucky 3.0.0 instance, Lucky's own WebService OAuth relay and an owned OIDC provider to obtain real tmpCode/authUrl values and complete authorization, user mapping and backend login without retaining any temporary code or provider token."
     },
     {
       "path": "/api/rclone/third/115pan/user",
@@ -3785,7 +3804,7 @@
       "risk": "mutating",
       "body_keys": ["challengeId", "cipherText"],
       "request_body_schema": {"type": "object", "properties": {"challengeId": {"type": "string"}, "cipherText": {"type": "string"}}},
-      "schema_evidence": "frontend first GETs /api/login/challenge (runtime-verified challengeId string), encrypts the OAuth provider/code/timestamp payload locally to string cipherText, and POSTs only {challengeId,cipherText}; no OAuth login attempt was sent"
+      "schema_evidence": "frontend first GETs /api/login/challenge, RSA-encrypts {type,token,twoFA,challengeId,nonce} into string cipherText using <=120-byte UTF-8 chunks, and POSTs only {challengeId,cipherText}. GitHub Actions run 33517965844 reproduced that request with the frontend '_' anti-replay query and received ret=0 plus a non-empty OAuth backend-login token on a disposable Lucky 3.0.0 instance"
     },
     {
       "path": "/api/password/verify",
