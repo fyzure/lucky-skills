@@ -6595,7 +6595,27 @@
                             "null"
                           ],
                           "items": {
-                            "type": "object"
+                            "type": "object",
+                            "properties": {
+                              "DisplayName": {
+                                "type": "string"
+                              },
+                              "InvalidMsg": {
+                                "type": "string"
+                              },
+                              "IsLocalDir": {
+                                "type": "boolean"
+                              },
+                              "Param": {
+                                "type": "string"
+                              },
+                              "Type": {
+                                "type": "string"
+                              },
+                              "Writable": {
+                                "type": "boolean"
+                              }
+                            }
                           }
                         },
                         "ListenPort": {
@@ -6677,12 +6697,12 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_panel-CTgqt91C.js"
         ],
         "x-lucky-risk": "read-only",
-        "x-schema-evidence": "authorized GET /api/dlnaservice/configure observed configuration/interface field names and JSON types only; live paths, interface names, hardware addresses and IP values were not retained"
+        "x-schema-evidence": "authorized GET /api/dlnaservice/configure observed configuration/interface field names and JSON types only; a later disposable isolated-bridge probe populated one local MountList entry and one NetInterfaceList string while preserving safe field types. Live paths, interface names, hardware addresses and IP values were not retained"
       },
       "put": {
         "summary": "Lucky frontend call: PUT /api/dlnaservice/configure",
@@ -6698,11 +6718,16 @@
         ],
         "responses": {
           "200": {
-            "description": "Lucky JSON response; envelope shape varies by endpoint.",
+            "description": "Response schema observed from runtime evidence; see x-schema-evidence for provenance.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LuckyEnvelope"
+                  "type": "object",
+                  "properties": {
+                    "ret": {
+                      "type": "integer"
+                    }
+                  }
                 }
               }
             }
@@ -6718,12 +6743,12 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_panel-CTgqt91C.js"
         ],
         "x-lucky-risk": "mutating",
-        "x-schema-evidence": "frontend deliberately rebuilds the authorized GET configure response into these seven fields and passes that normalized object directly to PUT; request types are copied from the verified GET configure model and list item shapes remain unspecified",
+        "x-schema-evidence": "frontend rebuilds the DLNA configure model and the shared mount editor constructs Type/Param/DisplayName/Writable/DisableChangeWriteTable. A bounded isolated-bridge TEST PUT used one private br-* interface string, one random high listener port and one local TEST mount; Lucky returned ret=0 and the service started without exposing a physical/LAN interface",
         "requestBody": {
           "required": true,
           "content": {
@@ -6745,7 +6770,9 @@
                       "array",
                       "null"
                     ],
-                    "items": {}
+                    "items": {
+                      "type": "string"
+                    }
                   },
                   "FriendlyName": {
                     "type": "string"
@@ -6758,7 +6785,26 @@
                       "array",
                       "null"
                     ],
-                    "items": {}
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "Type": {
+                          "type": "string"
+                        },
+                        "Param": {
+                          "type": "string"
+                        },
+                        "DisplayName": {
+                          "type": "string"
+                        },
+                        "Writable": {
+                          "type": "boolean"
+                        },
+                        "DisableChangeWriteTable": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
                   }
                 }
               }

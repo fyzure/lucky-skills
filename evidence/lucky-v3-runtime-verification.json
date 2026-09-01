@@ -231,6 +231,26 @@
       },
       "security": "The probe refuses to run when WebDAV is already active or has configured users, binds only loopback, disables firewall automation and TLS, uses a disposable random password, and never prints credentials or file content. Configuration restoration is ownership-guarded to avoid overwriting a concurrent change."
     },
+    "dlna_isolated_behavior": {
+      "confidence": "runtime-verified",
+      "model": {
+        "service_lifecycle": "PUT /api/dlnaservice/configure can start DLNA with one local mount on an isolated host-only Docker bridge and a later ownership-guarded PUT restores the original stopped configuration",
+        "mount_model": "The current shared mount editor submits Type/Param/DisplayName/Writable/DisableChangeWriteTable; runtime DLNA readback exposed DisplayName, InvalidMsg, IsLocalDir, Param, Type and Writable",
+        "device_description": "The isolated HTTP listener serves a UPnP device description at /rootDesc.xml with a ContentDirectory service",
+        "content_directory": "A SOAP ContentDirectory Browse(ObjectID=0, BrowseDirectChildren) request returned HTTP 200 and exposed an owned TEST child directory from the local media root",
+        "interface_boundary": "Loopback cannot host this DLNA implementation because lo lacks the MULTICAST flag. The successful probe therefore selected only an UP+MULTICAST br-* interface with private IPv4 and zero attached veths; no physical/LAN interface was eligible",
+        "ssdp_boundary": "Host-originated SSDP M-SEARCH on the empty Linux bridge returned no response in the verified run, so HTTP/UPnP SOAP behavior is verified while host-side SSDP discovery is not claimed"
+      },
+      "verification": "Starting from a stopped DLNA service with an empty MountList, a bounded Lucky 3.0.0 probe selected an empty private Docker bridge after requiring br-* naming, UP+MULTICAST flags, a private IPv4 address and zero veth attachments. It created one unique Lucky-visible /tmp/TEST-* media tree with an album child, configured DLNA on a random high HTTP port bound only to that bridge and selected only that interface for DLNA networking. Runtime readback preserved the TEST listener/interface/mount ownership markers, the TCP listener became reachable, GET /rootDesc.xml returned a UPnP device description advertising ContentDirectory, and a SOAP Browse request returned HTTP 200 with the TEST album visible. Module logs were queried without retaining their content. The service configuration and stopped status were restored only while the ownership guard still matched, and the TEST tree was deleted.",
+      "observations": {
+        "loopback_rejected": "An earlier loopback-only attempt was restored cleanly after the DLNA log reported that interface lo is not appropriately configured because DLNA requires an interface that is UP, MULTICAST and has MTU > 0",
+        "http_upnp": "The isolated bridge listener served /rootDesc.xml as text/xml, advertised ContentDirectory, and accepted Browse with a text/xml HTTP 200 response containing the TEST album entry",
+        "friendly_name": "FriendlyName persisted in Lucky configure readback but the rootDesc friendlyName did not equal the disposable TEST value; the probe records this mismatch rather than treating FriendlyName as a verified device-description override",
+        "ssdp": "M-SEARCH sent only through the empty TEST bridge received zero host-side responses; no SSDP success claim is made",
+        "cleanup": "The ownership guard passed, the exact stopped configuration was restored, and the unique TEST media tree was removed"
+      },
+      "security": "The probe refuses any physical or named LAN interface and only selects an empty Docker-style br-* interface with private IPv4, UP+MULTICAST and zero attached veths. It never modifies firewall/network configuration, never mounts external storage, creates only an owned /tmp media tree, and restores DLNA only while the live configuration still matches the TEST listener/interface/mount markers. Interface/IP values, DeviceUUID, log bodies and existing paths are not retained in evidence."
+    },
     "filebrowser_local_behavior": {
       "confidence": "runtime-verified",
       "model": {
@@ -2658,7 +2678,9 @@
       "method": "GET",
       "risk": "read-only",
       "response_schema": {"type": "object", "properties": {"ret": {"type": "integer"}, "status": {"type": "boolean"}, "configure": {"type": "object", "properties": {"Enable": {"type": "boolean"}, "MountList": {"type": ["array", "null"], "items": {}}, "ListenPort": {"type": "integer"}, "ListenIP": {"type": "string"}, "NetInterfaceList": {"type": ["array", "null"], "items": {}}, "FriendlyName": {"type": "string"}, "DeviceUUID": {"type": "string"}, "ConfVersion": {"type": "integer"}}}, "netinterfaces": {"type": "array", "items": {"type": "object", "properties": {"index": {"type": "integer"}, "mtu": {"type": "integer"}, "name": {"type": "string"}, "hardwareAddr": {"type": "string"}, "flags": {"type": "array", "items": {"type": "string"}}, "addrs": {"type": "array", "items": {"type": "object", "properties": {"addr": {"type": "string"}}}}}}}}},
-      "schema_evidence": "authorized GET /api/dlnaservice/configure observed configuration/interface field names and JSON types only; live paths, interface names, hardware addresses and IP values were not retained"
+      "confidence": "runtime-verified",
+      "schema_evidence": "authorized GET /api/dlnaservice/configure observed configuration/interface field names and JSON types only; a later disposable isolated-bridge probe populated one local MountList entry and one NetInterfaceList string while preserving safe field types. Live paths, interface names, hardware addresses and IP values were not retained",
+      "verification": "Repeated authorized reads covered both the stopped baseline and the disposable running DLNA configuration on an empty private Docker bridge; only safe field names/types and generic mount/interface semantics are retained."
     },
     {
       "path": "/api/dlnaservice/status",
@@ -3547,8 +3569,11 @@
       "method": "PUT",
       "risk": "mutating",
       "body_keys": ["Enable", "ListenIP", "ListenPort", "NetInterfaceList", "FriendlyName", "DeviceUUID", "MountList"],
-      "request_body_schema": {"type": "object", "properties": {"Enable": {"type": "boolean"}, "ListenIP": {"type": "string"}, "ListenPort": {"type": "integer"}, "NetInterfaceList": {"type": ["array", "null"], "items": {}}, "FriendlyName": {"type": "string"}, "DeviceUUID": {"type": "string"}, "MountList": {"type": ["array", "null"], "items": {}}}},
-      "schema_evidence": "frontend deliberately rebuilds the authorized GET configure response into these seven fields and passes that normalized object directly to PUT; request types are copied from the verified GET configure model and list item shapes remain unspecified"
+      "request_body_schema": {"type": "object", "properties": {"Enable": {"type": "boolean"}, "ListenIP": {"type": "string"}, "ListenPort": {"type": "integer"}, "NetInterfaceList": {"type": ["array", "null"], "items": {"type": "string"}}, "FriendlyName": {"type": "string"}, "DeviceUUID": {"type": "string"}, "MountList": {"type": ["array", "null"], "items": {"type": "object", "properties": {"Type": {"type": "string"}, "Param": {"type": "string"}, "DisplayName": {"type": "string"}, "Writable": {"type": "boolean"}, "DisableChangeWriteTable": {"type": "boolean"}}}}}},
+      "response_schema": {"type": "object", "properties": {"ret": {"type": "integer"}}},
+      "confidence": "runtime-verified",
+      "schema_evidence": "frontend rebuilds the DLNA configure model and the shared mount editor constructs Type/Param/DisplayName/Writable/DisableChangeWriteTable. A bounded isolated-bridge TEST PUT used one private br-* interface string, one random high listener port and one local TEST mount; Lucky returned ret=0 and the service started without exposing a physical/LAN interface",
+      "verification": "A disposable DLNA probe successfully PUT a TEST configuration onto an empty private Docker bridge, observed status=true and a reachable HTTP listener, completed rootDesc/ContentDirectory behavior verification, then restored the exact stopped baseline under an ownership guard."
     },
     {
       "path": "/api/frontend-preferences",
@@ -4259,8 +4284,8 @@
     },
     {
       "path": "/api/dlnaservice/configure", "method": "GET",
-      "at": ["properties", "configure", "properties", "MountList", "items"], "value": {"type": "object"},
-      "evidence": "MountList is a collection of mount records passed through by the service configuration model; path-bearing fields stay unspecified"
+      "at": ["properties", "configure", "properties", "MountList", "items"], "value": {"type": "object", "properties": {"DisplayName": {"type": "string"}, "InvalidMsg": {"type": "string"}, "IsLocalDir": {"type": "boolean"}, "Param": {"type": "string"}, "Type": {"type": "string"}, "Writable": {"type": "boolean"}}},
+      "evidence": "the disposable isolated DLNA local mount read back DisplayName, InvalidMsg, IsLocalDir, Param, Type and Writable; path values themselves are not retained"
     },
     {
       "path": "/api/dlnaservice/configure", "method": "GET",

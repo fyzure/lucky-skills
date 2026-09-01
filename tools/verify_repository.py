@@ -591,6 +591,41 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
     if not (ROOT / "tools" / "lucky_webdav_probe.py").is_file():
         fail("WebDAV runtime probe tool is missing")
 
+    dlna_evidence = model_evidence.get("dlna_isolated_behavior")
+    if not isinstance(dlna_evidence, dict):
+        fail("DLNA isolated behavior evidence is missing")
+    if dlna_evidence.get("confidence") != "runtime-verified":
+        fail("DLNA isolated behavior evidence must remain runtime-verified")
+    dlna_model = dlna_evidence.get("model")
+    if not isinstance(dlna_model, dict) or set(dlna_model) != {
+        "service_lifecycle",
+        "mount_model",
+        "device_description",
+        "content_directory",
+        "interface_boundary",
+        "ssdp_boundary",
+    }:
+        fail("DLNA isolated behavior model regressed")
+    dlna_observations = dlna_evidence.get("observations")
+    if not isinstance(dlna_observations, dict) or set(dlna_observations) != {
+        "loopback_rejected",
+        "http_upnp",
+        "friendly_name",
+        "ssdp",
+        "cleanup",
+    }:
+        fail("DLNA isolated behavior observations regressed")
+    for field in ("verification", "security"):
+        value = dlna_evidence.get(field)
+        if not isinstance(value, str) or not value.strip():
+            fail(f"DLNA isolated behavior evidence field is missing: {field}")
+    if "ContentDirectory" not in str(dlna_model.get("content_directory")):
+        fail("DLNA ContentDirectory runtime behavior evidence regressed")
+    if "zero attached veths" not in str(dlna_model.get("interface_boundary")):
+        fail("DLNA empty-bridge isolation evidence regressed")
+    if not (ROOT / "tools" / "lucky_dlna_probe.py").is_file():
+        fail("DLNA runtime probe tool is missing")
+
     filebrowser_evidence = model_evidence.get("filebrowser_local_behavior")
     if not isinstance(filebrowser_evidence, dict):
         fail("FileBrowser local behavior evidence is missing")
@@ -2939,19 +2974,70 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
     if docker_container_name != {"type": "string"}:
         fail("Docker container Name runtime evidence regressed")
 
-    dlna_put = merged_by_key[("PUT", "/api/dlnaservice/configure")].request_body_schema
-    dlna_get = merged_by_key[("GET", "/api/dlnaservice/configure")].response_schema
+    dlna_put_route = merged_by_key[("PUT", "/api/dlnaservice/configure")]
+    dlna_get_route = patched_by_key[("GET", "/api/dlnaservice/configure")]
+    dlna_put = dlna_put_route.request_body_schema
+    dlna_get = dlna_get_route.response_schema
     dlna_config_props = (
         dlna_get.get("properties", {}).get("configure", {}).get("properties", {})
         if isinstance(dlna_get, dict)
         else {}
     )
-    dlna_fields = ("Enable", "ListenIP", "ListenPort", "NetInterfaceList", "FriendlyName", "DeviceUUID", "MountList")
-    expected_dlna_put = {"type": "object", "properties": {field: dlna_config_props.get(field) for field in dlna_fields}}
+    expected_dlna_put = {
+        "type": "object",
+        "properties": {
+            "Enable": dlna_config_props.get("Enable"),
+            "ListenIP": dlna_config_props.get("ListenIP"),
+            "ListenPort": dlna_config_props.get("ListenPort"),
+            "NetInterfaceList": {"type": ["array", "null"], "items": {"type": "string"}},
+            "FriendlyName": dlna_config_props.get("FriendlyName"),
+            "DeviceUUID": dlna_config_props.get("DeviceUUID"),
+            "MountList": {
+                "type": ["array", "null"],
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "Type": {"type": "string"},
+                        "Param": {"type": "string"},
+                        "DisplayName": {"type": "string"},
+                        "Writable": {"type": "boolean"},
+                        "DisableChangeWriteTable": {"type": "boolean"},
+                    },
+                },
+            },
+        },
+    }
     if dlna_put != expected_dlna_put:
-        fail("DLNA PUT request schema must match the verified GET configure projection")
+        fail("DLNA PUT request schema must match the verified editable configuration model")
     if isinstance(dlna_put, dict) and "required" in dlna_put:
         fail("DLNA PUT request schema must not invent required fields")
+    if dlna_config_props.get("MountList") != {
+        "type": ["array", "null"],
+        "items": {
+            "type": "object",
+            "properties": {
+                "DisplayName": {"type": "string"},
+                "InvalidMsg": {"type": "string"},
+                "IsLocalDir": {"type": "boolean"},
+                "Param": {"type": "string"},
+                "Type": {"type": "string"},
+                "Writable": {"type": "boolean"},
+            },
+        },
+    }:
+        fail("DLNA GET MountList runtime item model regressed")
+    if dlna_config_props.get("NetInterfaceList") != {
+        "type": ["array", "null"], "items": {"type": "string"}
+    }:
+        fail("DLNA NetInterfaceList runtime item model regressed")
+    if dlna_put_route.response_schema != {
+        "type": "object", "properties": {"ret": {"type": "integer"}}
+    }:
+        fail("DLNA PUT ret-only response schema regressed")
+    if dlna_put_route.confidence != "runtime-verified":
+        fail("DLNA PUT behavior must remain runtime-verified")
+    if dlna_get_route.confidence != "runtime-verified":
+        fail("DLNA GET configuration behavior must remain runtime-verified")
 
     read_model_put_schemas = {
         "/api/webterminal/config": "config",
@@ -3188,8 +3274,8 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         fail("Local Path Browser delete must remain classified dangerous")
 
     response_schema_count = sum(route.response_schema is not None for route in patched_merged.routes)
-    if response_schema_count < 346:
-        fail(f"response-schema coverage regressed below 346 routes: {response_schema_count}")
+    if response_schema_count < 347:
+        fail(f"response-schema coverage regressed below 347 routes: {response_schema_count}")
 
     icon_response = merged_by_key[("GET", "/api/iconlib/icon")]
     if icon_response.response_type != "blob" or icon_response.response_content_type != "image/png":
@@ -3209,8 +3295,8 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         for route in merged.routes
         if route.request_body_schema is not None
     )
-    if request_schema_holes > 37:
-        fail(f"nested request-schema coverage regressed above 37 holes: {request_schema_holes}")
+    if request_schema_holes > 35:
+        fail(f"nested request-schema coverage regressed above 35 holes: {request_schema_holes}")
 
     response_schema_holes = sum(
         count_schema_holes(route.response_schema)

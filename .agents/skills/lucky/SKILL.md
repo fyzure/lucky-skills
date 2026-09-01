@@ -125,6 +125,12 @@ Before restoring the baseline WebDAV configuration, the probe re-reads the live 
 
 FTP is not equivalent from a safety perspective. The current FTP configuration exposes `Network`, control `Port` and passive port range but no loopback `ListenIP`. Do not start a temporary FTP listener on a production host merely for coverage and do not modify the host firewall to manufacture isolation. Practice real FTP login/transfer only in a network namespace or dedicated isolated instance.
 
+## DLNA isolated HTTP/UPnP behavior
+
+Use `tools/lucky_dlna_probe.py` only from a stopped DLNA baseline with an empty MountList. Do not force loopback: current Lucky 3.0.0 rejects `lo` because its DLNA implementation requires an interface that is UP, MULTICAST and has MTU > 0. The probe may select only a Docker-style `br-*` interface with a private IPv4 address, UP+MULTICAST flags and **zero attached veths**. It must never select a physical/LAN, Tailscale, WireGuard or populated Docker interface, and it must not modify firewall or network configuration.
+
+The verified behavior is HTTP/UPnP control-plane behavior on that empty host-local bridge: one unique `/tmp/TEST-*` local mount, a random high HTTP port, `/rootDesc.xml`, ContentDirectory advertisement and a SOAP `Browse(ObjectID=0, BrowseDirectChildren)` that exposes the TEST child directory. Host-side SSDP M-SEARCH on the empty Linux bridge returned no response in the verified run; record that as an observation rather than treating it as a DLNA failure or claiming discovery success. Also do not assume `FriendlyName` changes the rootDesc friendly name merely because configure readback preserved it. Restore the original stopped configuration only while listener/interface/mount ownership markers still match, then delete the TEST tree.
+
 ## FileBrowser local behavior
 
 `tools/lucky_filebrowser_probe.py` verifies FileBrowser only from a stopped/disabled baseline. It creates a fresh TEST database, cache and writable local mount under one unique Lucky-visible `/tmp/TEST-*` tree, then starts HTTP on a random `127.0.0.1` tcp4 port with TLS, AutoFirewall and exec disabled. Never point this probe at an existing FileBrowser database and never call `/api/third/filebrowser/resetadmin` for coverage.

@@ -130,8 +130,8 @@ pageClass: api-routes-page
 
 | 方法 | 路径 | 风险 | 查询字段 | 请求体 | 响应 | 证据等级 |
 |---|---|---|---|---|---|---|
-| `GET` | `/api/dlnaservice/configure` | `read-only` | — | — | `json` | `frontend-call` |
-| `PUT` | `/api/dlnaservice/configure` | `mutating` | — | `Enable`, `ListenIP`, `ListenPort`, `NetInterfaceList`, `FriendlyName`, `DeviceUUID`, `MountList` | `json` | `frontend-call` |
+| `GET` | `/api/dlnaservice/configure` | `read-only` | — | — | `json` | `runtime-verified` |
+| `PUT` | `/api/dlnaservice/configure` | `mutating` | — | `Enable`, `ListenIP`, `ListenPort`, `NetInterfaceList`, `FriendlyName`, `DeviceUUID`, `MountList` | `json` | `runtime-verified` |
 | `GET` | `/api/dlnaservice/lastlogs` | `read-only` | `page`, `pageSize` | — | `json` | `frontend-call` |
 | `GET` | `/api/dlnaservice/logs` | `read-only` | `page`, `pageSize` | — | `json` | `frontend-call` |
 | `GET` | `/api/dlnaservice/status` | `read-only` | — | — | `json` | `frontend-call` |

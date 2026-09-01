@@ -213,14 +213,14 @@
 
 ### FTP / WebDAV / SMB / DLNA / FileBrowser
 
-WebDAV 与 FileBrowser 已完成 localhost 完整闭环；FTP 当前配置没有 `ListenIP`，启动会监听所选 network 的全部地址，因此不为了覆盖率临时暴露控制/PASV 端口，留待隔离 network namespace/专用测试环境。SMB/DLNA 仍待实践。
+WebDAV 与 FileBrowser 已完成 localhost 完整闭环；DLNA 已在一个 **UP+MULTICAST、私网 IPv4、veth_count=0** 的空 Docker bridge 上完成 HTTP/UPnP 闭环。`lo` 因缺少 MULTICAST 被 Lucky 明确拒绝，因此没有为了满足“localhost”字面要求去改宿主网卡；空 bridge 不连接物理网卡或业务容器。FTP 当前配置没有 `ListenIP`，启动会监听所选 network 的全部地址，因此不为了覆盖率临时暴露控制/PASV 端口，留待隔离 network namespace/专用测试环境。SMB 仍待实践。
 
 - [x] WebDAV：独立 TEST root/storage、TEST 用户、127.0.0.1 高位端口
 - [x] WebDAV：OPTIONS / PROPFIND / 可写 PUT-GET-DELETE / 只读写拒绝
 - [x] WebDAV：status/logs、停止并恢复原配置、删除 TEST 用户/storage/path
 - [ ] FTP：隔离网络环境下真实登录/列目录/上传下载（当前不启动公网可见随机端口）
 - [ ] SMB：独立临时 root、用户、localhost 客户端读写
-- [ ] DLNA：独立临时媒体 root 与 localhost HTTP/UPnP 行为
+- [x] DLNA：独立临时媒体 root + 空私网 Docker bridge；`/rootDesc.xml` + ContentDirectory SOAP Browse 实际可用并能看到 TEST 子目录；host-side SSDP M-SEARCH 无回包，不宣称 SSDP discovery 成功；固化 `tools/lucky_dlna_probe.py`
 - [x] FileBrowser：fresh TEST DB + local mount，127.0.0.1 高位端口，登录、upload/GET/rename/DELETE 与底层文件行为
 - [x] FileBrowser：status/logs、ownership-guarded 配置恢复、TEST path 清理；固化 `tools/lucky_filebrowser_probe.py`
 
