@@ -15,6 +15,7 @@ printed or persisted in repository evidence.
 
 from __future__ import annotations
 
+import copy
 import json
 import ipaddress
 import secrets
@@ -199,6 +200,9 @@ def main() -> int:
         "admin_port_unpublished": False,
         "admin_reachable_on_internal_bridge": False,
         "baseline_empty": False,
+        "service_baseline_disabled": False,
+        "server_enabled_for_probe": False,
+        "service_baseline_restored": False,
         "device_created": False,
         "broadcast_ip_item_is_string": False,
         "wakeup_ret_zero": False,
@@ -230,6 +234,8 @@ def main() -> int:
         )
         created_key = ""
         capture: socket.socket | None = None
+        service_baseline: dict[str, Any] | None = None
+        server_enabled = False
 
         try:
             gateway, broadcast = network_addresses(network_name)
@@ -276,6 +282,42 @@ def main() -> int:
             report["baseline_empty"] = not baseline_keys
             if not report["baseline_empty"]:
                 raise ProbeError("fresh Lucky WOL device baseline was not empty")
+
+            service_response = api_json(base_url, open_token, "/api/wol/service/configure")
+            configure = service_response.get("configure")
+            if not isinstance(configure, dict):
+                raise ProbeError("WOL service configure response missing configure object")
+            service_baseline = copy.deepcopy(configure)
+            server = configure.get("Server")
+            client = configure.get("Client")
+            report["service_baseline_disabled"] = (
+                isinstance(server, dict)
+                and server.get("Enable") is False
+                and isinstance(client, dict)
+                and client.get("Enable") is False
+            )
+            if not report["service_baseline_disabled"]:
+                raise ProbeError("fresh Lucky WOL service baseline was not fully disabled")
+            candidate = copy.deepcopy(configure)
+            candidate_server = candidate.get("Server")
+            if not isinstance(candidate_server, dict):
+                raise ProbeError("WOL Server configuration is missing")
+            candidate_server["Enable"] = True
+            api_json(
+                base_url,
+                open_token,
+                "/api/wol/service/configure",
+                method="PUT",
+                payload=candidate,
+            )
+            server_enabled = True
+            live_service = api_json(base_url, open_token, "/api/wol/service/configure")
+            live_server = live_service.get("configure", {}).get("Server", {})
+            report["server_enabled_for_probe"] = (
+                isinstance(live_server, dict) and live_server.get("Enable") is True
+            )
+            if not report["server_enabled_for_probe"]:
+                raise ProbeError("WOL Server did not become enabled in disposable Lucky")
 
             payload = {
                 "Key": "",
@@ -331,11 +373,42 @@ def main() -> int:
             report["device_deleted"] = True
             final_keys = {device_key(row) for row in get_devices(base_url, open_token) if device_key(row)}
             report["baseline_restored"] = final_keys == baseline_keys
+
+            if service_baseline is not None:
+                api_json(
+                    base_url,
+                    open_token,
+                    "/api/wol/service/configure",
+                    method="PUT",
+                    payload=service_baseline,
+                )
+                server_enabled = False
+                restored = api_json(base_url, open_token, "/api/wol/service/configure")
+                restored_config = restored.get("configure")
+                restored_server = restored_config.get("Server") if isinstance(restored_config, dict) else None
+                restored_client = restored_config.get("Client") if isinstance(restored_config, dict) else None
+                report["service_baseline_restored"] = (
+                    isinstance(restored_server, dict)
+                    and restored_server.get("Enable") is False
+                    and isinstance(restored_client, dict)
+                    and restored_client.get("Enable") is False
+                )
         finally:
             if created_key:
                 query = urllib.parse.urlencode({"key": created_key})
                 try:
                     api_json(base_url, open_token, f"/api/wol/device?{query}", method="DELETE")
+                except Exception:  # noqa: BLE001 - disposable container teardown is final safety net
+                    pass
+            if server_enabled and service_baseline is not None:
+                try:
+                    api_json(
+                        base_url,
+                        open_token,
+                        "/api/wol/service/configure",
+                        method="PUT",
+                        payload=service_baseline,
+                    )
                 except Exception:  # noqa: BLE001 - disposable container teardown is final safety net
                     pass
             if capture is not None:
@@ -351,6 +424,9 @@ def main() -> int:
         "admin_port_unpublished",
         "admin_reachable_on_internal_bridge",
         "baseline_empty",
+        "service_baseline_disabled",
+        "server_enabled_for_probe",
+        "service_baseline_restored",
         "device_created",
         "broadcast_ip_item_is_string",
         "wakeup_ret_zero",
