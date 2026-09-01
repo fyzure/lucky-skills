@@ -368,6 +368,75 @@ class KernelNatMapping:
             del check[insert_at + 2]
         return run(check, check=False, timeout=20).returncode != 0
 
+    @staticmethod
+    def _counter(table: str, chain: str, needles: tuple[str, ...]) -> int:
+        args = ["iptables"]
+        if table != "filter":
+            args.extend(["-t", table])
+        args.extend(["-L", chain, "-n", "-v", "-x"])
+        result = run(args, check=False, timeout=20)
+        text = result.stdout.decode("utf-8", errors="replace")
+        for line in text.splitlines():
+            if not all(needle in line for needle in needles):
+                continue
+            fields = line.split()
+            if not fields:
+                continue
+            try:
+                return int(fields[0])
+            except ValueError:
+                continue
+        return -1
+
+    def packet_counters(self) -> dict[str, int]:
+        return {
+            "dnat": self._counter(
+                "nat",
+                "PREROUTING",
+                (
+                    "DNAT",
+                    self.wan_interface,
+                    f"dpt:{self.external_port}",
+                    f"to:{self.lucky_ip}:{self.internal_port}",
+                ),
+            ),
+            "snat": self._counter(
+                "nat",
+                "POSTROUTING",
+                (
+                    "SNAT",
+                    self.bridge_name,
+                    self.client_ip,
+                    self.lucky_ip,
+                    f"dpt:{self.internal_port}",
+                    f"to:{self.lan_gateway_ip}",
+                ),
+            ),
+            "forward_in": self._counter(
+                "filter",
+                "FORWARD",
+                (
+                    "ACCEPT",
+                    self.wan_interface,
+                    self.bridge_name,
+                    self.client_ip,
+                    self.lucky_ip,
+                    f"dpt:{self.internal_port}",
+                ),
+            ),
+            "forward_out": self._counter(
+                "filter",
+                "FORWARD",
+                (
+                    "ACCEPT",
+                    self.bridge_name,
+                    self.wan_interface,
+                    self.lucky_ip,
+                    self.client_ip,
+                ),
+            ),
+        }
+
 
 class NatPmpGateway:
     def __init__(
@@ -700,7 +769,11 @@ def cleanup_wan_namespace(namespace: str, host_veth: str) -> None:
     run(["ip", "link", "del", host_veth], check=False, timeout=20)
 
 
-def mapped_udp_roundtrip(namespace: str, external_port: int, marker: bytes) -> bool:
+def mapped_udp_roundtrip(
+    namespace: str,
+    external_port: int,
+    marker: bytes,
+) -> tuple[bool, int, str]:
     code = (
         "import socket,sys;"
         "m=bytes.fromhex(sys.argv[1]);"
@@ -720,7 +793,14 @@ def mapped_udp_roundtrip(namespace: str, external_port: int, marker: bytes) -> b
         check=False,
         timeout=15,
     )
-    return result.returncode == 0
+    stderr = result.stderr.decode("utf-8", errors="replace").lower()
+    if "timed out" in stderr or "timeouterror" in stderr:
+        failure_kind = "timeout"
+    elif result.returncode == 0:
+        failure_kind = ""
+    else:
+        failure_kind = "other"
+    return result.returncode == 0, int(result.returncode), failure_kind
 
 
 def direct_udp_roundtrip(
@@ -817,8 +897,12 @@ def main() -> int:
         "natpmp_internal_port_matches_listener": False,
         "natpmp_mapping_installed": False,
         "kernel_mapping_cleanup_verified": False,
+        "kernel_mapping_counters": {},
         "direct_listener_roundtrip": False,
         "mapped_data_roundtrip": False,
+        "mapped_client_returncode": 0,
+        "mapped_client_failure_kind": "",
+        "mapped_echo_target_used": False,
         "echo_target_used": False,
         "rule_log_surface_read": False,
         "rule_log_samples": [],
@@ -1052,11 +1136,18 @@ def main() -> int:
                 marker,
             )
 
-            report["mapped_data_roundtrip"] = mapped_udp_roundtrip(
+            echo_before_mapped = echo_server.request_count
+            mapped_ok, mapped_returncode, mapped_failure_kind = mapped_udp_roundtrip(
                 wan_namespace,
                 external_port,
                 marker,
             )
+            report["mapped_data_roundtrip"] = mapped_ok
+            report["mapped_client_returncode"] = mapped_returncode
+            report["mapped_client_failure_kind"] = mapped_failure_kind
+            report["mapped_echo_target_used"] = echo_server.request_count > echo_before_mapped
+            if natpmp.mapping is not None:
+                report["kernel_mapping_counters"] = natpmp.mapping.packet_counters()
             report["echo_target_used"] = echo_server.request_count > 0
 
             logs = api_json(base_url, open_token, f"/api/stun/{created_key}/lastlogs")
