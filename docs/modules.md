@@ -20,6 +20,8 @@
 
 典型流程是先读取 `GET /api/ddnstasklist`，复制完整任务对象，再用 `PUT /api/ddns` 更新。`/api/ddns/manualSync/{param}`、Webhook 测试和命令测试会产生外部网络或命令执行副作用，不属于只读调用。
 
+Lucky 3.0.0 的 Cloudflare DDNS 核心行为已经完成真实闭环验证。一次性 TEST 任务实际通过 `POST /api/ddns` 创建、回读、`PUT` 更新和 enable/disable；任务以 `V4QueryIPType=url` 从本机回环 HTTP 端点获取 IPv4，并使用记录值模板 `{ipv4Addr}` 将独立 Cloudflare TEST A 记录更新为查询结果。A 记录创建时 `SyncRecordData.ipv4Address` 不能为空；`{ipv4Addr}` 是已验证的动态替换模板，而 literal IP 会被当成固定目标值。随后将 TEST 记录值 PUT 为另一个文档保留地址并调用 `manualSync`，Cloudflare 记录再次真实更新；Webhook test 也实际向回环端点发出了 POST。完整可重复流程见 `tools/lucky_ddns_probe.py`，它会同时清理 Lucky TEST 任务与 Cloudflare TEST DNS 记录，并核对原 TaskKey 集合恢复。
+
 ## Web 服务、WAF 与认证
 
 `webservice` 覆盖主规则、子规则、分组、发现、CGI、文件夹操作、轻面板、统计、WAF 事件和网页登录会话。`coraza` 管理 WAF 实例和规则集。

@@ -50,7 +50,7 @@ Lucky Skills 使用两层证据：
 - 显式 response schema 已覆盖 **324 条**路由；
 - response 侧未定型 `{}` 叶子已降到 **0**；request 侧仍有 **38** 个。
 
-目前重点覆盖 DDNS、WebService、Docker、FRP、SSL/ACME、Security Groups、IPFilter/PortTrap、PortForward、STUN，以及部分 Rclone、Cron、WOL、Storage、FileBrowser、Status、IPDB、Modules 等接口。
+目前重点覆盖 DDNS、WebService、Docker、FRP、SSL/ACME、Security Groups、IPFilter/PortTrap、PortForward、STUN，以及部分 Rclone、Cron、WOL、Storage、FileBrowser、Status、IPDB、Modules 等接口。DDNS 的 Cloudflare 核心链路已提升到 `behavior-runtime`：独立 TEST 任务完成 CRUD、URL 取 IPv4、真实 DNS A 更新、manualSync、Webhook test 与双边清理；provider 密钥和真实业务记录未写入证据。
 
 ## 已知限制
 

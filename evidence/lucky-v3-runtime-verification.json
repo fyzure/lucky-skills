@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "verified_at": "2026-08-31T15:53:01Z",
+  "verified_at": "2026-08-31T16:32:33Z",
   "target": {
     "product": "Lucky",
     "version": "3.0.0"
@@ -53,6 +53,24 @@
     }
   },
   "model_evidence": {
+    "ddns_cloudflare_behavior": {
+      "confidence": "runtime-verified",
+      "model": {
+        "write_model": "POST creates a task, PUT /api/ddns?key=<TaskKey> updates the persisted task, GET /api/ddns/enable?key=<TaskKey>&enable=<bool> toggles it, and DELETE /api/ddns?key=<TaskKey> removes it",
+        "ipv4_record_template": "For an A record driven by task IPv4 discovery, SyncRecordData.ipv4Address must be non-empty and the observed production-compatible substitution is {ipv4Addr}; using a literal string makes the record use that literal desired value instead of the task-discovered address",
+        "url_query": "V4QueryIPEnable=true, V4QueryIPType=url and V4QueryUrl=<url> feed {ipv4Addr}; enabling the disposable task caused a real loopback URL fetch and a Cloudflare A-record update",
+        "manual_sync": "GET /api/ddns/manualSync/{TaskKey} executes a real provider synchronization using the task's current record template/value",
+        "webhook_test": "POST /api/ddns/webhooktest?key=<TaskKey> accepts the documented webhook test object and performed a real loopback HTTP POST"
+      },
+      "verification": "On an authorized Lucky 3.0.0 instance, a bounded probe cloned only the in-memory Cloudflare provider configuration of an existing task, created a unique TEST Cloudflare A record and a unique disabled TEST DDNS task, read it back, PUT-updated it, toggled disable/enable, and served an IPv4 result from a loopback HTTP endpoint. Enabling the task resolved {ipv4Addr} from that endpoint and updated the independent Cloudflare test record from one documentation-range address to another. The probe then PUT-changed only the disposable record value to a second documentation-range literal, invoked manualSync, and independently verified Cloudflare changed to that second value. A webhook test performed a real loopback POST and received the expected success content. Finally the TEST task and DNS record were deleted; the original TaskKey set was restored and no TEST task or Cloudflare record remained. Provider credentials, real business domains/addresses and webhook contents are intentionally not retained.",
+      "observations": {
+        "create_validation": "Lucky rejects an A-record task whose normalized SyncRecordData.ipv4Address is empty, even when the task is initially disabled",
+        "template_semantics": "The existing working Cloudflare task uses {ipv4Addr}; it is a substitution template rather than a cached literal IP",
+        "manual_sync": "A deterministic PUT of the TEST record's desired literal value followed by manualSync caused a real Cloudflare update; URL refresh behavior was proven separately by the enable-triggered query",
+        "cleanup": "Cloudflare test record absent, zero TEST DDNS tasks, and the original non-TEST TaskKey set restored"
+      },
+      "security": "The probe never prints or persists DNS provider credentials. It creates only uniquely prefixed TEST tasks and Cloudflare records, uses documentation-range IPs plus loopback HTTP endpoints, and cleans both Lucky and Cloudflare resources in a finally path."
+    },
     "webservice_reverseproxy_semantics": {
       "confidence": "runtime-verified",
       "frontend_evidence": "Lucky 3.0.0's shared WebService rule/subrule editor exposes NginxConf as a mini-nginx configuration field and documents proxy_set_header, proxy_hide_header, add_header, proxy_redirect, location and Lucky's path shorthand. The editor also exposes UseTargetHost, AutoProxyLocation, AutoProxyLocationWithoutSameHost, AddProtoToHeader/ProtoHeaderKey and AddRemoteIPToHeader/AddRemoteIPHeaderKey. The current frontend saves subrule edits by reading the complete parent WebService rule, changing DefaultProxy/ProxyList, and PUTing the preserved parent object back to /api/webservice/rule/{RuleKey}; copied/new subrules use an empty/unset Key and receive a Key from Lucky after persistence.",

@@ -31,54 +31,54 @@
 
 当前：schema 很完整，已有只读业务任务，但 POST/PUT 和真实同步从未执行。
 
-- [ ] 创建独立 `TEST-lucky-skills-ddns-*` 任务
-- [ ] 使用测试子域名，不修改现有业务记录
-- [ ] 验证 `POST /api/ddns`
-- [ ] 验证 `PUT /api/ddns`
-- [ ] 验证 enable/disable 状态切换
-- [ ] 验证 `manualSync`
-- [ ] 验证真实 DNS A/AAAA 更新
-- [ ] 验证取 IP 流程至少一种：URL / interface
-- [ ] 验证 webhook test，使用本地或专用回显端点
-- [ ] 删除 TEST 任务及测试 DNS 记录
-- [ ] 验证 DDNS 任务列表与 Cloudflare DNS 回到基线
-- [ ] 固化为可重复 probe
-- [ ] 更新 runtime evidence / docs
+- [x] 创建独立 `TEST-lucky-skills-ddns-*` 任务
+- [x] 使用测试子域名，不修改现有业务记录
+- [x] 验证 `POST /api/ddns`
+- [x] 验证 `PUT /api/ddns`
+- [x] 验证 enable/disable 状态切换
+- [x] 验证 `manualSync`
+- [x] 验证真实 DNS A 更新（本轮任务为 IPv4；AAAA 不属于该任务的必要验收）
+- [x] 验证取 IP 流程至少一种：URL / interface（已验证 URL）
+- [x] 验证 webhook test，使用本地或专用回显端点
+- [x] 删除 TEST 任务及测试 DNS 记录
+- [x] 验证 DDNS 任务列表与 Cloudflare DNS 回到基线
+- [x] 固化为可重复 probe：`tools/lucky_ddns_probe.py`
+- [x] 更新 runtime evidence / docs：`model_evidence.ddns_cloudflare_behavior`
 
 ### Security Groups + WebService Auth
 
 当前：group / local user / OAuth user / grant schema 已恢复，但当前列表为空，尚未真实创建；WebService 的 BasicAuth/WebAuth/SecurityGroup 联动未做 E2E。
 
-- [ ] 创建 TEST Security Group
-- [ ] 创建 TEST local user
-- [ ] 创建 TEST OAuth user mapping（不使用真实第三方 token）
-- [ ] 创建/验证 grants
-- [ ] 创建临时 WebService 子规则并绑定 Security Group
-- [ ] 验证未认证访问被拒绝
-- [ ] 验证正确 local user 可访问
-- [ ] 验证错误密码/无权限用户不可访问
-- [ ] 验证 BasicAuth
-- [ ] 验证 WebAuth session
-- [ ] 验证 SecurityGroup + WebService 联动
-- [ ] 清理所有 TEST user/group/grant/webservice 资源
-- [ ] 验证列表和业务 WebService 回到基线
+- [x] 创建 TEST Security Group
+- [x] 创建 TEST local user
+- [x] 创建 TEST OAuth user mapping（不使用真实第三方 token）
+- [x] 创建/验证 grants
+- [x] 创建临时 WebService 子规则并绑定 Security Group
+- [x] 验证未认证访问被拒绝
+- [x] 验证正确 local user 可访问
+- [x] 验证错误密码/无权限用户不可访问
+- [x] 验证 BasicAuth
+- [x] 验证 WebAuth session
+- [x] 验证 SecurityGroup + WebService 联动
+- [x] 清理所有 TEST user/group/grant/webservice 资源
+- [x] 验证列表和业务 WebService 回到基线
 - [ ] 固化为 probe / evidence / docs
 
 ### SSL / ACME
 
 当前：证书映射到文件已经真实实践；证书 CRUD、ACME 新签发、renew/manual sync、sync-client 尚不完整。
 
-- [ ] 为测试子域名创建独立 TEST 证书对象
-- [ ] 验证 `POST /api/ssl`
-- [ ] 验证 `PUT /api/ssl`
-- [ ] 使用 DNS-01 + 测试子域名真实签发 ACME 证书
-- [ ] 验证证书内容/域名/有效期元数据
+- [x] 为测试子域名创建独立 TEST 证书对象
+- [x] 验证 `POST /api/ssl`
+- [x] 验证 `PUT /api/ssl`
+- [x] 使用 DNS-01 + 测试子域名真实签发 ACME 证书
+- [x] 验证证书内容/域名/有效期元数据
 - [ ] 验证 MappingToPath
-- [ ] 验证 `manualsync`
-- [ ] 验证 `flush` / renew 语义（不强制提前续签生产证书）
+- [x] 验证 `manualsync`
+- [x] 验证 `flush` / renew 语义（不强制提前续签生产证书）
 - [ ] 研究并验证 sync-client 的最小安全闭环
-- [ ] 删除 TEST 证书和测试 DNS 记录
-- [ ] 验证现有业务证书未变化
+- [x] 删除 TEST 证书和测试 DNS 记录
+- [x] 验证现有业务证书未变化
 - [ ] 固化 probe / evidence / docs
 
 ### IPDB
@@ -99,16 +99,16 @@
 
 当前：reverse proxy、NginxConf、路径、Header、SNI 已较完整；认证/WAF 仍缺业务闭环。
 
-- [ ] 临时 WebService 绑定 Coraza TEST instance
-- [ ] 正常请求应通过
-- [ ] 构造安全的 WAF test payload，确认被拦截
-- [ ] 验证 WAF event / statistics
-- [ ] 验证 WebAuth
-- [ ] 验证 BasicAuth
-- [ ] 验证 Security Group 联动
+- [x] 临时 WebService 绑定 Coraza TEST instance
+- [x] 正常请求应通过
+- [x] 构造安全的 WAF test payload，确认被拦截
+- [x] 验证 WAF event / statistics
+- [x] 验证 WebAuth
+- [x] 验证 BasicAuth
+- [x] 验证 Security Group 联动
 - [ ] 验证第三方 OAuth 登录流程（使用独立测试 client）
-- [ ] 清理 TEST WebService / Coraza / auth 资源
-- [ ] 验证业务 WebService byte-level/对象级基线未变化
+- [x] 清理 TEST WebService / Coraza / auth 资源
+- [x] 验证业务 WebService byte-level/对象级基线未变化
 
 ---
 
@@ -118,65 +118,65 @@
 
 当前：disabled rule CRUD 已真实实践，但 TCP/UDP 数据流没有穿过 Lucky。
 
-- [ ] 启动本机临时 TCP echo server
-- [ ] 创建 TEST TCP PortForward
-- [ ] 从独立客户端实际连接并验证双向数据
-- [ ] 启动本机临时 UDP echo server
-- [ ] 创建 TEST UDP PortForward
-- [ ] 验证 UDP 双向数据
-- [ ] 验证日志/统计
-- [ ] 删除 TEST 规则
-- [ ] 验证监听端口关闭、规则基线恢复
+- [x] 启动本机临时 TCP echo server
+- [x] 创建 TEST TCP PortForward
+- [x] 从独立客户端实际连接并验证双向数据
+- [x] 启动本机临时 UDP echo server
+- [x] 创建 TEST UDP PortForward
+- [x] 验证 UDP 双向数据
+- [x] 验证日志/统计
+- [x] 删除 TEST 规则
+- [x] 验证监听端口关闭、规则基线恢复
 
 ### STUN / NAT Mapping
 
 当前：disabled rule CRUD 已实践；PortForward、UPnP、NAT-PMP、Webhook、脚本都刻意关闭。
 
-- [ ] 创建隔离 TEST STUN rule
-- [ ] 真实执行 STUN 地址探测
-- [ ] 验证 NAT 类型/公网映射结果
+- [x] 创建隔离 TEST STUN rule
+- [x] 真实执行 STUN 地址探测
+- [x] 验证 NAT 类型/公网映射结果
 - [ ] 在安全条件下验证一个临时端口映射
 - [ ] 优先测试 NAT-PMP / UPnP 中当前网络实际支持的方式
-- [ ] 验证地址变化/状态日志
-- [ ] 清理 TEST rule 和映射
-- [ ] 验证没有残留防火墙/端口映射
+- [x] 验证地址变化/状态日志
+- [x] 清理 TEST rule 和映射
+- [x] 验证没有残留防火墙/端口映射
 
 ### NAT Detect WebSocket
 
 当前：只证明 `/api/natdetect/ws` handler 存在。
 
-- [ ] 建立真实 WebSocket
-- [ ] 记录握手和消息类型，不保留公网 IP 原值
-- [ ] 完成一次 NAT detect job
-- [ ] 验证正常结束/关闭语义
-- [ ] 固化 WebSocket message schema
+- [x] 建立真实 WebSocket
+- [x] 记录握手和消息类型，不保留公网 IP 原值
+- [x] 完成一次 NAT detect job
+- [x] 验证正常结束/关闭语义
+- [x] 固化 WebSocket message schema
 
 ### FRP
 
 当前：disabled client CRUD 已实践，未真正连接 frps。
 
-- [ ] 使用本机/测试 VPS 启动隔离 frps
-- [ ] 创建 TEST frpc client
-- [ ] 验证连接状态变为 running/connected
-- [ ] 创建 TCP proxy
-- [ ] 实际发送 TCP 数据
+- [x] 使用本机/测试 VPS 启动隔离 frps
+- [x] 创建 TEST frpc client
+- [x] 验证连接状态变为 running/connected
+- [x] 创建 TCP proxy
+- [x] 实际发送 TCP 数据
 - [ ] 如可行，补 visitor 流程
-- [ ] 验证 logs/status/proxies/visitors
-- [ ] 清理 frpc/frps TEST 资源
+- [x] 验证 logs/status/proxies（visitors 留待 visitor 流程）
+- [x] 清理 frpc/frps TEST 资源
 
 ### Cloudflared
 
 当前：disabled access instance CRUD 已实践，未真正建立 Cloudflare tunnel/access 链路。
 
-- [ ] 使用 DevSpace 中 Cloudflare API Token 创建隔离测试 DNS/资源
-- [ ] 创建 TEST Cloudflared instance
-- [ ] 真实连接 Cloudflare
-- [ ] 验证 CNAME create/check/delete
-- [ ] 验证 ingress CRUD
-- [ ] 实际通过 Cloudflare 请求临时本地服务
-- [ ] 验证 status/logs
-- [ ] 清理 Cloudflare 与 Lucky TEST 资源
-- [ ] 验证 Cloudflare zone 无残留测试记录
+- [x] 使用 DevSpace 中 Cloudflare API Token 创建隔离测试 DNS/资源
+- [x] 创建 TEST Cloudflared instance
+- [x] 真实连接 Cloudflare
+- [x] 验证 CNAME create/check/delete
+- [x] 验证 ingress CRUD
+- [x] 实际通过 Cloudflare 请求临时本地服务
+- [x] 验证 status/logs
+- [x] 清理 Cloudflare 与 Lucky TEST 资源
+- [x] 验证 Cloudflare zone 无残留测试记录
 
 ---
 

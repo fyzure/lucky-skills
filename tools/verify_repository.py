@@ -408,6 +408,39 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
     model_evidence = runtime.get("model_evidence")
     if not isinstance(model_evidence, dict):
         fail("runtime model_evidence must be an object")
+    ddns_evidence = model_evidence.get("ddns_cloudflare_behavior")
+    if not isinstance(ddns_evidence, dict):
+        fail("DDNS Cloudflare behavior evidence is missing")
+    if ddns_evidence.get("confidence") != "runtime-verified":
+        fail("DDNS Cloudflare behavior evidence must remain runtime-verified")
+    ddns_model = ddns_evidence.get("model")
+    required_ddns_model = {
+        "write_model",
+        "ipv4_record_template",
+        "url_query",
+        "manual_sync",
+        "webhook_test",
+    }
+    if not isinstance(ddns_model, dict) or set(ddns_model) != required_ddns_model:
+        fail("DDNS Cloudflare behavior model regressed")
+    for field in required_ddns_model:
+        if not isinstance(ddns_model.get(field), str) or not ddns_model[field].strip():
+            fail(f"DDNS Cloudflare behavior model field is missing: {field}")
+    ddns_observations = ddns_evidence.get("observations")
+    if not isinstance(ddns_observations, dict) or set(ddns_observations) != {
+        "create_validation",
+        "template_semantics",
+        "manual_sync",
+        "cleanup",
+    }:
+        fail("DDNS Cloudflare runtime observations regressed")
+    for field in ("verification", "security"):
+        value = ddns_evidence.get(field)
+        if not isinstance(value, str) or not value.strip():
+            fail(f"DDNS Cloudflare evidence field is missing: {field}")
+    if not (ROOT / "tools" / "lucky_ddns_probe.py").is_file():
+        fail("DDNS runtime probe tool is missing")
+
     reverse_proxy_evidence = model_evidence.get("webservice_reverseproxy_semantics")
     if not isinstance(reverse_proxy_evidence, dict):
         fail("WebService reverse-proxy model evidence is missing")
