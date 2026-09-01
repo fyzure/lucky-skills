@@ -20254,7 +20254,7 @@
                                 "type": "string"
                               },
                               "Dirs": {
-                                "type": "array"
+                                "type": "string"
                               },
                               "ReadOnly": {
                                 "type": "boolean"

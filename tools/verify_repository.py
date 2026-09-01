@@ -4489,7 +4489,7 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         if not isinstance(users, dict) or users.get("items") != {}:
             fail(f"credential-bearing user item schema must remain unspecified for {route_key}")
 
-    ftp_response_schema = merged_by_key[("GET", "/api/ftpserver/configure")].response_schema
+    ftp_response_schema = patched_by_key[("GET", "/api/ftpserver/configure")].response_schema
     ftp_configure_props = (
         ftp_response_schema.get("properties", {}).get("configure", {}).get("properties", {})
     )
@@ -4498,7 +4498,7 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         "type": "object",
         "properties": {
             "Username": {"type": "string"},
-            "Dirs": {"type": "array"},
+            "Dirs": {"type": "string"},
             "ReadOnly": {"type": "boolean"},
             "MountList": {
                 "type": "array",

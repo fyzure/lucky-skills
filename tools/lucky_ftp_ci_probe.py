@@ -416,7 +416,7 @@ def main() -> int:
             }
             report["readback_safe_types"] = (
                 isinstance(first_user.get("Username"), str)
-                and isinstance(first_user.get("Dirs"), list)
+                and isinstance(first_user.get("Dirs"), str)
                 and isinstance(first_user.get("ReadOnly"), bool)
                 and isinstance(mounts, list)
                 and len(mounts) == 1

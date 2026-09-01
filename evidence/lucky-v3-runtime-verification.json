@@ -235,7 +235,7 @@
       "confidence": "runtime-verified",
       "model": {
         "service_lifecycle": "PUT /api/ftpserver/configure starts and stops the FTP service on Lucky 3.0.0; the successful CI probe started from the fresh stopped/empty baseline, applied one TEST configuration, then restored the exact baseline through the API",
-        "principal_model": "A working FTP user accepts Username, Password and one local MountList. Runtime readback exposed safe account fields Username, Dirs, ReadOnly and MountList; credential values are never retained. The local mount readback exposed Type, Param, DisplayName, Writable and IsLocalDir among its fields",
+        "principal_model": "A working FTP user accepts Username, Password and one local MountList. Runtime readback verified Username and Dirs as strings, ReadOnly as boolean and MountList as an array; credential values are never retained. The local mount readback verified Type, Param and DisplayName as strings plus Writable and IsLocalDir as booleans",
         "protocol": "A Python stdlib FTP client completed passive-mode login, directory listing, STOR upload, RETR download and DELE against the disposable Lucky service; a wrong password was rejected",
         "root_mapping": "With exactly one local mount, the mounted directory is the FTP root itself rather than an extra DisplayName subdirectory: a seed file placed directly in the mounted directory appeared in root LIST/NLST and an uploaded file appeared directly in the same backing directory",
         "passive_range": "Lucky 3.0.0 rejects a PassivePortStart/PassivePortEnd range whose difference is below 9; the final probe uses ten consecutive passive ports and disables active mode",
@@ -245,7 +245,7 @@
       "observations": {
         "authentication": "The disposable TEST account accepted the generated password and rejected the same username with an incorrect password",
         "list_and_transfer": "Root directory listing saw the pre-created seed file; STOR created the exact marker bytes in the mounted backing directory, RETR returned the same bytes and DELE removed the backing file",
-        "readback": "Safe FTP user readback fields included Dirs, MountList, ReadOnly and Username. Safe mount readback fields included DisplayName, IsLocalDir, Param, Type and Writable; the live Password value and all generated credentials were omitted from evidence",
+        "readback": "Safe FTP user readback types were Dirs=string, MountList=array, ReadOnly=boolean and Username=string. Safe mount types were DisplayName/Param/Type=string and IsLocalDir/Writable=boolean; the live Password value and all generated credentials were omitted from evidence",
         "cleanup": "The exact fresh stopped FTP configuration was restored through the API after an ownership check, and the disposable Lucky container plus TEST directory were removed by runner teardown"
       },
       "security": "The FTP probe is CI-only and refuses local execution. Because Lucky FTP has no ListenIP field, isolation is enforced outside Lucky by publishing every FTP port only to runner loopback; active mode and AutoFireWall are disabled. No production Lucky configuration, host firewall, public listener, password value or transferred marker content is retained."
@@ -4491,7 +4491,7 @@
     },
     {
       "path": "/api/ftpserver/configure", "method": "GET",
-      "at": ["properties", "configure", "properties", "Users", "items"], "value": {"type": "object", "properties": {"Username": {"type": "string"}, "Dirs": {"type": "array"}, "ReadOnly": {"type": "boolean"}, "MountList": {"type": "array", "items": {"type": "object", "properties": {"Type": {"type": "string"}, "Param": {"type": "string"}, "DisplayName": {"type": "string"}, "Writable": {"type": "boolean"}, "IsLocalDir": {"type": "boolean"}}}}}},
+      "at": ["properties", "configure", "properties", "Users", "items"], "value": {"type": "object", "properties": {"Username": {"type": "string"}, "Dirs": {"type": "string"}, "ReadOnly": {"type": "boolean"}, "MountList": {"type": "array", "items": {"type": "object", "properties": {"Type": {"type": "string"}, "Param": {"type": "string"}, "DisplayName": {"type": "string"}, "Writable": {"type": "boolean"}, "IsLocalDir": {"type": "boolean"}}}}}},
       "evidence": "A disposable CI FTP behavior probe runtime-verified these non-secret account and local-mount fields/types through configure readback plus real passive FTP transfer behavior. Password is present in the live user object but is intentionally omitted from response documentation"
     },
     {
