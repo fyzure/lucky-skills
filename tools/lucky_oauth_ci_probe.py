@@ -727,7 +727,6 @@ def main() -> int:
         "tmpcode_msg": "",
         "tmpcode_error": "",
         "tmpcode_response_shape": {},
-        "frontend_runtime_snippets": {},
         "tmpcode_attempts": [],
         "tmpcode_available": False,
         "auth_url_owned": False,
@@ -798,6 +797,7 @@ def main() -> int:
         baseline_webservice_keys: set[str] = set()
         oauth_relay_key = ""
         saved_user_key = ""
+        frontend_runtime_diagnostics: dict[str, str] = {}
         try:
             gateway_ip, _ = docker_network_values(network_name)
             report["network_internal"] = True
@@ -882,7 +882,10 @@ def main() -> int:
                     report["third_auth_login_enabled"] = bool(
                         oauthcfg.get("ThirdAuthLoginEnable")
                     )
-            report["frontend_runtime_snippets"] = frontend_runtime_snippets(base_url)
+            # Keep the served-frontend reconnaissance available for failures,
+            # but do not dump megabytes of minified JS into every successful
+            # CI run now that the OAuth login protocol is runtime-verified.
+            frontend_runtime_diagnostics = frontend_runtime_snippets(base_url)
             baseline_webservice_keys = {
                 str(row.get("RuleKey") or "")
                 for row in webservice_rules(base_url, admin_token, browser_opener)
@@ -1478,6 +1481,8 @@ def main() -> int:
     if report.get("oauth_userinfo_ret") != 0:
         failed.append("oauth_userinfo_completed")
     report["failed"] = failed
+    if failed and frontend_runtime_diagnostics:
+        report["frontend_runtime_snippets"] = frontend_runtime_diagnostics
     print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
     return 1 if failed else 0
 
