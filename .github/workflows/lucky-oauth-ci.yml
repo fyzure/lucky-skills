@@ -1,0 +1,34 @@
+name: lucky-oauth-ci
+
+on:
+  push:
+    paths:
+      - ".github/workflows/lucky-oauth-ci.yml"
+      - "tools/lucky_oauth_ci_probe.py"
+      - "tools/lucky_docker_build_ci_probe.py"
+      - "tools/lucky_upnp_ci_probe.py"
+  pull_request:
+    paths:
+      - ".github/workflows/lucky-oauth-ci.yml"
+      - "tools/lucky_oauth_ci_probe.py"
+      - "tools/lucky_docker_build_ci_probe.py"
+      - "tools/lucky_upnp_ci_probe.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  oauth-behavior:
+    name: Lucky isolated OIDC authorization behavior
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Show Docker runtime
+        run: docker version
+
+      - name: Run isolated Lucky OAuth probe
+        run: sudo -E python3 tools/lucky_oauth_ci_probe.py
