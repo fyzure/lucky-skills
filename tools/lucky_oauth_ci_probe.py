@@ -759,6 +759,7 @@ def main() -> int:
         "oauth_login_token_present": False,
         "login_page_config_shape": {},
         "third_auth_login_enabled": None,
+        "third_auth_login_user_allowed": False,
         "third_party_user_revoked": False,
         "third_party_user_created": False,
         "config_restored": False,
@@ -1062,6 +1063,28 @@ def main() -> int:
                     saved_user_key = str(saved.get("key") or "")
                     report["third_party_user_saved"] = bool(saved_user_key)
                     if saved_user_key:
+                        login_access_config = dict(hardened_config)
+                        login_access_config["OldPassword"] = disposable_admin_password
+                        login_access_config["AdminAccount"] = disposable_admin_account
+                        login_access_config["AdminPassword"] = disposable_admin_password
+                        login_access_config["EnableThirdAuthLogin"] = True
+                        login_access_config["AllowAllThirdAuthUsers"] = False
+                        login_access_config["ThirdAuthLoginUserList"] = [saved_user_key]
+                        admin_json(
+                            base_url,
+                            admin_token,
+                            "/api/baseconfigure",
+                            method="PUT",
+                            payload=login_access_config,
+                            opener=browser_opener,
+                        )
+                        admin_token, browser_opener, _ = login_browser_admin(
+                            base_url,
+                            tmp,
+                            disposable_admin_password,
+                            disposable_admin_account,
+                        )
+                        report["third_auth_login_user_allowed"] = True
                         encoded_user_key = urllib.parse.quote(saved_user_key, safe="")
                         detail = admin_json(
                             base_url,
@@ -1436,6 +1459,7 @@ def main() -> int:
         "oauth_login_token_present",
         "third_party_user_revoked",
         "third_auth_login_enabled",
+        "third_auth_login_user_allowed",
         "config_restored",
         "user_baseline_restored",
     )
