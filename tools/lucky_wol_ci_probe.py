@@ -212,6 +212,7 @@ def main() -> int:
         "magic_packet_exact": False,
         "magic_packet_size": 0,
         "configured_port_used": False,
+        "observed_wakeup_udp_port": 0,
         "device_deleted": False,
         "baseline_restored": False,
         "shutdown_exercised": False,
@@ -377,6 +378,7 @@ def main() -> int:
             report["magic_packet_size"] = len(packet)
             report["magic_packet_exact"] = packet == expected_packet
             report["configured_port_used"] = bool(packet) and observed_destination_port == wol_port
+            report["observed_wakeup_udp_port"] = observed_destination_port
 
             delete_query = urllib.parse.urlencode({"key": created_key})
             api_json(base_url, open_token, f"/api/wol/device?{delete_query}", method="DELETE")
