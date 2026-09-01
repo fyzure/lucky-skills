@@ -451,34 +451,6 @@ def rule_options() -> dict[str, Any]:
     }
 
 
-def module_config(enable: bool, stun_server: str) -> dict[str, Any]:
-    """Return a credential-free STUN module configuration for disposable CI."""
-
-    return {
-        "ConfVer": 1,
-        "EnableModule": enable,
-        "GlobalStunServerList": [stun_server],
-        "RetryCount": 0,
-        "RetryInterval": 0,
-        "WebHookTimeout": 0,
-        "WebhookDisableCallbackSuccessContentCheck": False,
-        "WebhookEnable": False,
-        "WebhookHeaders": None,
-        "WebhookInsecureSkipVerify": False,
-        "WebhookLocalAddr": "",
-        "WebhookMethod": "",
-        "WebhookNetworkType": "",
-        "WebhookOnlyAddrChange": False,
-        "WebhookProxy": "",
-        "WebhookProxyAddr": "",
-        "WebhookProxyPassword": "",
-        "WebhookProxyUser": "",
-        "WebhookRequestBody": "",
-        "WebhookSuccessContent": None,
-        "WebhookURL": "",
-    }
-
-
 def rule_payload(
     name: str,
     lucky_ip: str,
@@ -587,7 +559,7 @@ def main() -> int:
         "admin_reachable_on_internal_bridge": False,
         "baseline_empty": False,
         "stun_module_present": False,
-        "module_started_disabled": False,
+        "module_transient_not_ready_observed": False,
         "module_enabled_for_probe": False,
         "module_baseline_restored": False,
         "rule_created": False,
@@ -636,7 +608,6 @@ def main() -> int:
         created_key = ""
         module_baseline: dict[str, Any] | None = None
         module_changed = False
-        module_started_disabled = False
 
         try:
             gateway_ip, _subnet = docker_network_values(network_name)
@@ -687,53 +658,46 @@ def main() -> int:
                 raise ProbeError("fresh Lucky module list does not contain STUN")
 
             opener = urllib.request.build_opener()
-            config_status, module_response = json_request(
-                opener,
-                base_url,
-                "/api/stun/configure",
-                open_token=open_token,
-                timeout=30,
-            )
-            if config_status != 200:
-                raise ProbeError(f"initial STUN configure GET returned HTTP {config_status}")
-            if module_response.get("ret") == 0:
-                configure = module_response.get("configure")
-                if not isinstance(configure, dict):
-                    raise ProbeError("STUN module configure response missing configure object")
-                module_baseline = copy.deepcopy(configure)
-                if configure.get("EnableModule") is not True:
-                    candidate = copy.deepcopy(configure)
-                    candidate["EnableModule"] = True
-                    candidate.setdefault("WebhookProxyPassword", "")
-                    api_json(
-                        base_url,
-                        open_token,
-                        "/api/stun/configure",
-                        method="PUT",
-                        payload=candidate,
+            configure: dict[str, Any] | None = None
+            deadline = time.time() + 35
+            while time.time() < deadline:
+                config_status, module_response = json_request(
+                    opener,
+                    base_url,
+                    "/api/stun/configure",
+                    open_token=open_token,
+                    timeout=10,
+                )
+                if config_status != 200:
+                    raise ProbeError(f"STUN configure GET returned HTTP {config_status}")
+                if module_response.get("ret") == 0:
+                    candidate_config = module_response.get("configure")
+                    if not isinstance(candidate_config, dict):
+                        raise ProbeError("STUN module configure response missing configure object")
+                    configure = candidate_config
+                    break
+                if module_response.get("ret") != -10:
+                    raise ProbeError(
+                        f"unexpected STUN configure ret={module_response.get('ret')!r}"
                     )
-                    module_changed = True
-            elif module_response.get("ret") == -10:
-                # Fresh Lucky 3.0.0 reports module-disabled before configuration
-                # can be read. The frontend's own PUT model can still enable it;
-                # use only the bridge-local fake STUN server and no credentials.
-                module_started_disabled = True
-                report["module_started_disabled"] = True
+                report["module_transient_not_ready_observed"] = True
+                time.sleep(1)
+            if configure is None:
+                raise ProbeError("STUN module did not become ready after transient ret=-10")
+
+            module_baseline = copy.deepcopy(configure)
+            if configure.get("EnableModule") is not True:
+                candidate = copy.deepcopy(configure)
+                candidate["EnableModule"] = True
+                candidate.setdefault("WebhookProxyPassword", "")
                 api_json(
                     base_url,
                     open_token,
                     "/api/stun/configure",
                     method="PUT",
-                    payload=module_config(
-                        True,
-                        f"{gateway_ip}:{stun_server.port}",
-                    ),
+                    payload=candidate,
                 )
                 module_changed = True
-            else:
-                raise ProbeError(
-                    f"unexpected initial STUN configure ret={module_response.get('ret')!r}"
-                )
             live_module = api_json(base_url, open_token, "/api/stun/configure").get("configure")
             report["module_enabled_for_probe"] = (
                 isinstance(live_module, dict) and live_module.get("EnableModule") is True
@@ -830,29 +794,7 @@ def main() -> int:
             report["baseline_restored"] = final_keys == baseline_keys
 
             if module_changed:
-                if module_started_disabled:
-                    api_json(
-                        base_url,
-                        open_token,
-                        "/api/stun/configure",
-                        method="PUT",
-                        payload=module_config(
-                            False,
-                            f"{gateway_ip}:{stun_server.port}",
-                        ),
-                    )
-                    module_changed = False
-                    restore_status, restore_response = json_request(
-                        opener,
-                        base_url,
-                        "/api/stun/configure",
-                        open_token=open_token,
-                        timeout=30,
-                    )
-                    report["module_baseline_restored"] = (
-                        restore_status == 200 and restore_response.get("ret") == -10
-                    )
-                elif module_baseline is not None:
+                if module_baseline is not None:
                     restore = copy.deepcopy(module_baseline)
                     restore.setdefault("WebhookProxyPassword", "")
                     api_json(
@@ -887,12 +829,7 @@ def main() -> int:
                     pass
             if module_changed and base_url:
                 try:
-                    if module_started_disabled:
-                        restore = module_config(
-                            False,
-                            f"{gateway_ip}:{stun_server.port}" if stun_server is not None else "127.0.0.1:9",
-                        )
-                    elif module_baseline is not None:
+                    if module_baseline is not None:
                         restore = copy.deepcopy(module_baseline)
                         restore.setdefault("WebhookProxyPassword", "")
                     else:
