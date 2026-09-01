@@ -1219,20 +1219,25 @@ def main() -> int:
                                 # a third fresh authorization and hand it directly
                                 # to /api/oauth/login exactly as the login page does.
                                 time.sleep(0.025)
-                                login_tmpcode = admin_json(
+                                # The login page invokes the same tmpcode endpoint
+                                # without an existing backend/admin token.  Keep this
+                                # third authorization on a separate anonymous opener;
+                                # authenticated tmpcodes are management-flow tickets
+                                # and are not accepted by /api/oauth/login.
+                                login_opener = urllib.request.build_opener()
+                                login_tmpcode_status, login_tmpcode = json_request(
+                                    login_opener,
                                     base_url,
-                                    admin_token,
                                     "/api/oauth/tmpcode?"
                                     + urllib.parse.urlencode(
                                         {"type": "oidc", "_": lucky_frontend_timestamp()}
                                     ),
-                                    require_zero=False,
-                                    opener=browser_opener,
                                 )
                                 login_code = login_tmpcode.get("tmpCode")
                                 login_auth_url = login_tmpcode.get("authUrl")
                                 if (
-                                    login_tmpcode.get("ret") == 0
+                                    login_tmpcode_status == 200
+                                    and login_tmpcode.get("ret") == 0
                                     and isinstance(login_code, str)
                                     and login_code
                                     and isinstance(login_auth_url, str)
@@ -1241,9 +1246,9 @@ def main() -> int:
                                     follow_authorization(login_auth_url, gateway_ip, provider.port)
                                     deadline = time.time() + 12
                                     while time.time() < deadline:
-                                        login_status = admin_json(
+                                        login_status_http, login_status = json_request(
+                                            login_opener,
                                             base_url,
-                                            admin_token,
                                             "/api/oauth/status?"
                                             + urllib.parse.urlencode(
                                                 {
@@ -1252,11 +1257,10 @@ def main() -> int:
                                                     "_": lucky_frontend_timestamp(),
                                                 }
                                             ),
-                                            require_zero=False,
-                                            opener=browser_opener,
                                         )
                                         if (
-                                            login_status.get("ret") == 0
+                                            login_status_http == 200
+                                            and login_status.get("ret") == 0
                                             and login_status.get("auth") is True
                                         ):
                                             report["oauth_login_status_authorized"] = True
