@@ -20,6 +20,7 @@ from __future__ import annotations
 import http.server
 import json
 import os
+import re
 import secrets
 import shutil
 import socket
@@ -97,6 +98,50 @@ def json_shape(value: Any) -> Any:
     if isinstance(value, float):
         return "number"
     return "string"
+
+
+def frontend_oauth_snippet(base_url: str) -> str:
+    """Read Lucky's own served frontend and return only the tmpcode call vicinity."""
+
+    origin = urllib.parse.urlsplit(base_url)
+    opener = urllib.request.build_opener()
+    queue = ["/"]
+    seen: set[str] = set()
+    fetched = 0
+    while queue and len(seen) < 100 and fetched < 24 * 1024 * 1024:
+        path = queue.pop(0)
+        if path in seen:
+            continue
+        seen.add(path)
+        request = urllib.request.Request(
+            base_url + path,
+            headers={"User-Agent": "lucky-skills-oauth-ci-inspector/1"},
+        )
+        try:
+            with opener.open(request, timeout=8) as response:
+                raw = response.read(min(4 * 1024 * 1024, 24 * 1024 * 1024 - fetched))
+        except Exception:  # noqa: BLE001 - best-effort runtime source inspection
+            continue
+        fetched += len(raw)
+        text = raw.decode("utf-8", errors="replace")
+        needle = "/api/oauth/tmpcode"
+        index = text.find(needle)
+        if index >= 0:
+            start = max(0, index - 1400)
+            end = min(len(text), index + 2200)
+            return re.sub(r"\s+", " ", text[start:end])[:3600]
+        candidates = set(re.findall(r"(?:src=|href=)?[\"']([^\"']+\.js(?:\?[^\"']*)?)[\"']", text))
+        candidates.update(re.findall(r"(?:\.\/)?(assets/[A-Za-z0-9_./-]+\.js)", text))
+        for candidate in candidates:
+            parsed = urllib.parse.urlsplit(candidate)
+            if parsed.scheme and (parsed.scheme != origin.scheme or parsed.netloc != origin.netloc):
+                continue
+            candidate_path = parsed.path
+            if not candidate_path.startswith("/"):
+                candidate_path = "/" + candidate_path.lstrip("./")
+            if candidate_path not in seen and candidate_path.endswith(".js"):
+                queue.append(candidate_path)
+    return ""
 
 
 class FakeOidcProvider:
@@ -288,7 +333,9 @@ def main() -> int:
         "oauth_user_baseline_empty": False,
         "oauth_test_client_configured": False,
         "tmpcode_ret": None,
+        "tmpcode_msg": "",
         "tmpcode_response_shape": {},
+        "frontend_tmpcode_snippet": "",
         "tmpcode_available": False,
         "auth_url_owned": False,
         "auth_server_shape": "",
@@ -366,6 +413,7 @@ def main() -> int:
             report["lucky_version"] = str(info.get("Version") or "")
             if report["lucky_version"] != EXPECTED_LUCKY_VERSION:
                 raise ProbeError(f"unexpected Lucky version: {report['lucky_version']!r}")
+            report["frontend_tmpcode_snippet"] = frontend_oauth_snippet(base_url)
 
             config_response = admin_json(base_url, admin_token, "/api/thirdPartyAuthManager/config")
             baseline_config = config_response.get("config")
@@ -411,6 +459,7 @@ def main() -> int:
                 require_zero=False,
             )
             report["tmpcode_ret"] = tmpcode.get("ret")
+            report["tmpcode_msg"] = str(tmpcode.get("msg") or tmpcode.get("message") or "")[:240]
             report["tmpcode_response_shape"] = json_shape(tmpcode)
             tmp_code = tmpcode.get("tmpCode") or tmpcode.get("tmpcode") or tmpcode.get("code")
             auth_url = tmpcode.get("authUrl") or tmpcode.get("authurl")
