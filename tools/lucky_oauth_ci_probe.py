@@ -286,24 +286,25 @@ class FakeOidcProvider:
                 body_keys: list[str] = []
                 body_kind = "empty"
                 if body:
-                    if content_type == "application/json":
+                    decoded_text = body.decode("utf-8", errors="replace")
+                    if content_type == "application/json" or decoded_text.lstrip().startswith(("{", "[")):
                         try:
-                            decoded = json.loads(body.decode("utf-8", errors="strict"))
+                            decoded = json.loads(decoded_text)
                         except (UnicodeDecodeError, json.JSONDecodeError):
                             body_kind = "invalid-json"
                         else:
                             body_kind = "json"
                             if isinstance(decoded, dict):
                                 body_keys = sorted(str(key) for key in decoded)
-                    elif content_type == "application/x-www-form-urlencoded":
+                    elif content_type == "application/x-www-form-urlencoded" or "=" in decoded_text:
                         body_kind = "form"
                         body_keys = sorted(
                             urllib.parse.parse_qs(
-                                body.decode("utf-8", errors="replace"), keep_blank_values=True
+                                decoded_text, keep_blank_values=True
                             ).keys()
                         )
                     else:
-                        body_kind = "bytes"
+                        body_kind = "text" if decoded_text.isprintable() else "bytes"
                 fixture.other_requests.append(
                     {
                         "method": method,
