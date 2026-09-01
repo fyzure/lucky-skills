@@ -313,6 +313,25 @@ def frontend_runtime_snippets(base_url: str) -> dict[str, str]:
             continue
         fetched += len(raw)
         text = raw.decode("utf-8", errors="replace")
+        if path.endswith("lucky_index-DND3_xvE.js"):
+            positions = [
+                match.start()
+                for match in re.finditer(re.escape("/api/oauth/tmpcode"), text)
+            ]
+            if positions:
+                snippets["index:oauth-tmpcode-occurrences"] = " || ".join(
+                    re.sub(
+                        r"\s+",
+                        " ",
+                        text[max(0, position - 2200) : min(len(text), position + 2600)],
+                    )
+                    for position in positions[:6]
+                )[:16000]
+            export_index = text.rfind("export{")
+            if export_index >= 0:
+                snippets["index:exports"] = re.sub(
+                    r"\s+", " ", text[export_index : min(len(text), export_index + 16000)]
+                )[:16000]
         if "xe(u.value,1)" in text:
             snippets["login-helper-imports"] = re.sub(r"\s+", " ", text[:5000])[:5000]
         if "$e(A,0)" in text:
