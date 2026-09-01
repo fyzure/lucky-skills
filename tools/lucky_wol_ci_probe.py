@@ -78,9 +78,8 @@ def network_addresses(network_name: str) -> tuple[str, str]:
 def receive_magic_packet(
     capture: socket.socket,
     expected_packet: bytes,
-    destination_port: int,
     timeout: float = 10.0,
-) -> bytes:
+) -> tuple[bytes, int]:
     deadline = time.time() + timeout
     while time.time() < deadline:
         capture.settimeout(max(0.1, deadline - time.time()))
@@ -99,12 +98,12 @@ def receive_magic_packet(
         udp_start = ip_start + ihl
         udp_destination = int.from_bytes(frame[udp_start + 2 : udp_start + 4], "big")
         udp_length = int.from_bytes(frame[udp_start + 4 : udp_start + 6], "big")
-        if udp_destination != destination_port or udp_length < 8:
+        if udp_length < 8:
             continue
         payload = frame[udp_start + 8 : udp_start + udp_length]
         if payload == expected_packet:
-            return payload
-    return b""
+            return payload, udp_destination
+    return b"", 0
 
 
 def container_ipv4(container_name: str, network_name: str) -> str:
@@ -205,10 +204,14 @@ def main() -> int:
         "service_baseline_restored": False,
         "device_created": False,
         "broadcast_ip_item_is_string": False,
+        "can_wakeup_before_action": False,
+        "state_before_action": "",
+        "reachability_state_before_action": "",
         "wakeup_ret_zero": False,
         "magic_packet_received": False,
         "magic_packet_exact": False,
         "magic_packet_size": 0,
+        "configured_port_used": False,
         "device_deleted": False,
         "baseline_restored": False,
         "shutdown_exercised": False,
@@ -357,15 +360,23 @@ def main() -> int:
                 and len(broadcast_ips) == 1
                 and isinstance(broadcast_ips[0], str)
             )
+            report["can_wakeup_before_action"] = matches[0].get("CanWakeup") is True
+            state_value = matches[0].get("State")
+            report["state_before_action"] = state_value if isinstance(state_value, str) else ""
+            reachability_value = matches[0].get("ReachabilityState")
+            report["reachability_state_before_action"] = (
+                reachability_value if isinstance(reachability_value, str) else ""
+            )
 
             query = urllib.parse.urlencode({"key": created_key})
             wake = api_json(base_url, open_token, f"/api/wol/device/wakeup?{query}")
             report["wakeup_ret_zero"] = wake.get("ret") == 0
 
-            packet = receive_magic_packet(capture, expected_packet, wol_port)
+            packet, observed_destination_port = receive_magic_packet(capture, expected_packet)
             report["magic_packet_received"] = bool(packet)
             report["magic_packet_size"] = len(packet)
             report["magic_packet_exact"] = packet == expected_packet
+            report["configured_port_used"] = bool(packet) and observed_destination_port == wol_port
 
             delete_query = urllib.parse.urlencode({"key": created_key})
             api_json(base_url, open_token, f"/api/wol/device?{delete_query}", method="DELETE")
