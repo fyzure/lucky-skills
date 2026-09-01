@@ -754,6 +754,7 @@ def main() -> int:
         "oauth_login_msg": "",
         "oauth_login_error": "",
         "oauth_login_need_2fa": False,
+        "oauth_login_status_authorized": False,
         "oauth_login_token_present": False,
         "login_page_config_shape": {},
         "third_auth_login_enabled": None,
@@ -1254,7 +1255,11 @@ def main() -> int:
                                             require_zero=False,
                                             opener=browser_opener,
                                         )
-                                        if login_status.get("ret") == 0:
+                                        if (
+                                            login_status.get("ret") == 0
+                                            and login_status.get("auth") is True
+                                        ):
+                                            report["oauth_login_status_authorized"] = True
                                             break
                                         time.sleep(0.5)
                                     oauth_login = oauth_login_with_tmpcode(
@@ -1416,6 +1421,7 @@ def main() -> int:
         "third_party_user_reenabled",
         "oauth_reauthorized",
         "oauth_user_refreshed",
+        "oauth_login_status_authorized",
         "oauth_login_token_present",
         "third_party_user_revoked",
         "third_auth_login_enabled",
