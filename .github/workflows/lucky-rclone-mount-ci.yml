@@ -1,0 +1,34 @@
+name: lucky-rclone-mount-ci
+
+on:
+  push:
+    paths:
+      - ".github/workflows/lucky-rclone-mount-ci.yml"
+      - "tools/lucky_rclone_mount_ci_probe.py"
+      - "tools/lucky_docker_build_ci_probe.py"
+  pull_request:
+    paths:
+      - ".github/workflows/lucky-rclone-mount-ci.yml"
+      - "tools/lucky_rclone_mount_ci_probe.py"
+      - "tools/lucky_docker_build_ci_probe.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rclone-system-mount:
+    name: Lucky isolated Rclone SystemMount behavior
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Show FUSE and Docker runtime
+        run: |
+          ls -l /dev/fuse
+          docker version
+
+      - name: Run isolated Lucky Rclone SystemMount probe
+        run: sudo -E python3 tools/lucky_rclone_mount_ci_probe.py
