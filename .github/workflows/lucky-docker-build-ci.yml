@@ -1,0 +1,30 @@
+name: lucky-docker-build-ci
+
+on:
+  push:
+    paths:
+      - ".github/workflows/lucky-docker-build-ci.yml"
+      - "tools/lucky_docker_build_ci_probe.py"
+  pull_request:
+    paths:
+      - ".github/workflows/lucky-docker-build-ci.yml"
+      - "tools/lucky_docker_build_ci_probe.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  docker-build-handlers:
+    name: Lucky ZIP + Git build handlers
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Show Docker runtime
+        run: docker version
+
+      - name: Run isolated Lucky Docker build probe
+        run: python3 tools/lucky_docker_build_ci_probe.py
