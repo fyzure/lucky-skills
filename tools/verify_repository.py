@@ -408,6 +408,130 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
     model_evidence = runtime.get("model_evidence")
     if not isinstance(model_evidence, dict):
         fail("runtime model_evidence must be an object")
+    ipdb_evidence = model_evidence.get("ipdb_behavior")
+    if not isinstance(ipdb_evidence, dict):
+        fail("IPDB behavior evidence is missing")
+    if ipdb_evidence.get("confidence") != "runtime-verified":
+        fail("IPDB behavior evidence must remain runtime-verified")
+    ipdb_model = ipdb_evidence.get("model")
+    required_ipdb_model = {
+        "upload",
+        "item_lifecycle",
+        "enable_route",
+        "query",
+        "database_files",
+    }
+    if not isinstance(ipdb_model, dict) or set(ipdb_model) != required_ipdb_model:
+        fail("IPDB behavior model regressed")
+    for field in required_ipdb_model:
+        if not isinstance(ipdb_model.get(field), str) or not ipdb_model[field].strip():
+            fail(f"IPDB behavior model field is missing: {field}")
+    ipdb_observations = ipdb_evidence.get("observations")
+    if not isinstance(ipdb_observations, dict) or set(ipdb_observations) != {
+        "formats",
+        "enable_get_side_effect",
+        "query_result_privacy",
+        "cleanup",
+    }:
+        fail("IPDB runtime observations regressed")
+    for field in ("verification", "security"):
+        value = ipdb_evidence.get(field)
+        if not isinstance(value, str) or not value.strip():
+            fail(f"IPDB evidence field is missing: {field}")
+    if not (ROOT / "tools" / "lucky_ipdb_probe.py").is_file():
+        fail("IPDB runtime probe tool is missing")
+
+    ssl_acme_evidence = model_evidence.get("ssl_acme_behavior")
+    if not isinstance(ssl_acme_evidence, dict):
+        fail("SSL ACME behavior evidence is missing")
+    if ssl_acme_evidence.get("confidence") != "runtime-verified":
+        fail("SSL ACME behavior evidence must remain runtime-verified")
+    ssl_acme_model = ssl_acme_evidence.get("model")
+    required_ssl_acme_model = {
+        "lifecycle",
+        "issuance",
+        "mapping",
+        "flush",
+        "manual_sync",
+    }
+    if not isinstance(ssl_acme_model, dict) or set(ssl_acme_model) != required_ssl_acme_model:
+        fail("SSL ACME behavior model regressed")
+    ssl_acme_observations = ssl_acme_evidence.get("observations")
+    if not isinstance(ssl_acme_observations, dict) or set(ssl_acme_observations) != {
+        "mapping_namespace",
+        "mapping_lifecycle",
+        "flush",
+        "cleanup",
+    }:
+        fail("SSL ACME runtime observations regressed")
+    for field in ("verification", "security"):
+        value = ssl_acme_evidence.get(field)
+        if not isinstance(value, str) or not value.strip():
+            fail(f"SSL ACME evidence field is missing: {field}")
+    if not (ROOT / "tools" / "lucky_ssl_acme_probe.py").is_file():
+        fail("SSL ACME runtime probe tool is missing")
+
+    ssl_sync_evidence = model_evidence.get("ssl_sync_client_behavior")
+    if not isinstance(ssl_sync_evidence, dict):
+        fail("SSL sync-client behavior evidence is missing")
+    if ssl_sync_evidence.get("confidence") != "runtime-verified":
+        fail("SSL sync-client behavior evidence must remain runtime-verified")
+    ssl_sync_model = ssl_sync_evidence.get("model")
+    if not isinstance(ssl_sync_model, dict) or set(ssl_sync_model) != {
+        "setting_model",
+        "selection_model",
+        "linuxssh",
+        "authorization_gate",
+        "e2e_status",
+    }:
+        fail("SSL sync-client behavior model regressed")
+    ssl_sync_observations = ssl_sync_evidence.get("observations")
+    if not isinstance(ssl_sync_observations, dict) or set(ssl_sync_observations) != {
+        "instance_user_level",
+        "manual_sync_error",
+        "ssh_prerequisite",
+        "cleanup",
+    }:
+        fail("SSL sync-client runtime observations regressed")
+    for field in ("verification", "security"):
+        value = ssl_sync_evidence.get(field)
+        if not isinstance(value, str) or not value.strip():
+            fail(f"SSL sync-client evidence field is missing: {field}")
+    if not (ROOT / "tools" / "lucky_ssl_sync_probe.py").is_file():
+        fail("SSL sync-client runtime probe tool is missing")
+
+    webterminal_evidence = model_evidence.get("webterminal_behavior")
+    if not isinstance(webterminal_evidence, dict):
+        fail("WebTerminal behavior evidence is missing")
+    if webterminal_evidence.get("confidence") != "runtime-verified":
+        fail("WebTerminal behavior evidence must remain runtime-verified")
+    webterminal_model = webterminal_evidence.get("model")
+    if not isinstance(webterminal_model, dict) or set(webterminal_model) != {
+        "local_websocket",
+        "session_lifecycle",
+        "ssh_host_key",
+        "sftp_core",
+        "uploads",
+        "archive",
+    }:
+        fail("WebTerminal behavior model regressed")
+    webterminal_observations = webterminal_evidence.get("observations")
+    if not isinstance(webterminal_observations, dict) or set(webterminal_observations) != {
+        "websocket_packetization",
+        "host_key_confirmation",
+        "multipart_upload_failure",
+        "streaming_upload_failure",
+        "cleanup",
+    }:
+        fail("WebTerminal runtime observations regressed")
+    for field in ("verification", "security"):
+        value = webterminal_evidence.get(field)
+        if not isinstance(value, str) or not value.strip():
+            fail(f"WebTerminal evidence field is missing: {field}")
+    for probe_name in ("lucky_webterminal_probe.py", "lucky_webterminal_sftp_probe.py"):
+        if not (ROOT / "tools" / probe_name).is_file():
+            fail(f"WebTerminal runtime probe tool is missing: {probe_name}")
+
     ddns_evidence = model_evidence.get("ddns_cloudflare_behavior")
     if not isinstance(ddns_evidence, dict):
         fail("DDNS Cloudflare behavior evidence is missing")

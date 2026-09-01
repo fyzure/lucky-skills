@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "verified_at": "2026-08-31T16:32:33Z",
+  "verified_at": "2026-09-01T05:16:15Z",
   "target": {
     "product": "Lucky",
     "version": "3.0.0"
@@ -53,6 +53,24 @@
     }
   },
   "model_evidence": {
+    "ipdb_behavior": {
+      "confidence": "runtime-verified",
+      "model": {
+        "upload": "Lucky 3.0.0 accepts multipart file uploads at POST /api/ipdb/upload and returns the persisted database file path",
+        "item_lifecycle": "POST /api/ipdb/item creates, PUT /api/ipdb/item updates, DELETE /api/ipdb/item?key=<Key> deletes, and GET /api/ipdb/items lists items",
+        "enable_route": "GET /api/ipdb/item/{Key}/{bool} changes Enable state and is therefore mutating despite using GET",
+        "query": "GET /api/ipdb/query?ip=<address> performs real lookup against enabled Ready databases",
+        "database_files": "GET /api/ipdb/avalidDBFiles lists available DB files, GET /api/ipdb/download?key=<Key> downloads the active DB, and DELETE /api/ipdb/dbfile?key=<Key>&file=<path> removes a DB file"
+      },
+      "verification": "A bounded Lucky 3.0.0 probe started from an empty IPDB item baseline, downloaded a public GeoCN MMDB into memory, uploaded two uniquely named TEST copies through Lucky, created a disabled geocn item, PUT-updated its buffer mode, enabled it through the GET boolean route, and waited for Ready=true. Real IPv4 and IPv6 lookups succeeded. Downloading the active DB through Lucky produced the same byte length and SHA-256 as the source. The item was then switched to the second uploaded TEST file and lookup succeeded again. The item and both DB files were removed and the original item Key baseline was restored.",
+      "observations": {
+        "formats": "Frontend format choices include zxipv6wry, ip2region, geoip, geocn, qqwry, ipip, ip2location, lkdb and czdb",
+        "enable_get_side_effect": "The route GET /api/ipdb/item/{Key}/{bool} is invoked by the frontend enable switch and changed the persisted Enable/Ready state during runtime verification",
+        "query_result_privacy": "Evidence retains only response key structure and success booleans; returned geography values are not persisted",
+        "cleanup": "Zero TEST items remained and both uploaded TEST database files were absent after cleanup"
+      },
+      "security": "The probe never modifies CustomIPDBPath or existing IPDB items. It uses uniquely named TEST files and a TEST item, keeps lookup result values out of evidence, and deletes only files created by the probe."
+    },
     "ddns_cloudflare_behavior": {
       "confidence": "runtime-verified",
       "model": {
@@ -117,8 +135,64 @@
         "MappingPath": "string writable directory",
         "MappingChangeScript": "string command executed after mapped certificate content changes"
       },
-      "verification": "On an authorized Lucky 3.0.0 certificate managed by ACME, enabling MappingToPath created certificate/key files named from the certificate Remark, including <Remark>.key and <Remark>.pem, in the configured writable directory. Certificate metadata/fingerprint matched the managed certificate. The private key was parseable but the initial mapped key mode was 0644; it was reduced to 0600 and MappingChangeScript was configured to re-apply the restrictive mode after future changes. Certificate bodies, private keys, DNS API credentials, ACME account data and filesystem paths are intentionally omitted.",
+      "verification": "On an authorized Lucky 3.0.0 certificate managed by ACME, a disposable TEST certificate was created with MappingToPath already enabled before issuance. Lucky wrote non-empty <Remark>.key, <Remark>.crt and <Remark>.pem files into a unique TEST directory; the files were observed through Lucky's own local-path-browser API because the production Lucky runs in Docker and its /tmp namespace is not the host /tmp. Earlier bounded runs also showed that switching MappingToPath from false to true after an already-issued certificate did not immediately backfill old certificate material; mapping is tied to certificate material creation/change rather than a pure config toggle. Separate prior mapping verification found the mapped private key initially mode 0644 and reduced it to 0600 with MappingChangeScript configured to re-apply the restrictive mode. Certificate bodies, private keys, DNS API credentials, ACME account data and filesystem paths are intentionally omitted.",
       "security": "GET /api/ssl/{param} can return CertBase64 and KeyBase64. Do not print or persist raw responses; use redaction or root-only temporary files, and remove temporary secret-bearing payloads immediately after a reviewed update."
+    },
+    "ssl_acme_behavior": {
+      "confidence": "runtime-verified",
+      "model": {
+        "lifecycle": "POST /api/ssl creates a certificate object, PUT /api/ssl updates it, PUT /api/ssl/{Key}?enable=<bool> toggles it, and DELETE /api/ssl?key=<Key> removes it",
+        "issuance": "A unique TEST DNS hostname using an in-memory clone of an existing ACME/DNS-provider configuration reached issued state with the requested hostname in certificate metadata and a SHA-256 fingerprint",
+        "mapping": "When MappingToPath is enabled before issuance, certificate creation writes <Remark>.key, <Remark>.crt and <Remark>.pem into the configured Lucky-visible directory",
+        "flush": "PUT /api/ssl/flush?key=<Key> is an executable certificate refresh/check action; on the disposable currently-valid certificate it did not start ACME or change the certificate fingerprint",
+        "manual_sync": "GET /api/ssl/manualsync/{Key} reaches the certificate sync business path; whether transfer occurs depends on configured sync clients and instance entitlement"
+      },
+      "verification": "A bounded Lucky 3.0.0 probe created one unique TEST ACME certificate, waited for real issuance, verified hostname/fingerprint/validity metadata and certificate-material presence without persisting the material, verified MappingToPath files through Lucky's own filesystem browser, PUT-updated the disposable object, toggled it off/on, exercised manualsync and flush only on that TEST certificate, then deleted it and its TEST mapping directory. The original certificate Key set was restored and no TEST certificate remained.",
+      "observations": {
+        "mapping_namespace": "Lucky runs in Docker with its own /tmp namespace; mapping verification must use a Lucky-visible path/API or an explicitly shared mount rather than assuming host /tmp is the same filesystem",
+        "mapping_lifecycle": "Enabling mapping before issuance produced key/crt/pem files; enabling it only after existing material was already issued did not immediately backfill files in bounded runs",
+        "flush": "The valid TEST certificate remained issued and its fingerprint did not change after flush in the final run",
+        "cleanup": "The TEST certificate Key baseline was restored and the unique Lucky-side mapping directory was removed"
+      },
+      "security": "The probe clones existing ACME/DNS-provider fields only in memory, never prints certificate/private-key/provider material, mutates only a unique TEST certificate, and removes only its own TEST filesystem directory."
+    },
+    "ssl_sync_client_behavior": {
+      "confidence": "runtime-verified",
+      "model": {
+        "setting_model": "PUT /api/ssl/setting accepts SyncClientList entries and assigns a Key to a saved linuxssh sync client while preserving existing setting scalars and non-TEST clients",
+        "selection_model": "A certificate with AllSyncClient=true and an empty explicit SyncClientList is normalized as selected for all configured sync clients",
+        "linuxssh": "The current frontend/runtime shape includes SSH host/port/user/auth/private-key, host-key, certificate/key destination paths, script directory and post-sync command fields",
+        "authorization_gate": "The current Lucky instance rejects GET /api/ssl/manualsync/{Key} with PermissionDeniedCannotUseSyncFunction when /api/info reports user level u=0; the frontend gates certificate sync on userLevel >= 1",
+        "e2e_status": "Actual certificate/key transfer through linuxssh remains unverified on this instance because the entitlement check rejects manual sync before the SSH transfer stage"
+      },
+      "verification": "A bounded localhost-only probe generated an ephemeral SSH key, verified that key could log in to the existing RS sshd, appended one TEST linuxssh sync client to the latest SSL setting, confirmed the client received a Key and appeared in /api/ssl/syncclients, issued a disposable TEST ACME certificate with AllSyncClient=true, then invoked manualsync. Lucky returned ret=1 PermissionDeniedCannotUseSyncFunction before any sync files were written. /api/info reported u=0, matching the frontend's userLevel >= 1 sync gate. The TEST certificate/client, ephemeral SSH authorization and target directories were removed and non-TEST client/certificate baselines restored.",
+      "observations": {
+        "instance_user_level": "u=0",
+        "manual_sync_error": "PermissionDeniedCannotUseSyncFunction",
+        "ssh_prerequisite": "The ephemeral localhost SSH credential itself succeeded, so the observed block occurs before linuxssh transfer rather than at SSH authentication",
+        "cleanup": "No TEST sync client or TEST certificate remained; temporary SSH authorization and target/key directories were removed"
+      },
+      "security": "The probe does not bypass Lucky entitlement. It uses a localhost-only disposable SSH credential, unique TEST sync client/certificate/paths, preserves current non-TEST SSL settings from the latest object, and never emits SSH or certificate private keys."
+    },
+    "webterminal_behavior": {
+      "confidence": "runtime-verified",
+      "model": {
+        "local_websocket": "A temporary-access ticket for /api/webterminal/connect/{ConnectionKey} opens a real WebSocket session. The server emits connecting/connected JSON events with sessionId, terminal input/output uses raw text/binary frames, and resize uses JSON {type:resize,cols,rows}",
+        "session_lifecycle": "Closing only the WebSocket leaves a session in detached state; /api/webterminal/attach/{SessionId} re-attaches it, while DELETE /api/webterminal/sessions/{SessionId} explicitly closes the session",
+        "ssh_host_key": "POST /api/webterminal/connections/test on first SSH use returns ret=409 SSHHostKeyUntrusted with host-key metadata; PUT /api/webterminal/connections/{Key}/ssh-host-key persists trust, after which a test with the disposable private key succeeds",
+        "sftp_core": "A live SSH session supports list, mkdir, touch, write/read, rename, copy, chmod, compress, preview-archive, decompress and remove against an isolated TEST tree",
+        "uploads": "On this Lucky 3.0.0 instance, browser-equivalent multipart upload reproducibly returns ret=5 SSH_FX_FAILURE and application/octet-stream upload-streaming reproducibly returns ret=4 closed-pipe / a client BrokenPipe; these are recorded as runtime defects rather than treated as supported behavior",
+        "archive": "tar.gz compress/preview/decompress succeeds when the SSH target provides tar+gzip; zip preview depends on an external unzip command and failed on the RS target because unzip is not installed"
+      },
+      "verification": "Two bounded probes exercised WebTerminal end to end. The local probe created a TEST local /bin/sh connection, opened a real ticketed WebSocket, sent resize and shell input, observed output, inspected/listed/remarked/statted the session, detached and re-attached it, then closed the session and removed the connection. The SSH/SFTP probe used the existing localhost sshd with one ephemeral key, exercised Lucky's first-use host-key trust flow and a real SSH terminal, then performed isolated SFTP file and tar.gz archive operations under /tmp. All TEST connection/session/authorization/path baselines were restored. Multipart and streaming upload failures were reproduced after matching the current frontend request shapes exactly.",
+      "observations": {
+        "websocket_packetization": "Lucky may send the first WebSocket frame in the same TCP read as the HTTP 101 response; the shared stdlib RFC6455 helper now preserves those post-header bytes instead of assuming packet boundaries are protocol boundaries",
+        "host_key_confirmation": "The first test returned ret=409 with host/port/hostname/hostKey/fingerprint/trustedAt/keyType fields; after persisting trust, a second test with the disposable private key returned ret=0",
+        "multipart_upload_failure": "POST /api/webterminal/sftp/{SessionId}/upload returned ret=5 SSH_FX_FAILURE even after FormData field order was matched to file -> path -> filename",
+        "streaming_upload_failure": "POST /api/webterminal/sftp/{SessionId}/upload-streaming returned closed-pipe semantics for a small body and ret=4 closed-pipe / BrokenPipe behavior for a 1 MiB body",
+        "cleanup": "No TEST WebTerminal connection/session, temporary SSH authorization, key directory or TEST file tree remained after the final probes"
+      },
+      "security": "WebTerminal probes are intentionally high-risk and therefore constrained to localhost, unique TEST resources and /tmp. The SSH key is ephemeral and forwarding/X11/agent use is disabled; terminal output, host-key material, private keys and file contents are not persisted in evidence."
     }
   },
   "routes": [
@@ -193,7 +267,7 @@
       "risk": "mutating",
       "response_type": "websocket",
       "confidence": "runtime-verified",
-      "verification": "Plain GET reached the route and returned login invalid; no WebSocket upgrade or NAT probe was started."
+      "verification": "A temporary-access ticket was issued for the route, a real WebSocket upgrade completed, Lucky emitted JSON log/result messages, and one NAT-detection job reached a final result without persisting public/local address values. The shared stdlib WebSocket helper also handles a valid first frame coalesced with the HTTP 101 response."
     },
     {
       "path": "/api/oauth/tmpcode",

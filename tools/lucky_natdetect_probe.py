@@ -152,7 +152,34 @@ def recv_frame(sock: socket.socket) -> tuple[bool, int, bytes]:
     return fin, opcode, payload
 
 
-def connect_websocket(target: urllib.parse.SplitResult, timeout: float = 15.0) -> socket.socket:
+class PrefixedSocket:
+    """Socket-compatible wrapper that drains already-read bytes first."""
+
+    def __init__(self, sock: socket.socket, prefix: bytes) -> None:
+        self._sock = sock
+        self._prefix = bytearray(prefix)
+
+    def recv(self, count: int) -> bytes:
+        if self._prefix:
+            take = min(count, len(self._prefix))
+            chunk = bytes(self._prefix[:take])
+            del self._prefix[:take]
+            return chunk
+        return self._sock.recv(count)
+
+    def sendall(self, data: bytes) -> None:
+        self._sock.sendall(data)
+
+    def settimeout(self, value: float | None) -> None:
+        self._sock.settimeout(value)
+
+    def close(self) -> None:
+        self._sock.close()
+
+
+def connect_websocket(
+    target: urllib.parse.SplitResult, timeout: float = 15.0
+) -> socket.socket | PrefixedSocket:
     host = target.hostname
     if not host:
         raise RuntimeError("invalid WebSocket target host")
@@ -205,12 +232,10 @@ def connect_websocket(target: urllib.parse.SplitResult, timeout: float = 15.0) -
     expected = base64.b64encode(hashlib.sha1((key + WS_GUID).encode("ascii")).digest()).decode("ascii")
     if headers.get("sec-websocket-accept") != expected:
         raise RuntimeError("invalid Sec-WebSocket-Accept")
-    if extra:
-        # The server normally sends no frame bytes in the same packet. Rather
-        # than losing bytes, reject this rare condition so the probe remains
-        # simple and deterministic.
-        raise RuntimeError("unexpected frame bytes bundled with handshake")
-    return sock
+    # A valid server may send its first WebSocket frame in the same TCP read as
+    # the HTTP 101 response. Preserve those bytes instead of treating packet
+    # boundaries as protocol boundaries.
+    return PrefixedSocket(sock, extra) if extra else sock
 
 
 def run_job(sock: socket.socket, timeout: float = 45.0) -> tuple[list[dict[str, Any]], dict[str, Any]]:

@@ -223,6 +223,72 @@ def cleanup_tests(client: LuckyClient) -> int:
     return removed
 
 
+def local_path_entries(client: LuckyClient, path: str) -> list[dict[str, Any]]:
+    payload = client.request_json(
+        "GET", "/api/local-path-browser/list", query={"path": path, "showFiles": "true"}
+    )
+    data = payload.get("data") if isinstance(payload, dict) else None
+    entries = data.get("entries") if isinstance(data, dict) else None
+    if entries is None:
+        return []
+    if not isinstance(entries, list):
+        raise RuntimeError("unexpected local-path-browser response")
+    return [entry for entry in entries if isinstance(entry, dict)]
+
+
+def create_mapping_dir(client: LuckyClient, path: str) -> None:
+    mutate(
+        client,
+        "POST",
+        "/api/local-path-browser/mkdir",
+        json_body={"path": path},
+        body_supplied=True,
+    )
+
+
+def delete_mapping_dir(client: LuckyClient, path: str) -> bool:
+    name = path.rstrip("/").rsplit("/", 1)[-1]
+    try:
+        mutate(
+            client,
+            "DELETE",
+            "/api/local-path-browser/path",
+            json_body={"path": path, "confirmName": name},
+            body_supplied=True,
+        )
+    except Exception:
+        return False
+    parent = path.rstrip("/").rsplit("/", 1)[0] or "/"
+    return all(str(entry.get("path") or "") != path for entry in local_path_entries(client, parent))
+
+
+def wait_mapping_files(
+    client: LuckyClient, mapping_dir: str, remark: str, timeout: float = 20.0
+) -> dict[str, dict[str, Any] | None]:
+    expected_names = {
+        "key": f"{remark}.key",
+        "crt": f"{remark}.crt",
+        "pem": f"{remark}.pem",
+    }
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        rows = local_path_entries(client, mapping_dir)
+        by_name = {str(row.get("name") or ""): row for row in rows}
+        result = {kind: by_name.get(name) for kind, name in expected_names.items()}
+        if all(
+            isinstance(row, dict)
+            and row.get("isDir") is False
+            and isinstance(row.get("size"), int)
+            and row.get("size", 0) > 0
+            for row in result.values()
+        ):
+            return result
+        time.sleep(0.5)
+    rows = local_path_entries(client, mapping_dir)
+    by_name = {str(row.get("name") or ""): row for row in rows}
+    return {kind: by_name.get(name) for kind, name in expected_names.items()}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--confirm", required=True)
@@ -242,6 +308,13 @@ def main() -> int:
     remark = TEST_PREFIX + nonce
     hostname = f"ssl-{nonce}.{args.domain_suffix.strip().strip('.').lower()}"
     candidate = build_candidate(template, remark, hostname)
+    mapping_dir = f"/tmp/TEST-lucky-skills-ssl-map-{nonce}"
+    if any(str(entry.get("path") or "") == mapping_dir for entry in local_path_entries(client, "/tmp")):
+        raise RuntimeError("pre-existing TEST SSL mapping directory found")
+    create_mapping_dir(client, mapping_dir)
+    candidate["MappingToPath"] = True
+    candidate["MappingPath"] = mapping_dir
+    candidate["MappingChangeScript"] = ""
     test_key = ""
     results: dict[str, bool] = {}
     observations: dict[str, Any] = {}
@@ -271,6 +344,26 @@ def main() -> int:
         results["certificate_material_present"] = bool(
             info.get("CertBase64") and info.get("KeyBase64")
         )
+        mapping_files = wait_mapping_files(client, mapping_dir, remark)
+        results["mapping_config_roundtrip"] = (
+            info.get("MappingToPath") is True and info.get("MappingPath") == mapping_dir
+        )
+        for kind in ("key", "crt", "pem"):
+            row = mapping_files[kind]
+            results[f"mapping_{kind}_written"] = bool(
+                isinstance(row, dict)
+                and row.get("isDir") is False
+                and isinstance(row.get("size"), int)
+                and row.get("size", 0) > 0
+            )
+        observations["mapped_file_names"] = sorted(
+            str(row.get("name")) for row in mapping_files.values() if isinstance(row, dict)
+        )
+        observations["mapped_file_sizes_positive"] = all(
+            isinstance(row, dict) and isinstance(row.get("size"), int) and row.get("size", 0) > 0
+            for row in mapping_files.values()
+        )
+
         updated = copy.deepcopy(info)
         updated_remark = remark + "-updated"
         updated["Remark"] = updated_remark
@@ -326,6 +419,7 @@ def main() -> int:
 
     finally:
         cleanup["test_certificates_removed"] = cleanup_tests(client)
+        cleanup["mapping_directory_removed"] = delete_mapping_dir(client, mapping_dir)
 
     final_rows = ssl_rows(client)
     final_keys = {row_key(row) for row in final_rows if row_key(row)}
@@ -339,6 +433,8 @@ def main() -> int:
         failed.append("certificate_key_baseline_restored")
     if cleanup.get("leftover_test_certificates") != 0:
         failed.append("leftover_test_certificates")
+    if not cleanup.get("mapping_directory_removed"):
+        failed.append("mapping_directory_removed")
 
     print(
         json.dumps(

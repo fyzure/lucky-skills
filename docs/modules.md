@@ -57,6 +57,10 @@ Lucky 3.0.0 的 SNI 分流也已完成真实实例验证。子规则类型值为
 
 证书私钥、DNS API 凭据和用户授权信息不得出现在调试输出。下载证书前先确认接口是否包含私钥。Lucky 3.0.0 证书对象还支持 `MappingToPath`、`MappingPath`、`MappingChangeScript`：开启映射后会按证书 `Remark` 在目标目录生成 `<Remark>.key`、`<Remark>.pem` 等文件，并在证书更新后刷新。实测映射出的私钥默认权限可能为 `0644`，生产使用时应收紧到 `0600`，并可通过 `MappingChangeScript` 在后续续期后重新收紧权限/重载消费证书的服务。`GET /api/ssl/{key}` 的完整响应包含私钥材料，避免直接打印原始响应。
 
+TEST ACME 生命周期也已完成真实闭环：独立证书对象经 POST 创建并真实签发，随后完成 PUT、启停、flush/manualsync 路径和删除；当 `MappingToPath` 在签发前已开启时，Lucky 实际生成 `<Remark>.key/.crt/.pem`。需要注意 Lucky 运行在 Docker 时路径属于 Lucky 自己的 mount namespace，不能把容器 `/tmp` 直接等同于宿主 `/tmp`。另外，已经存在证书 material 后才打开 mapping，并不会在当前 3.0.0 实测中立即回填旧 material。证书 sync-client 的 `linuxssh` 配置、Key 分配和 `AllSyncClient` 选择模型已经实践，但当前实例 `/api/info` 返回 `u=0`，`manualsync` 会在 SSH 传输前以 `PermissionDeniedCannotUseSyncFunction` 拒绝；这属于实例授权边界，不应通过客户端绕过。
+
+IPDB 在 Lucky 3.0.0 上已经完成 `behavior-runtime` 闭环。`tools/lucky_ipdb_probe.py` 通过 Lucky 自己的 `POST /api/ipdb/upload` multipart 接口上传两份唯一 TEST GeoCN MMDB，创建并 PUT 更新 TEST item，随后通过 `GET /api/ipdb/item/{key}/true` 启用并等待 `Ready=true`。IPv4 与 IPv6 都实际通过 `/api/ipdb/query` 返回结果；`/api/ipdb/download?key=...` 下载得到的数据库与上传源文件 SHA-256 一致。probe 再把 item 切换到第二份上传文件并重新查询，最后删除 item 与两份数据库文件并验证原 item Key 基线恢复。注意 `/api/ipdb/item/{key}/{bool}` 虽然是 GET，但其真实语义是启用/禁用，属于写操作而不是只读接口。
+
 ## 存储与文件服务
 
 - `storagemanagement`：本地与网盘挂载；
@@ -80,6 +84,10 @@ OpenToken 能调用这些端点时，实际权限接近 Docker daemon 权限，�
 ## Web 终端
 
 `webterminal` 提供本地 Shell、SSH/Telnet 连接、会话、SFTP、分屏与快捷指令。连接和附加接口使用 WebSocket。该模块可执行命令与传输文件，是最高风险区域之一。
+
+Lucky 3.0.0 已完成两条隔离行为验证。local connection 通过 temporary-access ticket 建立真实 WebSocket；服务端先发送 `connecting/connected` JSON 事件并给出 `sessionId`，普通终端输入输出使用原始 text/binary frame，resize 使用 `{type:"resize",cols,rows}`。仅关闭 WebSocket 会让 session 进入 `detached`，随后可经 attach 路径恢复同一 session；显式 DELETE 才关闭 session。
+
+localhost SSH 还验证了首次 host-key 流程：connection test 返回 `ret=409 SSHHostKeyUntrusted` 和 host-key 元数据，经专用 PUT 保存信任后，重新提供测试私钥的第二次 test 返回 `ret=0`。同一 SSH session 的 SFTP 已验证 list/mkdir/touch/write/read/rename/copy/chmod/remove，以及基于目标机现有 `tar+gzip` 的 compress/preview/decompress。当前 3.0.0 有两个可重复缺陷：multipart `/upload` 即使按前端 `file → path → filename` FormData 顺序构造仍返回 `ret=5 SSH_FX_FAILURE`；`/upload-streaming` 则出现 `ret=4 closed pipe` / `BrokenPipe`。不要把这两个路由标成已支持成功行为。
 
 ## Cloudflared 与 FRP
 

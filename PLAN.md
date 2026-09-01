@@ -66,34 +66,34 @@
 
 ### SSL / ACME
 
-当前：证书映射到文件已经真实实践；证书 CRUD、ACME 新签发、renew/manual sync、sync-client 尚不完整。
+当前：TEST ACME 新签发、CRUD、启停、MappingToPath、flush/manualsync 路径均已真实实践；sync-client 配置模型已实践，但当前实例 `u=0` 被证书同步授权门槛阻断，尚不能验证实际 linuxssh 文件传输。
 
 - [x] 为测试子域名创建独立 TEST 证书对象
 - [x] 验证 `POST /api/ssl`
 - [x] 验证 `PUT /api/ssl`
 - [x] 使用 DNS-01 + 测试子域名真实签发 ACME 证书
 - [x] 验证证书内容/域名/有效期元数据
-- [ ] 验证 MappingToPath
+- [x] 验证 MappingToPath
 - [x] 验证 `manualsync`
 - [x] 验证 `flush` / renew 语义（不强制提前续签生产证书）
-- [ ] 研究并验证 sync-client 的最小安全闭环
+- [x] 研究并验证 sync-client 的最小安全闭环（配置/选择/授权边界已验证；实际传输被 `PermissionDeniedCannotUseSyncFunction` 阻断）
 - [x] 删除 TEST 证书和测试 DNS 记录
 - [x] 验证现有业务证书未变化
-- [ ] 固化 probe / evidence / docs
+- [x] 固化 probe / evidence / docs：`tools/lucky_ssl_acme_probe.py`、`tools/lucky_ssl_sync_probe.py`
 
 ### IPDB
 
 当前：GET/schema/parser 为主，没有真实 item CRUD、数据库下载更新和查询闭环。
 
-- [ ] 创建独立 TEST IPDB item
-- [ ] 验证 POST / PUT / DELETE
-- [ ] 使用隔离测试数据库文件验证加载
-- [ ] 验证 query 返回结构
-- [ ] 验证关键词查询
-- [ ] 验证数据库文件下载/更新流程，不覆盖系统现用数据库
-- [ ] 清理 TEST item / db file
-- [ ] 验证 item / file 基线恢复
-- [ ] 固化 probe / evidence / docs
+- [x] 创建独立 `TEST-lucky-skills-ipdb-*` item
+- [x] 验证 POST / PUT / DELETE
+- [x] 使用隔离测试 GeoCN MMDB 文件验证加载
+- [x] 验证 query 返回结构
+- [x] 验证 IPv4 / IPv6 查询
+- [x] 验证数据库文件上传、下载、切换/更新流程，不覆盖系统现用数据库
+- [x] 清理 TEST item / db file
+- [x] 验证 item / file 基线恢复
+- [x] 固化 probe / evidence / docs：`tools/lucky_ipdb_probe.py`
 
 ### WebService WAF / OAuth 认证联动
 
@@ -184,20 +184,20 @@
 
 ### WebTerminal
 
-当前：local connection CRUD 和 quickAccess 已实践；真实 terminal WebSocket / SSH/Telnet / SFTP 未执行。
+当前：local WebSocket session、localhost SSH、host-key 信任与 SFTP 核心文件/归档操作已真实实践；两个上传 handler 在 Lucky 3.0.0 上稳定复现运行时失败。
 
-- [ ] 建立本机 local terminal WebSocket session
-- [ ] 验证输入/输出/resize/heartbeat/close
-- [ ] 验证 session list / remark
-- [ ] 创建 localhost SSH 测试连接
-- [ ] 验证 SSH host-key 流程
-- [ ] 验证 connection test
-- [ ] 在 `/tmp/TEST-lucky-skills-*` 隔离目录验证 SFTP：mkdir/touch/write/read/rename/copy/chmod
-- [ ] 验证 multipart upload
-- [ ] 验证 streaming upload
-- [ ] 验证 compress/decompress
-- [ ] 删除隔离目录和 TEST connection/session
-- [ ] 固化 WebSocket/SFTP schema
+- [x] 建立本机 local terminal WebSocket session
+- [x] 验证输入/输出/resize/close（heartbeat 未单独作为业务断言）
+- [x] 验证 session list / detail / stats / remark / detach / attach
+- [x] 创建 localhost SSH 测试连接
+- [x] 验证 SSH host-key 首次 409 → trust → 二次 test 成功流程
+- [x] 验证 connection test
+- [x] 在 `/tmp/TEST-lucky-skills-*` 隔离目录验证 SFTP：mkdir/touch/write/read/rename/copy/chmod/remove
+- [x] 验证 multipart upload：按当前前端 FormData 形状实测，稳定返回 `ret=5 SSH_FX_FAILURE`，记录为 3.0.0 运行时缺陷
+- [x] 验证 streaming upload：实测 `closed pipe` / `BrokenPipe`，记录为 3.0.0 运行时缺陷
+- [x] 验证 compress/preview/decompress（使用目标机已有 tar+gzip；不为测试安装 unzip）
+- [x] 删除隔离目录和 TEST connection/session/SSH authorization
+- [x] 固化 WebSocket/SFTP schema 与运行时缺陷：`tools/lucky_webterminal_probe.py`、`tools/lucky_webterminal_sftp_probe.py`
 
 ### StorageManagement
 
@@ -367,6 +367,7 @@
 8. FRP
 9. IPDB
 10. WebTerminal WebSocket + SFTP
-11. Docker Compose / image load-import-build
-12. Storage / FTP / WebDAV / SMB / DLNA / FileBrowser
+11. Storage / FTP / WebDAV / SMB / DLNA / FileBrowser
+12. Rclone / Cron 核心行为
+13. Docker Compose / image load-import-build
 

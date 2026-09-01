@@ -23,6 +23,8 @@
 | 308 重定向 | 已验证 `RedirectType="308"`，GET / POST 均返回 308 |
 | WebService SNI 分流 | 已验证 `WebServiceType="SNIRouting"`、`Domains` + `Locations`，公网 TLS 流量经 SNI 路由进入本地 TLS 服务 |
 | SSL 证书映射 | 已验证 `MappingToPath` / `MappingPath` / `MappingChangeScript`，并确认映射文件随证书对象生成 |
+| SSL / ACME | 已验证 TEST 证书真实签发、CRUD/启停、MappingToPath、flush/manualsync 路径；sync-client 实际传输被当前实例 `u=0` 授权等级阻断 |
+| WebTerminal | 已验证 local WebSocket session、detach/attach、localhost SSH host-key 信任及 SFTP 核心文件/归档操作；两个 upload handler 已复现运行时失败 |
 | `UNKNOWN` 路由 | 当前默认合并目录为 0 |
 | OpenToken 鉴权 | 安全入口 + `openToken` 请求头 |
 | 状态接口限流 | 当前实例约 20 请求/秒 |
@@ -50,7 +52,7 @@ Lucky Skills 使用两层证据：
 - 显式 response schema 已覆盖 **324 条**路由；
 - response 侧未定型 `{}` 叶子已降到 **0**；request 侧仍有 **38** 个。
 
-目前重点覆盖 DDNS、WebService、Docker、FRP、SSL/ACME、Security Groups、IPFilter/PortTrap、PortForward、STUN，以及部分 Rclone、Cron、WOL、Storage、FileBrowser、Status、IPDB、Modules 等接口。DDNS 的 Cloudflare 核心链路已提升到 `behavior-runtime`：独立 TEST 任务完成 CRUD、URL 取 IPv4、真实 DNS A 更新、manualSync、Webhook test 与双边清理；provider 密钥和真实业务记录未写入证据。
+目前重点覆盖 DDNS、WebService、Docker、FRP、SSL/ACME、Security Groups、IPFilter/PortTrap、PortForward、STUN、WebTerminal，以及部分 Rclone、Cron、WOL、Storage、FileBrowser、Status、IPDB、Modules 等接口。DDNS 的 Cloudflare 核心链路已提升到 `behavior-runtime`：独立 TEST 任务完成 CRUD、URL 取 IPv4、真实 DNS A 更新、manualSync、Webhook test 与双边清理；provider 密钥和真实业务记录未写入证据。IPDB 也已完成隔离 MMDB 的上传、item CRUD、启停、IPv4/IPv6 查询、下载哈希校验、数据库文件切换和清理闭环；其中 `GET /api/ipdb/item/{key}/{bool}` 已确认具有写副作用。WebTerminal 已完成真实 ticketed WebSocket、raw shell I/O、resize、session detach/attach、localhost SSH host-key 信任与 SFTP mkdir/touch/write/read/rename/copy/chmod/remove、tar.gz compress/preview/decompress；multipart upload 在匹配当前前端 FormData 形状后仍返回 `SSH_FX_FAILURE`，streaming upload 则稳定复现 `closed pipe` / `BrokenPipe`，两项按 Lucky 3.0.0 运行时缺陷记录。
 
 ## 已知限制
 
@@ -59,7 +61,8 @@ Lucky Skills 使用两层证据：
 - 静态分析不能可靠推导所有必填字段、错误码、事务语义或 WebSocket 消息格式。
 - 路由存在不代表写请求一定安全，也不代表请求体 schema 已完全验证。
 - 不同模块、镜像和 Lucky 后续版本可能改变接口集合和行为。
-- 当前客户端不会建立 WebSocket 会话，只验证相关路由或鉴权层。
+- WebSocket 已在 NAT Detect 与 WebTerminal 上完成真实会话验证，但并非所有 WebSocket 路由都已恢复消息协议；当前 stdlib helper 已支持 HTTP 101 后同一 TCP read 内紧跟首个 WebSocket frame 的合法情况。
+- SSL sync-client 的配置、选择模型和授权拒绝已实测；当前实例 `/api/info` 为 `u=0`，`manualsync` 在真正 linuxssh 文件传输前返回 `PermissionDeniedCannotUseSyncFunction`，因此不能宣称 sync-client E2E 文件传输已完成。
 
 因此，接口目录是**经过验证的操作依据**，不是上游兼容性承诺。
 

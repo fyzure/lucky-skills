@@ -99,6 +99,18 @@ Lucky 3.0.0 certificate objects support `MappingToPath`, `MappingPath`, and `Map
 
 Treat mapped private keys as secrets. The observed default mapping created the private key with mode `0644`, so explicitly reduce it to `0600` and, when appropriate, use `MappingChangeScript` to re-apply the permission after future certificate updates and/or reload the consuming service. Keep mapping paths inside an intentionally writable Lucky mount; do not expose mapped certificate directories through file-serving rules. Never print `CertBase64`, `KeyBase64`, ACME credentials, or the raw response from `GET /api/ssl/{key}` into chat/logs; use the client's redacted output or write sensitive responses to a root-only temporary file and delete it immediately after constructing a reviewed update payload.
 
+For owner-authorized ACME validation, `tools/lucky_ssl_acme_probe.py` creates one unique TEST certificate, performs real issuance, verifies metadata plus Lucky-visible mapped `.key/.crt/.pem` files, exercises only TEST-object update/toggle/flush/manualsync paths, and cleans the certificate and mapping directory. If Lucky is containerized, `MappingPath` is interpreted in Lucky's filesystem namespace; do not assume container `/tmp` equals host `/tmp`. Current 3.0.0 behavior also showed that turning mapping on only after certificate material already exists does not immediately backfill old material.
+
+`tools/lucky_ssl_sync_probe.py` verifies the `linuxssh` sync-client configuration and entitlement boundary without bypassing it. On the current runtime, `/api/info` reports `u=0`; although a TEST linuxssh client receives a Key and a TEST certificate with `AllSyncClient=true` is created successfully, `manualsync` returns `PermissionDeniedCannotUseSyncFunction` before SSH transfer. Treat actual sync-client file delivery as **not verified** unless a legitimately entitled Lucky instance allows the transfer stage.
+
+## WebTerminal behavior
+
+WebTerminal is a high-risk capability. Runtime probes are allowed only against localhost and uniquely prefixed TEST connections/sessions/paths. `tools/lucky_webterminal_probe.py` verifies a real temporary-ticket WebSocket local shell: `connecting/connected` JSON events, raw terminal input/output, JSON resize frames, session list/detail/stats/remark, detach and attach, then explicit close. The shared stdlib WebSocket helper preserves a valid first frame that arrives in the same TCP read as the HTTP 101 response.
+
+`tools/lucky_webterminal_sftp_probe.py` uses an ephemeral localhost-only SSH key and the existing local sshd to verify Lucky's first-use `SSHHostKeyUntrusted` confirmation flow, persisted host-key trust, a second successful connection test, real SSH terminal I/O, and SFTP list/mkdir/touch/write/read/rename/copy/chmod/remove plus tar.gz compress/preview/decompress under a unique `/tmp/TEST-*` tree. Do not install remote utilities just to make a probe pass; archive behavior depends on tools already available on the SSH target.
+
+Two Lucky 3.0.0 upload routes are currently verified **failures**, not supported-success claims: browser-equivalent multipart `POST /api/webterminal/sftp/{SessionId}/upload` reproducibly returns `ret=5 SSH_FX_FAILURE`, while `upload-streaming` reproducibly returns closed-pipe/BrokenPipe behavior. Preserve these as runtime defects until a later Lucky version is re-verified.
+
 ## Report results
 
 Summarize what was read or changed, identify any remaining non-Lucky dependency (DNS, CDN, origin application, firewall, certificate issuance), and avoid reproducing secrets returned by Lucky responses.
