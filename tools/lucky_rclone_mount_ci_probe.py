@@ -48,7 +48,6 @@ from lucky_docker_build_ci_probe import (
 
 
 TEST_PREFIX = "TEST-lucky-skills-rclone-mount-ci-"
-RCLONE_FRONTEND_ASSET = "/assets/lucky_rclone-sFF3mpk8.js"
 
 
 def choose_loopback_port() -> int:
@@ -245,33 +244,54 @@ def remote_detail(base_url: str, token: str, key: str) -> dict[str, Any]:
 def frontend_mount_snippets(base_url: str) -> dict[str, str]:
     """Extract public Lucky 3.0.0 Rclone UI context for mount field semantics."""
 
-    request = urllib.request.Request(
-        base_url + RCLONE_FRONTEND_ASSET,
-        headers={"User-Agent": "lucky-skills-rclone-mount-ci-inspector/1"},
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=10) as response:
-            raw = response.read(4 * 1024 * 1024)
-    except Exception as error:  # noqa: BLE001 - failure diagnostic only
-        return {"fetch_error": type(error).__name__}
-    text = raw.decode("utf-8", errors="replace")
     snippets: dict[str, str] = {}
-    for needle in (
-        "MountType",
-        "OnleyCreateVFS",
-        "MountPoint",
-        "SystemMount",
-        "AllowOther",
-    ):
-        positions = [match.start() for match in re.finditer(needle, text)]
-        if not positions:
+    origin = urllib.parse.urlsplit(base_url)
+    queue = ["/"]
+    seen: set[str] = set()
+    fetched = 0
+    max_bytes = 24 * 1024 * 1024
+    needles = ("MountType", "OnleyCreateVFS", "MountPoint", "SystemMount", "AllowOther")
+    while queue and len(seen) < 120 and fetched < max_bytes:
+        path = queue.pop(0)
+        if path in seen:
             continue
-        chunks = []
-        for position in positions[:4]:
-            start = max(0, position - 1000)
-            end = min(len(text), position + 1800)
-            chunks.append(" ".join(text[start:end].split()))
-        snippets[needle] = " || ".join(chunks)[:9000]
+        seen.add(path)
+        request = urllib.request.Request(
+            base_url + path,
+            headers={"User-Agent": "lucky-skills-rclone-mount-ci-inspector/1"},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=8) as response:
+                raw = response.read(min(4 * 1024 * 1024, max_bytes - fetched))
+        except Exception:  # noqa: BLE001 - best-effort failure diagnostic
+            continue
+        fetched += len(raw)
+        text = raw.decode("utf-8", errors="replace")
+        for needle in needles:
+            positions = [match.start() for match in re.finditer(needle, text)]
+            if not positions:
+                continue
+            chunks = []
+            for position in positions[:4]:
+                start = max(0, position - 1000)
+                end = min(len(text), position + 1800)
+                chunks.append(" ".join(text[start:end].split()))
+            snippets[f"{path}:{needle}"] = " || ".join(chunks)[:9000]
+
+        candidates = set(
+            re.findall(r"(?:src=|href=)?[\"']([^\"']+\.js(?:\?[^\"']*)?)[\"']", text)
+        )
+        candidates.update(re.findall(r"(?:\.\/)?(assets/[A-Za-z0-9_./-]+\.js)", text))
+        for candidate in candidates:
+            resolved = urllib.parse.urljoin(base_url + path, candidate)
+            parsed = urllib.parse.urlsplit(resolved)
+            if parsed.scheme != origin.scheme or parsed.netloc != origin.netloc:
+                continue
+            candidate_path = parsed.path
+            if candidate_path.endswith(".js") and candidate_path not in seen:
+                queue.append(candidate_path)
+    if not snippets:
+        snippets["crawl"] = f"no mount markers found; files={len(seen)} bytes={fetched}"
     return snippets
 
 
