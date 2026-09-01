@@ -60,6 +60,7 @@ from lucky_docker_build_ci_probe import (
 TEST_PREFIX = "TEST-lucky-skills-natpmp-ci-"
 STUN_COOKIE = 0x2112A442
 NATPMP_PORT = 5351
+TEST_PUBLIC_IP = "198.51.100.42"
 
 
 def docker_network_values(network_name: str) -> tuple[str, str]:
@@ -211,7 +212,7 @@ class StunBindingServer:
         self.stop_event = threading.Event()
         self.request_count = 0
         self.thread = threading.Thread(target=self._serve, daemon=True)
-        self.public_ip = ipaddress.IPv4Address("198.51.100.42")
+        self.public_ip = ipaddress.IPv4Address(TEST_PUBLIC_IP)
 
     def start(self) -> None:
         self.thread.start()
@@ -301,7 +302,7 @@ class NatPmpGateway:
         self.socket.settimeout(0.2)
         self.stop_event = threading.Event()
         self.thread = threading.Thread(target=self._serve, daemon=True)
-        self.public_ip = ipaddress.IPv4Address("198.51.100.42")
+        self.public_ip = ipaddress.IPv4Address(TEST_PUBLIC_IP)
         self.started_at = time.monotonic()
         self.public_address_requests = 0
         self.add_requests = 0
@@ -529,6 +530,41 @@ def wait_event(event: threading.Event, label: str, timeout: float = 20.0) -> Non
         raise ProbeError(f"timed out waiting for {label}")
 
 
+def contains_string(value: Any, needle: str) -> bool:
+    if isinstance(value, str):
+        return needle in value
+    if isinstance(value, dict):
+        return any(contains_string(item, needle) for item in value.values())
+    if isinstance(value, list):
+        return any(contains_string(item, needle) for item in value)
+    return False
+
+
+def wait_runtime_stun_endpoint(
+    base_url: str,
+    token: str,
+    key: str,
+    *,
+    timeout: float = 12.0,
+) -> bool:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        listing = api_json(base_url, token, "/api/stunrulelist")
+        rows = listing.get("list") or []
+        owned = [
+            row
+            for row in rows
+            if isinstance(row, dict) and rule_key(row) == key
+        ]
+        if contains_string(owned, TEST_PUBLIC_IP):
+            return True
+        logs = api_json(base_url, token, f"/api/stun/{key}/lastlogs")
+        if contains_string(logs, TEST_PUBLIC_IP):
+            return True
+        time.sleep(0.4)
+    return False
+
+
 def mapped_udp_roundtrip(gateway_ip: str, external_port: int, marker: bytes) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as client:
         client.bind((gateway_ip, 0))
@@ -570,6 +606,7 @@ def main() -> int:
         "rule_upnp_disabled": False,
         "rule_firewall_automation_disabled": False,
         "fake_stun_used": False,
+        "runtime_stun_endpoint_observed": False,
         "natpmp_public_address_request_seen": False,
         "natpmp_udp_add_seen": False,
         "natpmp_internal_port_matches_listener": False,
@@ -766,6 +803,12 @@ def main() -> int:
             if not report["natpmp_mapping_installed"]:
                 raise ProbeError("fake NAT-PMP gateway did not install the UDP mapping")
 
+            report["runtime_stun_endpoint_observed"] = wait_runtime_stun_endpoint(
+                base_url,
+                open_token,
+                created_key,
+            )
+
             report["mapped_data_roundtrip"] = mapped_udp_roundtrip(
                 gateway_ip,
                 external_port,
@@ -872,6 +915,7 @@ def main() -> int:
         "rule_upnp_disabled",
         "rule_firewall_automation_disabled",
         "fake_stun_used",
+        "runtime_stun_endpoint_observed",
         "natpmp_udp_add_seen",
         "natpmp_internal_port_matches_listener",
         "natpmp_mapping_installed",
