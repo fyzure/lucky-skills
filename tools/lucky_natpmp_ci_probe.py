@@ -769,9 +769,10 @@ def cleanup_wan_namespace(namespace: str, host_veth: str) -> None:
     run(["ip", "link", "del", host_veth], check=False, timeout=20)
 
 
-def mapped_udp_roundtrip(
+def namespace_udp_roundtrip(
     namespace: str,
-    external_port: int,
+    host: str,
+    port: int,
     marker: bytes,
 ) -> tuple[bool, int, str]:
     code = (
@@ -779,22 +780,27 @@ def mapped_udp_roundtrip(
         "m=bytes.fromhex(sys.argv[1]);"
         "s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);"
         "s.settimeout(8);"
-        "s.connect((sys.argv[2],int(sys.argv[3])));"
-        "s.send(m);"
-        "d=s.recv(65535);"
-        "sys.exit(0 if d==m else 7)"
+        "\ntry:\n"
+        " s.connect((sys.argv[2],int(sys.argv[3]))); s.send(m); d=s.recv(65535);"
+        " sys.exit(0 if d==m else 7)\n"
+        "except Exception as e:\n"
+        " print(type(e).__name__+':'+str(e),file=sys.stderr); sys.exit(8)"
     )
     result = run(
         [
             "ip", "netns", "exec", namespace,
             sys.executable, "-c", code,
-            marker.hex(), TEST_WAN_GATEWAY, str(external_port),
+            marker.hex(), host, str(port),
         ],
         check=False,
         timeout=15,
     )
     stderr = result.stderr.decode("utf-8", errors="replace").lower()
-    if "timed out" in stderr or "timeouterror" in stderr:
+    if "network is unreachable" in stderr:
+        failure_kind = "unreachable"
+    elif "connection refused" in stderr:
+        failure_kind = "refused"
+    elif "timed out" in stderr or "timeouterror" in stderr:
         failure_kind = "timeout"
     elif result.returncode == 0:
         failure_kind = ""
@@ -878,6 +884,8 @@ def main() -> int:
         "runner_root": True,
         "network_internal": False,
         "wan_namespace_isolated": False,
+        "wan_client_route_ok": False,
+        "wan_gateway_roundtrip": False,
         "ip_forwarding_available": False,
         "admin_port_unpublished": False,
         "admin_reachable_on_internal_bridge": False,
@@ -953,6 +961,7 @@ def main() -> int:
 
         stun_server: StunBindingServer | None = None
         echo_server: UdpEchoServer | None = None
+        wan_echo_server: UdpEchoServer | None = None
         natpmp: NatPmpGateway | None = None
         base_url = ""
         created_key = ""
@@ -962,6 +971,22 @@ def main() -> int:
         try:
             gateway_ip, _subnet = docker_network_values(network_name)
             report["network_internal"] = True
+
+            route_check = run(
+                ["ip", "-n", wan_namespace, "route", "get", TEST_WAN_GATEWAY],
+                check=False,
+                timeout=20,
+            )
+            report["wan_client_route_ok"] = route_check.returncode == 0
+            wan_echo_server = UdpEchoServer(TEST_WAN_GATEWAY)
+            wan_echo_server.start()
+            wan_ok, _wan_rc, _wan_failure = namespace_udp_roundtrip(
+                wan_namespace,
+                TEST_WAN_GATEWAY,
+                wan_echo_server.port,
+                marker,
+            )
+            report["wan_gateway_roundtrip"] = wan_ok
 
             docker(
                 "run",
@@ -1137,8 +1162,9 @@ def main() -> int:
             )
 
             echo_before_mapped = echo_server.request_count
-            mapped_ok, mapped_returncode, mapped_failure_kind = mapped_udp_roundtrip(
+            mapped_ok, mapped_returncode, mapped_failure_kind = namespace_udp_roundtrip(
                 wan_namespace,
+                TEST_WAN_GATEWAY,
                 external_port,
                 marker,
             )
@@ -1233,6 +1259,8 @@ def main() -> int:
                 stun_server.close()
             if echo_server is not None:
                 echo_server.close()
+            if wan_echo_server is not None:
+                wan_echo_server.close()
             cleanup_wan_namespace(wan_namespace, wan_host_veth)
             run(["docker", "rm", "-f", container_name], check=False, timeout=45)
             run(["docker", "network", "rm", network_name], check=False, timeout=45)
@@ -1243,6 +1271,8 @@ def main() -> int:
         "runner_root",
         "network_internal",
         "wan_namespace_isolated",
+        "wan_client_route_ok",
+        "wan_gateway_roundtrip",
         "ip_forwarding_available",
         "admin_port_unpublished",
         "admin_reachable_on_internal_bridge",
