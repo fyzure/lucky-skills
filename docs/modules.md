@@ -133,6 +133,10 @@ Visitor 的当前前端默认模型为 `type=stcp`、`bindAddr=127.0.0.1`、`bin
 
 `thirdPartyAuthManager`、`oauth`、`security-groups` 和 `webservice/webauth` 共同管理第三方身份、授权用户和会话。不要记录临时 code、回调参数、用户标识或会话票据。
 
+当前前端把“添加第三方用户”的授权过程拆成 `GET /api/oauth/tmpcode?type=<provider>` → 打开返回的 `authUrl` → 轮询 `/api/oauth/status` → `/api/oauth/userinfo`；管理员 OAuth 登录则另走 `/api/login/challenge`，对 `{type,token,twoFA,challengeId,nonce}` 做 RSA 分块加密后 `POST /api/oauth/login`。这两条链不能混用 callback code、tmpCode 或用户 Key。
+
+OIDC 做过一次有界 preflight：在原 OIDC 三个公共字段均为空的基线下，只把 `OIDCAuthorizationEndpoint / OIDCClientID / OIDCRedirectURI` 临时改成唯一 loopback TEST 值，PUT 返回成功且 GET 精确回读。随后通过正常 OpenToken 客户端调用 `GET /api/oauth/tmpcode?type=oidc`，当前 Lucky 3.0.0 仍返回 `ret=2`，没有产生 `tmpCode`、`authUrl` 或 `authServer`，也没有访问配置的 loopback provider。恢复时只回滚这三个 OIDC 字段，并验证第三方用户列表基线未变。由此只能确认公共 OIDC 配置写入语义；**不能**宣称 OpenToken 能代替浏览器管理员会话发起 OAuth 授权。当前实际 OAuth 登录保持未验证，且不会为覆盖率使用 Playwright/Chromium 或读取 Lucky 内部状态绕过这一边界。
+
 Security Group + WebService Auth 的核心链路已通过 `tools/lucky_security_group_probe.py` 完成隔离 E2E。probe 创建唯一 TEST group、组内 local user、无 group local user，以及不携带真实 provider token 的 disabled third-party/OAuth mapping；随后只向现有 WebService 父规则 append 两条 TEST 子规则。BasicAuth 对未认证/错误密码返回 401，正确组内 local user 能到达 loopback marker origin。WebAuth 则实际恢复并执行了 challenge + RSA 登录协议：先取 `challengeId/nonce/publicKey`，再对 `{account,password,twoFA,challengeId,nonce}` 做分块 RSA 加密并提交，成功 session 能到达 upstream，而无 group 用户不能获得同等访问。
 
 成功 WebAuth 授权会生成 runtime Security Group grant；当前运行时/前端确认真实主键字段为 `GrantKey`。早期 probe 在显式删除时曾错误使用通用 `Key`，修正为 `GrantKey` 后没有为了覆盖率再重复整套生产 listener E2E，所以仓库只宣称 grant **生成**以及最终 principal cleanup 后 grant baseline 恢复，不宣称修正后的显式 grant-delete 已再次验证。对于 `AuthSource=securityGroup` 的 BasicAuth/WebAuth，当前前端会把 `SecurityGroupAccessMode` 置为 `disabled`；`strict/append` 是另一套授权叠加模式，不应混为一谈。清理后所有 TEST principals/subrules 消失，原 WebService 业务子规则对象级保持不变。

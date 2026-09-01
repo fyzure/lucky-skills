@@ -495,7 +495,7 @@
       "risk": "dangerous",
       "response_type": "json",
       "confidence": "runtime-verified",
-      "verification": "Unauthenticated GET reached the handler and returned ret=2 suspicious-request semantics; no temporary code was requested with valid auth context."
+      "verification": "An earlier unauthenticated GET reached the handler and returned ret=2 suspicious-request semantics. A later owner-authorized OIDC preflight first PUT three unique TEST public metadata fields (authorization endpoint, client ID and redirect URI), verified exact readback, then called GET /api/oauth/tmpcode?type=oidc through the normal OpenToken client. The handler again returned ret=2 with no tmpCode, authUrl or authServer, so current OpenToken-only access does not establish the browser/admin-session context required by this OAuth authorization flow. The three OIDC fields were restored under an ownership guard and the third-party user-list baseline remained unchanged; no temporary code, provider token or callback value is retained."
     },
     {
       "path": "/api/rclone/third/115pan/user",

@@ -97,7 +97,7 @@
 
 ### WebService WAF / OAuth 认证联动
 
-当前：reverse proxy、NginxConf、路径、Header、SNI 已较完整；认证/WAF 仍缺业务闭环。
+当前：reverse proxy、NginxConf、路径、Header、SNI、WAF、WebAuth/BasicAuth/Security Group 已完成。第三方 OAuth 仍缺真实登录闭环；一次隔离 OIDC preflight 已确认三个公共 OIDC 字段可 PUT/readback/完整恢复，但正常 OpenToken 客户端调用 `GET /api/oauth/tmpcode?type=oidc` 仍返回 `ret=2`，且没有 `tmpCode/authUrl/authServer`。当前授权流依赖浏览器/管理员会话上下文，不能由 OpenToken-only 客户端替代，也不会使用 Playwright/Chromium 绕过。
 
 - [x] 临时 WebService 绑定 Coraza TEST instance
 - [x] 正常请求应通过
@@ -265,7 +265,7 @@ WebDAV、SMB 与 FileBrowser 已完成 localhost 完整闭环；DLNA 已在一�
 
 ### ThirdPartyAuthManager
 
-当前：disabled GitHub-type mapping CRUD 已实践，没有真实 OAuth 登录。
+当前：disabled GitHub-type mapping CRUD 已实践，没有真实 OAuth 登录。OIDC 公共配置的隔离 PUT/readback/rollback 已验证；OpenToken-only `tmpcode(type=oidc)` 仍是 `ret=2`，因此实际授权要留给具备合法浏览器管理员会话的隔离环境，不在当前 API-only 生产实例强测。
 
 - [ ] 创建隔离 OAuth test client
 - [ ] 完成一次实际 OAuth login
