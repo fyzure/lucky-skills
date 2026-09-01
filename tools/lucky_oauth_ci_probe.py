@@ -190,13 +190,15 @@ def frontend_runtime_snippets(base_url: str) -> dict[str, str]:
         fetched += len(raw)
         text = raw.decode("utf-8", errors="replace")
         for needle in targets:
-            if needle in snippets:
-                continue
             index = text.find(needle)
             if index >= 0:
                 start = max(0, index - 1200)
                 end = min(len(text), index + 1800)
-                snippets[needle] = re.sub(r"\s+", " ", text[start:end])[:3000]
+                snippet = re.sub(r"\s+", " ", text[start:end])[:3000]
+                if needle not in snippets:
+                    snippets[needle] = snippet
+                if "lucky_thirdPartyAuthManager-" in path:
+                    snippets[f"third:{needle}"] = snippet
         candidates = set(re.findall(r"(?:src=|href=)?[\"']([^\"']+\.js(?:\?[^\"']*)?)[\"']", text))
         candidates.update(re.findall(r"(?:\.\/)?(assets/[A-Za-z0-9_./-]+\.js)", text))
         for candidate in candidates:
@@ -333,7 +335,7 @@ class FakeOidcProvider:
                 body_kind = "empty"
                 if body:
                     decoded_text = body.decode("utf-8", errors="replace")
-                    if content_type == "application/json" or decoded_text.lstrip().startswith(("{", "[")):
+                    if content_type == "application/json":
                         try:
                             decoded = json.loads(decoded_text)
                         except (UnicodeDecodeError, json.JSONDecodeError):
@@ -342,7 +344,7 @@ class FakeOidcProvider:
                             body_kind = "json"
                             if isinstance(decoded, dict):
                                 body_keys = sorted(str(key) for key in decoded)
-                    elif content_type == "application/x-www-form-urlencoded" or "=" in decoded_text:
+                    elif content_type == "application/x-www-form-urlencoded":
                         body_kind = "form"
                         body_keys = sorted(
                             urllib.parse.parse_qs(
@@ -350,7 +352,7 @@ class FakeOidcProvider:
                             ).keys()
                         )
                     else:
-                        body_kind = "text" if decoded_text.isprintable() else "bytes"
+                        body_kind = "bytes"
                 fixture.other_requests.append(
                     {
                         "method": method,
