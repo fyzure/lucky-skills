@@ -270,6 +270,25 @@
       },
       "security": "The probe refuses to run outside GitHub Actions. It does not address a physical NIC, LAN broadcast domain or real MAC; the only wake target is a private Docker --internal bridge broadcast address. Lucky's admin port is never host-published, raw capture is restricted to the owned bridge, shutdown is never invoked, and generated MAC/network values or packet bytes are not retained in repository evidence."
     },
+    "stun_natpmp_ci_behavior": {
+      "confidence": "runtime-verified",
+      "model": {
+        "topology": "A fresh pinned Lucky 3.0.0 container runs only on a Docker --internal LAN while a second veth-backed network namespace acts as the isolated WAN; the two sides have no Internet dependency",
+        "control_plane": "The TEST udp4 STUN rule enables NatPMP=true with UPnP=false and AutoOptionsFirewall=false. Lucky sent a real NAT-PMP UDP mapping request to the owned gateway on UDP/5351, and the requested internal port exactly matched the rule ListenPort",
+        "public_endpoint": "An owned STUN Binding responder supplied the synthetic WAN endpoint. Lucky logged a successful STUN public-address query and NAT-PMP local mapping creation without requiring a public STUN server or NAT-PMP public-address opcode 0",
+        "mapping_data_plane": "The fake NAT-PMP gateway assigns an external UDP port and opens one owned user-space mapping relay. A random marker from the isolated WAN namespace traversed relay -> Lucky listener -> owned UDP echo target -> Lucky -> relay and returned byte-for-byte",
+        "renewal": "Repeated NAT-PMP add/renew requests for the same internal mapping keep the already assigned external port instead of replacing the live mapping",
+        "delete": "Disabling/deleting the TEST rule produced a NAT-PMP lifetime=0 delete request; the owned mapping relay was closed and the STUN rule/module baselines were restored"
+      },
+      "verification": "A GitHub-hosted CI run of tools/lucky_natpmp_ci_probe.py started a disposable Docker --internal network, a separate veth/network-namespace WAN, a pinned Lucky 3.0.0 container with no published admin port, and owned stdlib STUN/NAT-PMP/UDP-echo fixtures. Lucky configuration was changed only through HTTP APIs after OpenToken bootstrap. The probe temporarily enabled the fresh STUN module, created one unique udp4 TEST rule with NatPMP=true, UPnP=false and firewall automation disabled, observed a NAT-PMP UDP add request whose internal port matched ListenPort, and observed Lucky's STUN public endpoint/log state. The assigned external mapping then carried one random UDP marker from the isolated WAN through Lucky to the owned echo target and back exactly; both relay forward/return counters were nonzero. Disabling the rule caused a lifetime=0 NAT-PMP delete, the relay disappeared, the TEST rule was deleted, the original STUN module state was restored and the disposable container/networks were removed. The successful report had failed=[].",
+      "observations": {
+        "protocol": "Lucky 3.0.0 used NAT-PMP UDP mapping opcode 1 for the udp4 TEST rule; no separate NAT-PMP public-address request was observed because public endpoint discovery came from STUN",
+        "data_plane": "The successful CI run recorded mapped_data_roundtrip=true, mapped_echo_target_used=true and exactly one observed relay forward plus one return for the marker transaction",
+        "logs": "Safe Lucky log samples included NAT-PMP local mapping creation, the current owned STUN server, successful redacted public-address discovery, forwarding-service enabled state and IP-filter pass entries",
+        "cleanup": "The NAT-PMP lifetime=0 delete was observed, the owned mapping relay was closed, the TEST rule key baseline returned empty and the temporary STUN module configuration returned to its original state"
+      },
+      "security": "The probe refuses execution outside GitHub Actions and requires root only to create/delete its private veth network namespace. It does not modify iptables, sysctls, a physical NIC, production Lucky, a real router or any public route. Lucky's admin port remains unpublished; all generated WAN/LAN addresses, ports and marker bytes are disposable and are not retained as repository evidence. UPnP mapping remains independently unexercised."
+    },
     "smb_loopback_behavior": {
       "confidence": "runtime-verified",
       "model": {

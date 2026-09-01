@@ -130,14 +130,13 @@
 
 ### STUN / NAT Mapping
 
-当前：disabled rule CRUD 已实践；PortForward、UPnP、NAT-PMP、Webhook、脚本都刻意关闭。
-当前 RS 的 `ens7` 直接持有公网 IPv4，默认网关也位于同一公网网段，不是 RFC1918/CGNAT 后主机；因此这里没有一个可代表真实 NAT 场景的 NAT-PMP/UPnP 网关。当前实例不为了覆盖率把“直接公网监听”误记成 NAT mapping 成功，相关两项留待 NAT 后专用测试节点。
+当前：生产 RS 仍不模拟 NAT；真实 mapping 行为改在 GitHub-hosted disposable Lucky 3.0.0 中完成。probe 使用 Docker `--internal` 作为 Lucky LAN、独立 veth/netns 作为 synthetic WAN、owned STUN responder + NAT-PMP UDP/5351 gateway。Lucky 仅通过 API 创建 udp4 TEST rule；NAT-PMP add 的 internal port 与 ListenPort 一致，外部 netns 的随机 UDP marker 通过临时 mapping relay → Lucky → echo target → Lucky → relay 原样返回，disable/delete 后观察到 lifetime=0 delete 并撤销 mapping。UPnP mapping 仍未单独实践。
 
 - [x] 创建隔离 TEST STUN rule
 - [x] 真实执行 STUN 地址探测
 - [x] 验证 NAT 类型/公网映射结果
-- [ ] 在安全条件下验证一个临时端口映射
-- [ ] 优先测试 NAT-PMP / UPnP 中当前网络实际支持的方式
+- [x] 在安全条件下验证一个临时端口映射（隔离 CI NAT-PMP）
+- [x] 优先测试 NAT-PMP / UPnP 中当前网络实际支持的方式（已完成 NAT-PMP；UPnP 保留独立边界）
 - [x] 验证地址变化/状态日志
 - [x] 清理 TEST rule 和映射
 - [x] 验证没有残留防火墙/端口映射

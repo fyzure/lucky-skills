@@ -672,6 +672,48 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
     if not (ROOT / ".github" / "workflows" / "lucky-wol-ci.yml").is_file():
         fail("WOL CI workflow is missing")
 
+    natpmp_evidence = model_evidence.get("stun_natpmp_ci_behavior")
+    if not isinstance(natpmp_evidence, dict):
+        fail("STUN NAT-PMP CI behavior evidence is missing")
+    if natpmp_evidence.get("confidence") != "runtime-verified":
+        fail("STUN NAT-PMP CI behavior evidence must remain runtime-verified")
+    natpmp_model = natpmp_evidence.get("model")
+    if not isinstance(natpmp_model, dict) or set(natpmp_model) != {
+        "topology",
+        "control_plane",
+        "public_endpoint",
+        "mapping_data_plane",
+        "renewal",
+        "delete",
+    }:
+        fail("STUN NAT-PMP CI behavior model regressed")
+    natpmp_observations = natpmp_evidence.get("observations")
+    if not isinstance(natpmp_observations, dict) or set(natpmp_observations) != {
+        "protocol",
+        "data_plane",
+        "logs",
+        "cleanup",
+    }:
+        fail("STUN NAT-PMP CI behavior observations regressed")
+    for field in ("verification", "security"):
+        value = natpmp_evidence.get(field)
+        if not isinstance(value, str) or not value.strip():
+            fail(f"STUN NAT-PMP CI behavior evidence field is missing: {field}")
+    if "UDP/5351" not in str(natpmp_model.get("control_plane")):
+        fail("STUN NAT-PMP UDP/5351 evidence regressed")
+    if "mapping relay" not in str(natpmp_model.get("mapping_data_plane")):
+        fail("STUN NAT-PMP mapping-relay evidence regressed")
+    if "lifetime=0" not in str(natpmp_model.get("delete")):
+        fail("STUN NAT-PMP deletion evidence regressed")
+    if "network namespace" not in str(natpmp_model.get("topology")):
+        fail("STUN NAT-PMP WAN isolation evidence regressed")
+    if "UPnP" not in str(natpmp_evidence.get("security")):
+        fail("STUN NAT-PMP UPnP boundary evidence regressed")
+    if not (ROOT / "tools" / "lucky_natpmp_ci_probe.py").is_file():
+        fail("STUN NAT-PMP CI runtime probe tool is missing")
+    if not (ROOT / ".github" / "workflows" / "lucky-natpmp-ci.yml").is_file():
+        fail("STUN NAT-PMP CI workflow is missing")
+
     smb_evidence = model_evidence.get("smb_loopback_behavior")
     if not isinstance(smb_evidence, dict):
         fail("SMB loopback behavior evidence is missing")

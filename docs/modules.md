@@ -39,6 +39,8 @@ Lucky 3.0.0 的 SNI 分流也已完成真实实例验证。子规则类型值为
 
 启用规则会立即改变网络暴露面。自动化保存后应验证监听地址、防火墙状态和目标服务，不要只检查 `ret: 0`。
 
+NAT-PMP 映射已经通过 `tools/lucky_natpmp_ci_probe.py` 在 GitHub-hosted disposable Lucky 3.0.0 上完成真实协议与数据面闭环，而不是在 RS 生产公网网卡上制造 NAT。隔离拓扑由 Docker `--internal` Lucky LAN、独立 veth/network namespace synthetic WAN、owned STUN responder、NAT-PMP UDP/5351 gateway 和 UDP echo target 组成。Lucky 只通过 HTTP API 临时启用 STUN 模块并创建唯一 udp4 TEST rule，`NatPMP=true`、`UPnP=false`、`AutoOptionsFirewall=false`。CI 实际观察到 NAT-PMP UDP add，internal port 与 rule `ListenPort` 一致；fake gateway 分配 external UDP port 后创建 owned mapping relay，WAN namespace 的随机 marker 经 relay → Lucky → echo → Lucky → relay 完整原样返回。关闭/删除 rule 时又观察到 lifetime=0 delete，relay 随即消失，rule/module baseline 完整恢复。当前不把这项证据扩展成“UPnP mapping 也已验证”；UPnP 仍是单独边界。
+
 ## 网络唤醒
 
 `wol` 提供设备列表、服务配置、Webhook、客户端状态、唤醒和关机。`/api/wol/device/wakeup` 与 `/shutdown` 即使使用 GET 也有明显副作用，必须在调用方单独确认。
