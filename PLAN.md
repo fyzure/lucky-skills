@@ -256,7 +256,7 @@ WebDAV、SMB 与 FileBrowser 已完成 localhost 完整闭环；DLNA 已在一�
 
 ### WOL
 
-当前：device CRUD 与真实 wake packet emission 已在 GitHub-hosted disposable Lucky + Docker `--internal` bridge 中完成；没有向物理 LAN、真实设备或公网发送 WOL。真实 powered-device 在线状态变化仍需要专用测试设备；shutdown 继续明确不为覆盖率强测。
+当前：device CRUD、真实 wake packet emission 与 virtual powered target 的离线→在线状态闭环均已在 GitHub-hosted disposable Lucky + Docker `--internal` bridge 中完成；没有向物理 LAN、真实设备或公网发送 WOL。物理主机不是本计划的覆盖目标，`shutdown` 继续明确不为覆盖率强测。
 
 - [x] `tools/lucky_wol_ci_probe.py` 在 isolated internal bridge 上创建 locally-administered TEST MAC/device，临时启用 WOL Server 后调用 `/api/wol/device/wakeup`，抓到并逐字节验证标准 **102-byte magic packet**
 - [x] 固化 wake 端口语义：Lucky 3.0.0 实际发往 **UDP/9**，没有使用 TEST device 中另设的随机 `Port`
@@ -276,7 +276,7 @@ WebDAV、SMB 与 FileBrowser 已完成 localhost 完整闭环；DLNA 已在一�
 
 ---
 
-## P4 — Docker 剩余覆盖
+## P4 — Docker 隔离覆盖（已完成）
 
 当前 Docker 已有较深的 disposable 生命周期实践；Compose、image import/load 以及三个 image build 入口的安全隔离闭环均已完成。生产 Docker prune 仍明确禁止。
 
@@ -315,7 +315,7 @@ WebDAV、SMB 与 FileBrowser 已完成 localhost 完整闭环；DLNA 已在一�
 
 ## P5 — 高风险核心管理操作（CI-only）
 
-以下能力继续纳入覆盖，但**只能在 GitHub Actions 的 disposable Lucky / disposable Docker daemon / owned synthetic fixture 中执行**。生产 Lucky、生产证书、生产 Docker daemon 和真实业务设备都不参与这些验证。
+以下能力均已完成既定覆盖，并且**只能在 GitHub Actions 的 disposable Lucky / disposable Docker daemon / owned synthetic fixture 中回归验证**。生产 Lucky、生产证书、生产 Docker daemon 和真实业务设备都不参与这些覆盖。
 
 - [x] Lucky 自更新：`tools/lucky_update_ci_probe.py` 仅在 fresh pinned Lucky 中使用官方 Linux x86_64 发布包；3.0.0 可解析/接受 2.27.2 包且 `/api/update/comfire` 返回 `ret=0`，随后 HTTP 中断且 45 秒内不恢复，而 Docker 容器保持 running / RestartCount=0 / ExitCode=0，已固化为明确的 downgrade non-serving failure semantic；生产二进制不参与
 - [x] 全局配置 restore/import：`tools/lucky_config_restore_ci_probe.py` 在 fresh Lucky 中写入 profile A → `GET /api/configure` 导出 → 改为 profile B → multipart `POST /api/configure` → `restoreConfigureKey` → `GET /api/restoreconfigureconfirm?key=...`；恢复后 profile A 回归并可重新登录，配置 ZIP 不离开 runner
@@ -369,21 +369,10 @@ CI probe 失败时优先保留脱敏的返回码、状态机和字段形状；�
 8. CI 全绿后验证线上文档页面。
 9. 在本文件中勾选完成项，并记录对应 commit / evidence 名称。
 
-## 近期执行顺序
+## 当前完成状态
 
-建议按以下顺序推进：
-
-1. DDNS
-2. Security Groups + WebService Auth
-3. SSL / ACME
-4. PortForward TCP/UDP
-5. STUN / NAT Detect
-6. Coraza + WebService WAF
-7. Cloudflared
-8. FRP
-9. IPDB
-10. WebTerminal WebSocket + SFTP
-11. Storage / FTP / WebDAV / SMB / DLNA / FileBrowser
-12. Rclone / Cron 核心行为
-13. Docker Compose / image load-import-build
+- 本文件已无未勾选覆盖项；既定 P0–P5 实践计划完成。
+- 高风险/高权限回归统一保留在 GitHub-hosted disposable CI，不因为“计划完成”而放宽生产环境边界。
+- 新发现的 Lucky 版本差异、上游新功能或新的业务需求应作为**新增覆盖项**单独加入，而不是重开已经闭环的旧项。
+- 任何新增行为仍遵循“唯一 TEST 资源 → 行为验证 → 清理 → 基线恢复 → evidence/docs/SKILL/verifier → GitHub Actions 全绿”的仓库动作。
 

@@ -4,8 +4,8 @@
 It refuses to run outside GitHub Actions and starts a fresh pinned Lucky
 container published only on runner loopback. The probe verifies password
 change, global 2FA enable/key replacement/disable and reboot_program against
-that disposable instance. It also retains focused frontend context for the
-remaining configuration-restore/update flows.
+that disposable instance. It also retains focused frontend context used to
+cross-check the dedicated configuration-restore and self-update CI probes.
 
 No production Lucky instance is contacted. Passwords, 2FA secrets/codes,
 OpenToken values, SafeURL values and configuration backup bodies are never

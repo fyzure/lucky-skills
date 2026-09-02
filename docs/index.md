@@ -32,7 +32,9 @@ features:
 
 ## 当前覆盖
 
-当前目标为 **Lucky 3.0.0 wanji / Linux x86_64**。接口目录由前端静态分析与脱敏运行时验证合并生成。
+当前目标为 **Lucky 3.0.0 wanji / Linux x86_64**。接口目录由前端静态分析与脱敏运行时验证合并生成；`PLAN.md` 中既定覆盖项已经全部闭环。高风险核心管理、真实 Docker prune、证书 destructive、自更新与 WOL powered-state 均迁到 GitHub-hosted disposable CI，不以生产环境承担覆盖风险。
+
+当前 merged catalog 共有 **243 条 POST/PUT/PATCH**，其中 **219 条**生成 OpenAPI `requestBody`；仅 **1 条**仍含未类型化顶层请求属性，显式 response schema 已覆盖 **354 条**路由。行为层已经包括完整 OIDC 登录 E2E、NAT-PMP/UPnP 数据面、Rclone FUSE SystemMount、Docker build/prune、配置 restore、密码/2FA/reboot、自更新 failure semantic，以及 WOL `Unreachable → Reachable` virtual powered transition。
 
 详细统计和限制见[证据与覆盖范围](./evidence-and-limitations.md)。
 
@@ -95,6 +97,6 @@ Lucky 存在具有副作用或敏感输出的 `GET` 接口。仓库客户端会�
 
 源码、Skill、OpenAPI、测试与证据文件统一维护在：
 
-**[UnlastingR/lucky-skills](https://github.com/fyzure/lucky-skills)**
+**[fyzure/lucky-skills](https://github.com/fyzure/lucky-skills)**
 
 本项目与 Lucky 作者无隶属关系。Lucky 官方项目见 [gdy666/lucky](https://github.com/gdy666/lucky)。

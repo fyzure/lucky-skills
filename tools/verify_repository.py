@@ -269,6 +269,58 @@ def check_local_links() -> None:
                 fail(f"broken local link in {path.relative_to(ROOT)}: {target}")
 
 
+def check_documentation_freshness() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    for required in (
+        "PLAN.md",
+        "354 条",
+        "GitHub Actions 作为权威验证环境",
+        "Unreachable → Reachable",
+        "private DinD",
+    ):
+        if required not in readme:
+            fail(f"README coverage summary is stale or incomplete: {required}")
+
+    plan = (ROOT / "PLAN.md").read_text(encoding="utf-8")
+    if "- [ ]" in plan:
+        fail("PLAN.md unexpectedly contains an unchecked coverage item")
+    for required in ("State=Unreachable", "State=Reachable", "既定 P0–P5 实践计划完成"):
+        if required not in plan:
+            fail(f"PLAN.md completion summary is stale: {required}")
+    if "真实 powered-device 在线状态变化仍需要专用测试设备" in plan:
+        fail("PLAN.md still contains the pre-virtual-target WOL limitation")
+
+    index = (ROOT / "docs" / "index.md").read_text(encoding="utf-8")
+    for required in ("354 条", "WOL `Unreachable → Reachable`", "fyzure/lucky-skills"):
+        if required not in index:
+            fail(f"docs/index.md coverage summary is stale: {required}")
+
+    sources = (ROOT / "docs" / "sources.md").read_text(encoding="utf-8")
+    for required in (
+        "GitHub-hosted disposable CI",
+        "lucky-update-ci",
+        "lucky-docker-prune-ci",
+        "WOL powered-state",
+    ):
+        if required not in sources:
+            fail(f"docs/sources.md runtime-evidence description is stale: {required}")
+    if "只执行了状态、应用信息和模块清单三类只读 API" in sources:
+        fail("docs/sources.md still claims runtime evidence is read-only-only")
+
+    api_client = (ROOT / "docs" / "api-client.md").read_text(encoding="utf-8")
+    if "显式 response schema 已提升到 **354 条**" not in api_client:
+        fail("docs/api-client.md response-schema count is stale")
+    if "显式 response schema 已提升到 **353 条**" in api_client:
+        fail("docs/api-client.md still contains the old 353-route count")
+
+    contributing = (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
+    for required in ("GitHub Actions 作为权威验证环境", "private DinD", "destructive certificate"):
+        if required not in contributing:
+            fail(f"CONTRIBUTING.md CI safety policy is stale: {required}")
+    if "`prune`、批量删除等全局危险操作只能连接 mock/隔离后端" in contributing:
+        fail("CONTRIBUTING.md still documents the pre-private-DinD prune policy")
+
+
 def check_skill_packaging() -> None:
     repo_skill_path = ROOT / ".agents" / "skills" / "lucky" / "SKILL.md"
     plugin_skill_path = ROOT / "skills" / "lucky" / "SKILL.md"
@@ -5456,6 +5508,7 @@ def check_generated_artifacts() -> None:
 def main() -> None:
     check_secrets()
     check_local_links()
+    check_documentation_freshness()
     check_skill_packaging()
     check_generated_artifacts()
     print("repository verification passed")

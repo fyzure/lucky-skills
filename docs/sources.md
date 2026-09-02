@@ -7,12 +7,18 @@
 - [Lucky v2 更新日志](https://lucky666.cn/docs/updatelogs/v2.X/)：OpenToken 失败保护、CORS 策略和各模块版本演进。
 - [Lucky 官方安装文件仓库](https://github.com/gdy666/lucky-files)：用于历史版本交叉核对。
 
-## 本机派生证据
+## 当前证据来源
 
-在用户授权下，文档基线来自本机 Docker 中运行的 Lucky v3 实例。只执行了状态、应用信息和模块清单三类只读 API。随后从该实例返回的前端入口递归获取 JavaScript bundle，在临时目录中做静态分析。
+仓库的 Lucky 3.0.0 结论不再只依赖早期的只读实例观察，而是由三层证据合并：
 
-仓库只保留派生端点快照和 bundle 哈希，不保留 bundle 内容、OpenToken、安全入口或原始 API 响应。
+1. **前端静态快照**：从已验证 Lucky 3.0.0 前端递归提取 API 调用、请求模型和 bundle SHA-256，生成 `evidence/lucky-v3-endpoints.json`；仓库不保存原始 bundle、OpenToken、安全入口或完整业务响应。
+2. **脱敏运行时证据**：`evidence/lucky-v3-runtime-verification.json` 记录授权只读探针、一次性 TEST 资源 CRUD/行为探针及其字段形状、状态机和清理结果；秘密值、真实业务标识、证书私钥、Token 和配置备份正文不进入 evidence。
+3. **GitHub-hosted disposable CI**：高风险、高权限或需要可控网络/设备的数据面验证统一放到 fresh Lucky / private DinD / Docker `--internal` / FUSE 专用容器 / owned virtual fixture 中执行。主密码与 2FA、`reboot_program`、配置 restore/import、自更新 failure semantic、真实 Docker prune、证书 destructive、OAuth/OIDC、NAT-PMP、UPnP、WOL powered-state、Rclone SystemMount 等均有独立 CI 行为证据。
+
+少量早期低风险或业务语义探针曾在实例所有者明确授权的现有 Lucky 上执行，并通过唯一 TEST 资源、最小变更和基线恢复约束风险；这些历史证据不会被解释为“以后应在生产环境重复验证”。当前需要破坏性、高权限或全局状态变更的覆盖一律优先使用 disposable CI。
+
+对应 workflow 包括 `lucky-core-admin-ci`、`lucky-config-restore-ci`、`lucky-update-ci`、`lucky-docker-prune-ci`、`lucky-ssl-destructive-ci`、`lucky-oauth-ci`、`lucky-natpmp-ci`、`lucky-upnp-ci`、`lucky-wol-ci`、`lucky-rclone-mount-ci`、`lucky-storage-mount-ci` 等；`docs-ci` 负责 Python 3.10–3.13 仓库验证、VitePress/Worker 构建与文档部署。
 
 ## 历史源码的使用方式
 
-Lucky 官方仓库公开到较早版本。历史源码可证明某些长期约定，例如 `/api/...` 路由、JSON `ret` 包络和前后端分离模式，但不能用来断言 Lucky v3 的当前请求体或权限行为。v3 结论优先使用当前前端证据与只读实测。
+Lucky 官方仓库公开到较早版本。历史源码可证明某些长期约定，例如 `/api/...` 路由、JSON `ret` 包络和前后端分离模式，但不能用来断言 Lucky v3 的当前请求体或权限行为。v3 结论优先级为：**当前版本前端证据 + 对应运行时/CI 行为证据 > 当前官方文档 > 历史源码**。如果不同来源冲突，以版本绑定且可重复的运行时结果为准，并把失败语义、平台边界或授权门槛原样记录，而不是补成推测的“成功行为”。

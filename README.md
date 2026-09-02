@@ -8,6 +8,8 @@ Lucky Skills 不是 Lucky 官方 SDK。它面向你**拥有或获授权管理**�
 
 当前快照目标：**Lucky 3.0.0 wanji / Linux x86_64**。
 
+当前 `PLAN.md` 中既定覆盖项已经全部闭环。高风险行为不再为了覆盖率触碰生产环境：主密码/2FA、`reboot_program`、配置 restore/import、自更新、真实 Docker prune、证书 destructive 行为和 WOL powered-state 都有独立的 GitHub Actions disposable CI 证据。
+
 ## 你能用它做什么
 
 | 能力 | 用途 |
@@ -102,7 +104,18 @@ python3 tools/lucky_api.py status
 
 ## 当前覆盖
 
-当前目标为 **Lucky 3.0.0 wanji / Linux x86_64**。默认目录已将已知 `UNKNOWN` 路由完成归类，并对主要写接口和常用模块补充请求/响应 schema。
+当前目标为 **Lucky 3.0.0 wanji / Linux x86_64**。默认目录已将已知 `UNKNOWN` 路由完成归类，并对主要写接口和常用模块补充请求/响应 schema。当前 merged catalog 共有 **243 条 POST/PUT/PATCH**，其中 **219 条**生成 OpenAPI `requestBody`；仅 **1 条**仍含未类型化顶层请求属性，显式 response schema 已覆盖 **354 条**路由。
+
+| 行为范围 | 当前证据 |
+| --- | --- |
+| 核心管理 | fresh Lucky 中真实验证主密码修改、2FA enable/key-replace/disable、`reboot_program`、配置 export/import/restore |
+| 自更新 | 官方 Linux x86_64 发布包可 staging/confirm；3.0.0 → 2.27.2 实测进入 non-serving downgrade failure semantic，不冒充成功更新 |
+| Docker | Compose、image load/import/build 已有行为证据；真实 prune 只连接 GitHub Actions 私有 DinD，并验证删除/保留边界 |
+| SSL | ACME TEST 证书生命周期已验证；CI 自签 `AddFrom=file` 证书的强制 refresh 明确返回 `UnsupportedRefreshType file`，随后 destructive DELETE 恢复空基线 |
+| WOL | internal bridge 上验证精确 102-byte magic packet / UDP 9，并用 virtual powered target 让 Lucky 真实观察 `Unreachable → Reachable` |
+| NAT / UPnP | NAT-PMP 与 UPnP IGD 均在 isolated LAN/WAN fixture 中完成真实协议与数据面闭环 |
+| 存储 / 挂载 | WebDAV/FTP/SMB/DLNA/FileBrowser 有隔离行为证据；Rclone SystemMount 在 FUSE disposable CI 中真实 mount/write-through/unmount；StorageManagement SystemMount 固化 Linux→Windows/WinFsp 平台边界 |
+| OAuth/OIDC | disposable Lucky + owned OIDC Provider + Lucky WebService OAuth relay 跑通完整管理与登录 E2E，并取得真实 Lucky login token |
 
 完整统计和证据等级见 [证据与覆盖范围](docs/evidence-and-limitations.md)。
 
@@ -124,21 +137,9 @@ tests/                  单元测试与提取器夹具
 
 ## 开发与验证
 
-Python 仓库验证：
+仓库把 **GitHub Actions 作为权威验证环境**。`docs-ci` 会在 Python 3.10–3.13 上执行测试、仓库一致性检查、frontend extractor 回归，并构建/部署 VitePress + Cloudflare Worker。高风险与高权限行为另有独立的 `lucky-*-ci` workflow，使用 fresh Lucky、private DinD、Docker `--internal`、FUSE 专用容器或 owned virtual fixture；这些覆盖不依赖生产 Lucky、生产 Docker socket 或生产证书。
 
-```bash
-python3 tools/verify_repository.py
-python3 -m unittest discover -s tests -p 'test_*.py' -v
-```
-
-文档站开发：
-
-```bash
-npm install --include=dev --no-package-lock
-npm run docs:dev
-```
-
-GitHub Actions 会在 Python 3.10–3.13 上执行测试、仓库一致性检查，并构建 VitePress + Cloudflare Worker。
+`tools/verify_repository.py` 会检查 generated Markdown / OpenAPI 与当前 evidence 的一致性、两个 Lucky SKILL 副本是否 byte-identical、敏感字段保护，以及关键项目文档是否仍反映最新 CI 证据。开发提交应以云端 CI 结果作为合并依据，而不是在生产实例上重复行为验证。
 
 ## 准确性边界
 
