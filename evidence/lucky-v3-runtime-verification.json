@@ -624,17 +624,18 @@
   },
   "route_method_ci_evidence": {
     "confidence": "runtime-verified",
-    "run_id": 33650448653,
+    "run_ids": [
+      33650448653,
+      33654437805
+    ],
     "network": "docker-internal",
     "authenticated": false,
     "open_token_enabled": false,
-    "verified_count": 74,
-    "auth_gate_count": 73,
-    "route_response_count": 1,
-    "unverified_count": 2,
-    "skipped_dangerous_count": 22,
-    "skipped_stateful_count": 2,
-    "verification": "GitHub Actions run 33650448653 started the pinned Lucky 3.0.0 image on a Docker --internal network, never logged in and never enabled OpenToken. For GET/POST/PUT/DELETE it calibrated a known protected route against a random missing route: protected routes returned HTTP 200 ret=-1 login invalid while missing routes returned HTTP 404. Of 76 non-dangerous, non-state-disruptive frontend-call candidates, 73 matched that authentication gate and one additional OAuth status route returned a distinct route-specific non-404/non-405 response. Two Docker paths remained 404. This evidence proves METHOD + path existence only and does not upgrade handler success semantics.",
+    "verified_count": 98,
+    "auth_gate_count": 96,
+    "route_response_count": 2,
+    "unverified_count": 0,
+    "verification": "GitHub Actions runs 33650448653 and 33654437805 started the pinned Lucky 3.0.0 image on a Docker --internal network, never logged in and never enabled OpenToken. For GET/POST/PUT/DELETE they calibrated known protected routes against random missing routes: protected routes returned HTTP 200 ret=-1 login invalid while missing routes returned HTTP 404. Across the two runs, 96 frontend-call candidates matched that authentication gate and two additional routes returned distinct route-specific non-404/non-405 responses. Dangerous routes in the second run were still sent without credentials and therefore stopped before their protected handlers. This evidence proves METHOD + path existence only and does not upgrade handler success semantics.",
     "routes": [
       "GET /api/cloudflared/{param}/cname/check",
       "DELETE /api/cloudflared/{param}/ingress",
@@ -709,16 +710,52 @@
       "GET /api/webterminal/sftp/{param}/list",
       "GET /api/webterminal/sftp/{param}/preview-archive",
       "GET /api/webterminal/sftp/{param}/read",
-      "DELETE /api/webterminal/splitlayout"
+      "DELETE /api/webterminal/splitlayout",
+      "DELETE /api/cloudflared/{param}/cname/delete",
+      "GET /api/ddns/getipfromcmdtest",
+      "DELETE /api/docker/compose/{param}/backup/cancel",
+      "POST /api/docker/containers/{param}/export",
+      "POST /api/docker/containers/{param}/unpause",
+      "GET /api/docker/volumes/export",
+      "POST /api/docker/volumes/{param}/backup",
+      "DELETE /api/docker/volumes/{param}/backup/cancel",
+      "POST /api/ipfliter/porttrap/blockedips/clear",
+      "GET /api/ipfliter/porttrap/blockedips/export",
+      "POST /api/ipfliter/porttrap/stats/reset",
+      "PUT /api/logout",
+      "PUT /api/lucky/service",
+      "GET /api/reboot_program",
+      "POST /api/smb/connections/{param}/disconnect",
+      "POST /api/status/history/clear",
+      "GET /api/third/filebrowser/resetadmin",
+      "GET /api/update/cancel",
+      "POST /api/webservice/statistics/clear",
+      "GET /api/webservice/statistics/export",
+      "POST /api/webservice/statistics/import/cancel",
+      "DELETE /api/webservice/{param}/disconnect/{param2}",
+      "DELETE /api/webterminal/sftp/{param}/remove",
+      "GET /api/wol/device/shutdown"
     ],
     "route_response_routes": [
-      "GET /api/oauth/status"
+      "GET /api/oauth/status",
+      "PUT /api/logout"
     ],
-    "unverified_routes": [
-      "GET /api/docker/containers/{param}/files/download",
-      "GET /api/docker/containers/{param}/upgrade-check"
-    ]
+    "unverified_routes": []
   },
+  "runtime_rejected_routes": [
+    {
+      "path": "/api/docker/containers/{param}/files/download",
+      "method": "GET",
+      "run_id": 33654696318,
+      "verification": "GitHub Actions run 33654696318 connected fresh pinned Lucky 3.0.0 only to a private disposable DinD Unix socket, created one owned network-none BusyBox container plus an owned marker file, and confirmed that container was visible through Lucky's runtime-verified container-list API. An authenticated GET using the real container ID and owned file path still returned plain HTTP 404. The frontend call is therefore rejected as a Lucky 3.0.0 backend route false positive rather than documented as runtime-verified."
+    },
+    {
+      "path": "/api/docker/containers/{param}/upgrade-check",
+      "method": "GET",
+      "run_id": 33654696318,
+      "verification": "GitHub Actions run 33654696318 connected fresh pinned Lucky 3.0.0 only to a private disposable DinD Unix socket, created one owned network-none BusyBox container and confirmed it was visible through Lucky's runtime-verified container-list API. An authenticated GET using that real container ID still returned plain HTTP 404. The frontend call is therefore rejected as a Lucky 3.0.0 backend route false positive; no container upgrade was performed."
+    }
+  ],
   "routes": [
     {
       "path": "/api/configure",

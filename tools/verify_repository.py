@@ -276,12 +276,13 @@ def check_documentation_freshness() -> None:
     for required in (
         "PLAN.md",
         "354 条",
-        "573 条",
-        "26 条",
+        "597 条",
+        "`frontend-call`、0 条 unknown",
         "GitHub Actions 作为权威验证环境",
         "Unreachable → Reachable",
         "private DinD",
         "lucky-route-method-ci",
+        "runtime-rejected",
     ):
         if required not in readme:
             fail(f"README coverage summary is stale or incomplete: {required}")
@@ -306,6 +307,7 @@ def check_documentation_freshness() -> None:
         "lucky-update-ci",
         "lucky-docker-prune-ci",
         "lucky-route-method-ci",
+        "lucky-docker-remaining-routes-ci",
         "WOL powered-state",
     ):
         if required not in sources:
@@ -318,6 +320,8 @@ def check_documentation_freshness() -> None:
         fail("docs/api-client.md response-schema count is stale")
     if "显式 response schema 已提升到 **353 条**" in api_client:
         fail("docs/api-client.md still contains the old 353-route count")
+    if "597 条 `runtime-verified`、0 条 `frontend-call`、0 条 `unknown`" not in api_client:
+        fail("docs/api-client.md route-confidence closure is stale")
 
     installation = (ROOT / "docs" / "installation.md").read_text(encoding="utf-8")
     if "GitHub Actions `docs-ci` 为权威结果" not in installation:
@@ -518,9 +522,16 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         fail("route-method CI evidence must remain unauthenticated")
     if route_method_evidence.get("open_token_enabled") is not False:
         fail("route-method CI evidence must not enable OpenToken")
-    run_id = route_method_evidence.get("run_id")
-    if not isinstance(run_id, int) or run_id <= 0:
-        fail("route-method CI evidence is missing a valid GitHub Actions run id")
+    run_ids = route_method_evidence.get("run_ids")
+    if (
+        not isinstance(run_ids, list)
+        or len(run_ids) < 2
+        or not all(isinstance(run_id, int) and run_id > 0 for run_id in run_ids)
+        or len(run_ids) != len(set(run_ids))
+    ):
+        fail("route-method CI evidence requires unique positive GitHub Actions run ids")
+    if set(run_ids) != {33650448653, 33654437805}:
+        fail("route-method CI evidence must remain bound to both successful cloud CI runs")
     route_method_routes = route_method_evidence.get("routes")
     if not isinstance(route_method_routes, list) or not all(
         isinstance(item, str) for item in route_method_routes
@@ -530,8 +541,8 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         fail("route-method CI evidence contains duplicate route specs")
     if route_method_evidence.get("verified_count") != len(route_method_routes):
         fail("route-method CI verified_count is stale")
-    if len(route_method_routes) < 50:
-        fail("route-method CI evidence no longer covers at least 50 routes")
+    if len(route_method_routes) != 98:
+        fail("route-method CI evidence must cover all 98 runtime-verified method-only routes")
     route_response_routes = route_method_evidence.get("route_response_routes")
     if not isinstance(route_response_routes, list) or not all(
         isinstance(item, str) for item in route_response_routes
@@ -547,6 +558,8 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         fail("route-method CI classification counts do not cover verified routes")
     if route_response_count != len(route_response_routes):
         fail("route-method CI route_response_count is stale")
+    if set(route_response_routes) != {"GET /api/oauth/status", "PUT /api/logout"}:
+        fail("route-method CI route-specific response set regressed")
     unverified_routes = route_method_evidence.get("unverified_routes")
     if not isinstance(unverified_routes, list) or not all(
         isinstance(item, str) for item in unverified_routes
@@ -573,14 +586,52 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
             fail(f"route-method CI evidence is not backed by static evidence: {spec}")
         if (method, path) in explicit_runtime_keys:
             fail(f"route-method CI evidence duplicates explicit runtime route evidence: {spec}")
-        if classify_known_operation(method, path).value == "dangerous":
-            fail(f"route-method CI evidence unexpectedly includes dangerous route: {spec}")
     for path in (
         ROOT / "tools" / "lucky_route_method_ci_probe.py",
         ROOT / ".github" / "workflows" / "lucky-route-method-ci.yml",
     ):
         if not path.is_file():
             fail(f"route-method CI artifact is missing: {path.relative_to(ROOT)}")
+
+    runtime_rejected = runtime.get("runtime_rejected_routes")
+    if not isinstance(runtime_rejected, list):
+        fail("runtime_rejected_routes must be an array")
+    expected_rejected = {
+        ("GET", "/api/docker/containers/{param}/files/download"),
+        ("GET", "/api/docker/containers/{param}/upgrade-check"),
+    }
+    rejected_keys: set[tuple[str, str]] = set()
+    for item in runtime_rejected:
+        if not isinstance(item, dict):
+            fail("runtime-rejected route evidence must be an object")
+        method = str(item.get("method", "")).upper()
+        path = str(item.get("path", ""))
+        run_id = item.get("run_id")
+        verification = item.get("verification")
+        key = (method, path)
+        if key in rejected_keys:
+            fail(f"duplicate runtime-rejected route evidence: {key}")
+        rejected_keys.add(key)
+        if key not in static_route_keys:
+            fail(f"runtime-rejected route lacks exact static frontend evidence: {key}")
+        if key in explicit_runtime_keys or f"{method} {path}" in set(route_method_routes):
+            fail(f"runtime-rejected route conflicts with verified evidence: {key}")
+        if not isinstance(run_id, int) or run_id <= 0:
+            fail(f"runtime-rejected route lacks a positive GitHub Actions run id: {key}")
+        if not isinstance(verification, str) or "private disposable DinD" not in verification:
+            fail(f"runtime-rejected route lacks private DinD verification text: {key}")
+        if "HTTP 404" not in verification:
+            fail(f"runtime-rejected route must preserve observed HTTP 404 semantic: {key}")
+    if rejected_keys != expected_rejected:
+        fail(f"runtime-rejected route set regressed: {sorted(rejected_keys)}")
+    if {item.get("run_id") for item in runtime_rejected} != {33654696318}:
+        fail("runtime-rejected Docker evidence must remain bound to successful cloud CI run 33654696318")
+    for path in (
+        ROOT / "tools" / "lucky_docker_remaining_routes_ci_probe.py",
+        ROOT / ".github" / "workflows" / "lucky-docker-remaining-routes-ci.yml",
+    ):
+        if not path.is_file():
+            fail(f"runtime-rejected Docker CI artifact is missing: {path.relative_to(ROOT)}")
 
     model_evidence = runtime.get("model_evidence")
     if not isinstance(model_evidence, dict):
@@ -5567,21 +5618,29 @@ def check_generated_artifacts() -> None:
     confidence_counts = Counter(
         str(item.get("confidence", "")) for item in merged_snapshot.get("routes", [])
     )
-    if sum(confidence_counts.values()) != 599:
+    if sum(confidence_counts.values()) != 597:
         fail(f"merged route confidence coverage count regressed: {dict(confidence_counts)}")
-    if confidence_counts.get("frontend-call", 0) > 50:
+    if confidence_counts.get("frontend-call", 0) != 0:
+        fail(f"merged route runtime coverage regressed: frontend-call must remain 0, got {confidence_counts.get('frontend-call', 0)}")
+    if confidence_counts.get("runtime-verified", 0) != 597:
         fail(
-            "merged route runtime coverage regressed: frontend-call must remain <= 50, "
-            f"got {confidence_counts.get('frontend-call', 0)}"
-        )
-    if confidence_counts.get("runtime-verified", 0) < 549:
-        fail(
-            "merged route runtime coverage regressed: runtime-verified must remain >= 549, "
+            "merged route runtime coverage regressed: runtime-verified must remain 597, "
             f"got {confidence_counts.get('runtime-verified', 0)}"
         )
-    unexpected_confidence = set(confidence_counts) - {"runtime-verified", "frontend-call"}
+    unexpected_confidence = set(confidence_counts) - {"runtime-verified"}
     if unexpected_confidence:
         fail(f"merged route confidence contains unexpected levels: {sorted(unexpected_confidence)}")
+    merged_route_keys = {
+        (str(item.get("method", "")).upper(), str(item.get("path", "")))
+        for item in merged_snapshot.get("routes", [])
+        if isinstance(item, dict)
+    }
+    for rejected_key in {
+        ("GET", "/api/docker/containers/{param}/files/download"),
+        ("GET", "/api/docker/containers/{param}/upgrade-check"),
+    }:
+        if rejected_key in merged_route_keys:
+            fail(f"runtime-rejected frontend false positive leaked back into merged catalog: {rejected_key}")
     if snapshot["route_count"] != len(snapshot["routes"]):
         fail("snapshot route_count does not match routes")
     if snapshot["bundle_count"] != len(snapshot["bundle_sha256"]):

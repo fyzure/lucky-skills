@@ -381,6 +381,42 @@ def _apply_runtime_verification(
             merged.setdefault("response_type", "unknown")
             route_map[(path, method)] = merged
 
+    runtime_rejected = payload.get("runtime_rejected_routes", [])
+    if not isinstance(runtime_rejected, list):
+        raise CatalogError("runtime runtime_rejected_routes must be an array")
+    route_method_specs = set()
+    if isinstance(route_method_evidence, dict):
+        raw_specs = route_method_evidence.get("routes", [])
+        if isinstance(raw_specs, list):
+            route_method_specs = {str(item) for item in raw_specs}
+    explicit_runtime_keys = {
+        (str(item.get("path")), str(item.get("method", "")).upper())
+        for item in verified
+        if isinstance(item, dict)
+    }
+    rejected_keys: set[tuple[str, str]] = set()
+    for item in runtime_rejected:
+        if not isinstance(item, dict):
+            raise CatalogError("malformed runtime-rejected route evidence")
+        path = str(item.get("path", ""))
+        method = str(item.get("method", "")).upper()
+        verification = item.get("verification")
+        run_id = item.get("run_id")
+        if not path.startswith("/api/") or method not in {"GET", "POST", "PUT", "DELETE", "PATCH"}:
+            raise CatalogError(f"invalid runtime-rejected route: {method} {path}")
+        if (path, method) not in static_keys:
+            raise CatalogError("runtime-rejected route is not backed by exact static frontend evidence")
+        if (path, method) in rejected_keys:
+            raise CatalogError(f"duplicate runtime-rejected route: {method} {path}")
+        if (path, method) in explicit_runtime_keys or f"{method} {path}" in route_method_specs:
+            raise CatalogError(f"runtime-rejected route conflicts with verified evidence: {method} {path}")
+        if not isinstance(run_id, int) or run_id <= 0:
+            raise CatalogError("runtime-rejected route requires a positive GitHub Actions run_id")
+        if not isinstance(verification, str) or not verification.strip():
+            raise CatalogError("runtime-rejected route requires verification text")
+        rejected_keys.add((path, method))
+        route_map.pop((path, method), None)
+
     if apply_schema_patches:
         _apply_schema_patches(route_map, payload.get("schema_patches"))
 
