@@ -13,11 +13,11 @@
 
 1. **前端静态快照**：从已验证 Lucky 3.0.0 前端递归提取 API 调用、请求模型和 bundle SHA-256，生成 `evidence/lucky-v3-endpoints.json`；仓库不保存原始 bundle、OpenToken、安全入口或完整业务响应。
 2. **脱敏运行时证据**：`evidence/lucky-v3-runtime-verification.json` 记录授权只读探针、一次性 TEST 资源 CRUD/行为探针及其字段形状、状态机和清理结果；秘密值、真实业务标识、证书私钥、Token 和配置备份正文不进入 evidence。
-3. **GitHub-hosted disposable CI**：高风险、高权限或需要可控网络/设备的数据面验证统一放到 fresh Lucky / private DinD / Docker `--internal` / FUSE 专用容器 / owned virtual fixture 中执行。主密码与 2FA、`reboot_program`、配置 restore/import、自更新 failure semantic、真实 Docker prune、证书 destructive、OAuth/OIDC、NAT-PMP、UPnP、WOL powered-state、Rclone SystemMount 等均有独立 CI 行为证据。
+3. **GitHub-hosted disposable CI**：高风险、高权限或需要可控网络/设备的数据面验证统一放到 fresh Lucky / private DinD / Docker `--internal` / FUSE 专用容器 / owned virtual fixture 中执行。主密码与 2FA、`reboot_program`、配置 restore/import、自更新 failure semantic、真实 Docker prune、证书 destructive、OAuth/OIDC、NAT-PMP、UPnP、WOL powered-state、Rclone SystemMount 等均有独立 CI 行为证据；此外 `lucky-route-method-ci` 在不登录、不启用 OpenToken 的 fresh pinned Lucky 内网 fixture 中，用随机 missing-route 404 控制校准剩余路由的方法存在性，不执行已鉴权保护的业务 handler。
 
 少量早期低风险或业务语义探针曾在实例所有者明确授权的现有 Lucky 上执行，并通过唯一 TEST 资源、最小变更和基线恢复约束风险；这些历史证据不会被解释为“以后应在生产环境重复验证”。当前需要破坏性、高权限或全局状态变更的覆盖一律优先使用 disposable CI。
 
-对应 workflow 包括 `lucky-core-admin-ci`、`lucky-config-restore-ci`、`lucky-update-ci`、`lucky-docker-prune-ci`、`lucky-ssl-destructive-ci`、`lucky-oauth-ci`、`lucky-natpmp-ci`、`lucky-upnp-ci`、`lucky-wol-ci`、`lucky-rclone-mount-ci`、`lucky-storage-mount-ci` 等；`docs-ci` 负责 Python 3.10–3.13 仓库验证、VitePress/Worker 构建与文档部署。
+对应 workflow 包括 `lucky-core-admin-ci`、`lucky-config-restore-ci`、`lucky-update-ci`、`lucky-docker-prune-ci`、`lucky-ssl-destructive-ci`、`lucky-oauth-ci`、`lucky-natpmp-ci`、`lucky-upnp-ci`、`lucky-wol-ci`、`lucky-rclone-mount-ci`、`lucky-storage-mount-ci`、`lucky-route-method-ci` 等；`docs-ci` 负责 Python 3.10–3.13 仓库验证、VitePress/Worker 构建与文档部署。
 
 ## 历史源码的使用方式
 

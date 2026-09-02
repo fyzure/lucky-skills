@@ -84,6 +84,12 @@ class RuntimeVerificationTests(unittest.TestCase):
                     "module": "prefix",
                     "confidence": "frontend-call",
                 },
+                {
+                    "path": "/api/method-only",
+                    "method": "GET",
+                    "module": "method-only",
+                    "confidence": "frontend-call",
+                },
             ],
         }
         verification = {
@@ -110,6 +116,10 @@ class RuntimeVerificationTests(unittest.TestCase):
                     "risk": "read-only",
                 },
             ],
+            "route_method_ci_evidence": {
+                "routes": ["GET /api/method-only"],
+                "route_response_routes": [],
+            },
         }
         with tempfile.TemporaryDirectory() as directory:
             snapshot_path = Path(directory) / "snapshot.json"
@@ -135,6 +145,9 @@ class RuntimeVerificationTests(unittest.TestCase):
         prefixed = catalog.match("GET", "/api/prefix/value")
         self.assertIsNotNone(prefixed)
         self.assertEqual(prefixed.confidence, "runtime-verified")  # type: ignore[union-attr]
+        method_only = catalog.match("GET", "/api/method-only")
+        self.assertIsNotNone(method_only)
+        self.assertEqual(method_only.confidence, "runtime-verified")  # type: ignore[union-attr]
 
     def test_static_catalog_keeps_verified_toggle_gets_mutating_without_runtime_sidecar(self) -> None:
         snapshot = {

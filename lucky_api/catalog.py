@@ -317,6 +317,70 @@ def _apply_runtime_verification(
         merged.setdefault("response_type", "unknown")
         route_map[(path, method)] = merged
 
+    route_method_evidence = payload.get("route_method_ci_evidence")
+    if route_method_evidence is not None:
+        if not isinstance(route_method_evidence, dict):
+            raise CatalogError("runtime route_method_ci_evidence must be an object")
+        route_specs = route_method_evidence.get("routes", [])
+        response_specs = route_method_evidence.get("route_response_routes", [])
+        if not isinstance(route_specs, list) or not all(isinstance(item, str) for item in route_specs):
+            raise CatalogError("runtime route_method_ci_evidence.routes must be an array of strings")
+        if not isinstance(response_specs, list) or not all(
+            isinstance(item, str) for item in response_specs
+        ):
+            raise CatalogError(
+                "runtime route_method_ci_evidence.route_response_routes must be an array of strings"
+            )
+        response_set = set(response_specs)
+        if not response_set.issubset(set(route_specs)):
+            raise CatalogError("runtime route-response evidence must be a subset of verified routes")
+
+        explicit_runtime_keys = {
+            (str(item.get("path")), str(item.get("method", "")).upper())
+            for item in verified
+            if isinstance(item, dict)
+        }
+        for spec in route_specs:
+            method, separator, path = spec.partition(" ")
+            method = method.upper()
+            if not separator or not path.startswith("/api/") or method not in {
+                "GET",
+                "POST",
+                "PUT",
+                "DELETE",
+                "PATCH",
+            }:
+                raise CatalogError(f"invalid runtime route-method evidence: {spec}")
+            if (path, method) in explicit_runtime_keys:
+                raise CatalogError(f"duplicate runtime route-method evidence: {spec}")
+            if (path, "UNKNOWN") not in static_keys and (path, method) not in static_keys:
+                raise CatalogError("runtime route-method evidence is not backed by the static snapshot")
+
+            route_map.pop((path, "UNKNOWN"), None)
+            merged = dict(route_map.get((path, method), {}))
+            merged.setdefault("module", _route_module(path))
+            merged["confidence"] = "runtime-verified"
+            if spec in response_set:
+                merged.setdefault(
+                    "verification",
+                    "GitHub-hosted pinned Lucky route-method probe returned a route-specific "
+                    "non-404/non-405 response distinct from a random missing-route control. "
+                    "This verifies METHOD + path existence only, not successful business semantics.",
+                )
+            else:
+                merged.setdefault(
+                    "verification",
+                    "GitHub-hosted pinned Lucky route-method probe reached the calibrated "
+                    "HTTP 200 ret=-1 login invalid authentication gate, distinct from a random "
+                    "missing-route HTTP 404 control. This verifies METHOD + path existence only; "
+                    "the protected business handler was not executed.",
+                )
+            merged.setdefault("query_keys", [])
+            merged.setdefault("body_keys", [])
+            merged.setdefault("has_body", False)
+            merged.setdefault("response_type", "unknown")
+            route_map[(path, method)] = merged
+
     if apply_schema_patches:
         _apply_schema_patches(route_map, payload.get("schema_patches"))
 

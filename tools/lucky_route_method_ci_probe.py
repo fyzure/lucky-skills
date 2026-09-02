@@ -47,7 +47,7 @@ PINNED_LUCKY_IMAGE = (
 EXPECTED_LUCKY_VERSION = "3.0.0"
 ADMIN_PORT = 16601
 MAX_HTTP_BYTES = 64 * 1024
-MINIMUM_VERIFIED = 50
+MAX_FRONTEND_CALL_AFTER_PROBE = 50
 HTTP_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 POSITIVE_CONTROLS = {
@@ -198,7 +198,7 @@ def cleanup_conf_dir(conf_dir: Path) -> None:
     shutil.rmtree(conf_dir, ignore_errors=True)
 
 
-def load_targets() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def load_targets() -> tuple[list[dict[str, Any]], list[dict[str, Any]], int]:
     snapshot_path = ROOT / "evidence" / "lucky-v3-endpoints.json"
     runtime_path = ROOT / "evidence" / "lucky-v3-runtime-verification.json"
     merged = load_merged_snapshot(snapshot_path, runtime_verification=runtime_path)
@@ -207,9 +207,11 @@ def load_targets() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
 
     targets: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
+    frontend_call_count = 0
     for route in merged.get("routes", []):
         if route.get("confidence") != "frontend-call":
             continue
+        frontend_call_count += 1
         method = str(route["method"]).upper()
         path = str(route["path"])
         risk = classify_known_operation(method, path).value
@@ -223,7 +225,7 @@ def load_targets() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
             skipped.append(row)
             continue
         targets.append(row)
-    return targets, skipped
+    return targets, skipped, frontend_call_count
 
 
 def main() -> int:
@@ -240,7 +242,8 @@ def main() -> int:
     network_name = f"lucky-route-method-{nonce}"
     conf_dir = Path(tempfile.mkdtemp(prefix="lucky-route-method-", dir=runner_temp))
 
-    targets, skipped = load_targets()
+    targets, skipped, frontend_call_before = load_targets()
+    required_new_verifications = max(0, frontend_call_before - MAX_FRONTEND_CALL_AFTER_PROBE)
     verified: list[dict[str, Any]] = []
     unverified: list[dict[str, Any]] = []
     controls: dict[str, Any] = {}
@@ -317,6 +320,8 @@ def main() -> int:
             "authenticated": False,
             "open_token_enabled": False,
             "target_count": len(targets),
+            "frontend_call_before": frontend_call_before,
+            "required_new_verifications": required_new_verifications,
             "verified_count": len(verified),
             "unverified_count": len(unverified),
             "skipped_count": len(skipped),
@@ -330,9 +335,11 @@ def main() -> int:
         print("ROUTE_METHOD_REPORT=" + serialized)
         if args.report:
             args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        if len(verified) < MINIMUM_VERIFIED:
+        if len(verified) < required_new_verifications:
             raise ProbeError(
-                f"route-method coverage target missed: verified={len(verified)} minimum={MINIMUM_VERIFIED}"
+                "route-method coverage target missed: "
+                f"frontend_call_before={frontend_call_before} verified={len(verified)} "
+                f"required={required_new_verifications} target_max={MAX_FRONTEND_CALL_AFTER_PROBE}"
             )
         return 0
     finally:

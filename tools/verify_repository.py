@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 
 from extract_lucky_frontend import write_markdown, write_openapi
 from lucky_api import OperationRisk, RouteCatalog, load_merged_snapshot
+from lucky_api.catalog import classify_known_operation
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -275,9 +276,12 @@ def check_documentation_freshness() -> None:
     for required in (
         "PLAN.md",
         "354 条",
+        "573 条",
+        "26 条",
         "GitHub Actions 作为权威验证环境",
         "Unreachable → Reachable",
         "private DinD",
+        "lucky-route-method-ci",
     ):
         if required not in readme:
             fail(f"README coverage summary is stale or incomplete: {required}")
@@ -301,6 +305,7 @@ def check_documentation_freshness() -> None:
         "GitHub-hosted disposable CI",
         "lucky-update-ci",
         "lucky-docker-prune-ci",
+        "lucky-route-method-ci",
         "WOL powered-state",
     ):
         if required not in sources:
@@ -501,6 +506,81 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
     prefix_count = prefix_evidence.get("count")
     if not isinstance(prefix_count, int) or prefix_count + len(no_route_paths) != len(suppress):
         fail("runtime suppression evidence counts do not cover suppress_literals")
+
+    route_method_evidence = runtime.get("route_method_ci_evidence")
+    if not isinstance(route_method_evidence, dict):
+        fail("runtime route_method_ci_evidence is missing")
+    if route_method_evidence.get("confidence") != "runtime-verified":
+        fail("route-method CI evidence must remain runtime-verified")
+    if route_method_evidence.get("network") != "docker-internal":
+        fail("route-method CI evidence must remain isolated on a Docker internal network")
+    if route_method_evidence.get("authenticated") is not False:
+        fail("route-method CI evidence must remain unauthenticated")
+    if route_method_evidence.get("open_token_enabled") is not False:
+        fail("route-method CI evidence must not enable OpenToken")
+    run_id = route_method_evidence.get("run_id")
+    if not isinstance(run_id, int) or run_id <= 0:
+        fail("route-method CI evidence is missing a valid GitHub Actions run id")
+    route_method_routes = route_method_evidence.get("routes")
+    if not isinstance(route_method_routes, list) or not all(
+        isinstance(item, str) for item in route_method_routes
+    ):
+        fail("route-method CI evidence routes must be an array of strings")
+    if len(route_method_routes) != len(set(route_method_routes)):
+        fail("route-method CI evidence contains duplicate route specs")
+    if route_method_evidence.get("verified_count") != len(route_method_routes):
+        fail("route-method CI verified_count is stale")
+    if len(route_method_routes) < 50:
+        fail("route-method CI evidence no longer covers at least 50 routes")
+    route_response_routes = route_method_evidence.get("route_response_routes")
+    if not isinstance(route_response_routes, list) or not all(
+        isinstance(item, str) for item in route_response_routes
+    ):
+        fail("route-method CI route_response_routes must be an array of strings")
+    if not set(route_response_routes).issubset(set(route_method_routes)):
+        fail("route-method CI route-response routes are not a subset of verified routes")
+    auth_gate_count = route_method_evidence.get("auth_gate_count")
+    route_response_count = route_method_evidence.get("route_response_count")
+    if not isinstance(auth_gate_count, int) or not isinstance(route_response_count, int):
+        fail("route-method CI classification counts are malformed")
+    if auth_gate_count + route_response_count != len(route_method_routes):
+        fail("route-method CI classification counts do not cover verified routes")
+    if route_response_count != len(route_response_routes):
+        fail("route-method CI route_response_count is stale")
+    unverified_routes = route_method_evidence.get("unverified_routes")
+    if not isinstance(unverified_routes, list) or not all(
+        isinstance(item, str) for item in unverified_routes
+    ):
+        fail("route-method CI unverified_routes must be an array of strings")
+    if route_method_evidence.get("unverified_count") != len(unverified_routes):
+        fail("route-method CI unverified_count is stale")
+    static_route_keys = {
+        (str(item.get("method", "")).upper(), str(item.get("path", "")))
+        for item in snapshot.get("routes", [])
+        if isinstance(item, dict)
+    }
+    explicit_runtime_keys = {
+        (str(item.get("method", "")).upper(), str(item.get("path", "")))
+        for item in runtime.get("routes", [])
+        if isinstance(item, dict)
+    }
+    for spec in route_method_routes:
+        method, separator, path = spec.partition(" ")
+        method = method.upper()
+        if not separator or not path.startswith("/api/"):
+            fail(f"invalid route-method CI route spec: {spec}")
+        if (method, path) not in static_route_keys and ("UNKNOWN", path) not in static_route_keys:
+            fail(f"route-method CI evidence is not backed by static evidence: {spec}")
+        if (method, path) in explicit_runtime_keys:
+            fail(f"route-method CI evidence duplicates explicit runtime route evidence: {spec}")
+        if classify_known_operation(method, path).value == "dangerous":
+            fail(f"route-method CI evidence unexpectedly includes dangerous route: {spec}")
+    for path in (
+        ROOT / "tools" / "lucky_route_method_ci_probe.py",
+        ROOT / ".github" / "workflows" / "lucky-route-method-ci.yml",
+    ):
+        if not path.is_file():
+            fail(f"route-method CI artifact is missing: {path.relative_to(ROOT)}")
 
     model_evidence = runtime.get("model_evidence")
     if not isinstance(model_evidence, dict):
@@ -5487,15 +5567,21 @@ def check_generated_artifacts() -> None:
     confidence_counts = Counter(
         str(item.get("confidence", "")) for item in merged_snapshot.get("routes", [])
     )
-    expected_confidence_counts = {
-        "runtime-verified": 499,
-        "frontend-call": 100,
-    }
-    if dict(confidence_counts) != expected_confidence_counts:
+    if sum(confidence_counts.values()) != 599:
+        fail(f"merged route confidence coverage count regressed: {dict(confidence_counts)}")
+    if confidence_counts.get("frontend-call", 0) > 50:
         fail(
-            "merged route confidence coverage regressed: "
-            f"expected {expected_confidence_counts}, got {dict(confidence_counts)}"
+            "merged route runtime coverage regressed: frontend-call must remain <= 50, "
+            f"got {confidence_counts.get('frontend-call', 0)}"
         )
+    if confidence_counts.get("runtime-verified", 0) < 549:
+        fail(
+            "merged route runtime coverage regressed: runtime-verified must remain >= 549, "
+            f"got {confidence_counts.get('runtime-verified', 0)}"
+        )
+    unexpected_confidence = set(confidence_counts) - {"runtime-verified", "frontend-call"}
+    if unexpected_confidence:
+        fail(f"merged route confidence contains unexpected levels: {sorted(unexpected_confidence)}")
     if snapshot["route_count"] != len(snapshot["routes"]):
         fail("snapshot route_count does not match routes")
     if snapshot["bundle_count"] != len(snapshot["bundle_sha256"]):
