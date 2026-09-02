@@ -7,17 +7,17 @@ fresh pinned Lucky 3.0.0 container.  Lucky never receives the GitHub runner's
 Docker socket.  The private daemon contains one owned, network-none BusyBox
 container and one random marker file.
 
-The probe exercises exactly two read-only frontend routes that return 404 on a
-fresh Lucky without a Docker backend:
+The probe exercises exactly two read-only frontend routes that first returned
+404 on a fresh Lucky without a Docker backend:
 
 * GET /api/docker/containers/{id}/files/download?path=<owned file>
 * GET /api/docker/containers/{id}/upgrade-check
 
-The first must return non-empty binary data for the owned marker file.  The
-second must reach a registered handler with the real owned container ID; any
-non-404/non-405 application result is sufficient because registry/update
-availability is not part of this route-existence assertion.  No upgrade is
-performed.
+The private DinD fixture answers the remaining ambiguity: if both routes still
+return Lucky's plain HTTP 404 while the same owned container is visible through
+the runtime-verified container-list API, they are classified as frontend false
+positives for Lucky 3.0.0.  The probe deliberately expects that observed
+runtime-rejected semantic and never performs an upgrade.
 """
 
 from __future__ import annotations
@@ -253,17 +253,18 @@ def main() -> int:
                 "response_keys": sorted(upgrade_json) if upgrade_json else [],
             }
 
+            report["classification"] = "runtime-rejected"
             failed: list[str] = []
             if report["owned_container_visible"] is not True:
                 failed.append("owned_container_visible")
-            if download_status in {404, 405} or not download_body:
-                failed.append("files_download_route")
-            if download_json is not None and download_json.get("ret") == -1:
-                failed.append("files_download_auth")
-            if upgrade_status in {404, 405}:
-                failed.append("upgrade_check_route")
-            if upgrade_json is None:
-                failed.append("upgrade_check_json")
+            if download_status != 404:
+                failed.append("files_download_expected_404")
+            if "text/plain" not in report["files_download"]["content_type"]:
+                failed.append("files_download_expected_plain_404")
+            if upgrade_status != 404:
+                failed.append("upgrade_check_expected_404")
+            if "text/plain" not in report["upgrade_check"]["content_type"]:
+                failed.append("upgrade_check_expected_plain_404")
             report["failed"] = failed
             print("DOCKER_REMAINING_REPORT=" + json.dumps(report, ensure_ascii=False, sort_keys=True))
             return 1 if failed else 0

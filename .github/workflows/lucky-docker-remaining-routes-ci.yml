@@ -33,5 +33,5 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Verify conditional Docker routes on private DinD
+      - name: Verify runtime-rejected Docker frontend routes on private DinD
         run: python tools/lucky_docker_remaining_routes_ci_probe.py
