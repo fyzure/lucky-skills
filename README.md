@@ -74,7 +74,7 @@ flowchart LR
 
     Cred[私有凭据文件<br/>Base URL + OpenToken] --> CLI
     Snapshot[前端静态端点快照] --> Catalog[合并路由目录]
-    Runtime[授权实例脱敏运行时验证] --> Catalog
+    Runtime[脱敏运行时 / disposable CI] --> Catalog
     Catalog --> Guard{路由 + 风险策略}
     CLI --> Guard
 
