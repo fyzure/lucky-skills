@@ -308,23 +308,24 @@ WebDAV、SMB 与 FileBrowser 已完成 localhost 完整闭环；DLNA 已在一�
 ### Prune
 
 - [x] 使用 temporary Lucky + mock Docker API 验证 handler
-- [ ] **禁止**为了覆盖率对生产 Docker daemon 执行真实 prune
+- [ ] 在 GitHub Actions 的 **disposable Docker daemon** 上执行一次真实 prune：只创建 TEST container/image/network/volume/build-cache，调用 Lucky `/api/docker/prune` 后验证目标被清除、非目标基线不变
+- [x] 生产 Docker daemon 永不用于 prune 覆盖验证
 
 ---
 
-## P5 — 高风险核心管理操作
+## P5 — 高风险核心管理操作（CI-only）
 
-以下能力默认不以“全覆盖”为目标，除非有明确业务需求和独立可恢复测试环境：
+以下能力继续纳入覆盖，但**只能在 GitHub Actions 的 disposable Lucky / disposable Docker daemon / owned synthetic fixture 中执行**。生产 Lucky、生产证书、生产 Docker daemon 和真实业务设备都不参与这些验证。
 
-- [ ] Lucky 自更新
-- [ ] 全局配置 restore/import
-- [ ] reboot_program
-- [ ] 主密码修改
-- [ ] 2FA reset/disable
-- [ ] 生产证书强制 renew/delete
-- [ ] 真实 Docker prune
+- [ ] Lucky 自更新：仅 fresh pinned Lucky，允许 disposable 实例自更新/重启并验证版本或失败语义；不触碰生产二进制
+- [ ] 全局配置 restore/import：仅 fresh Lucky，先导出/保存 owned baseline，再导入只改 TEST 字段的配置并验证恢复
+- [ ] `reboot_program`：仅 disposable Lucky，要求进程真实退出/恢复并重新接受 API 请求
+- [ ] 主密码修改：仅 fresh Lucky，验证旧密码失效、新密码可登录；runner 结束即销毁实例
+- [ ] 2FA enable / reset / disable：仅 fresh Lucky，使用 runner 内存中的 disposable TOTP secret/code，验证登录门禁与关闭恢复
+- [ ] 证书强制 renew/delete：仅 CI 自己签发/创建的 TEST 证书，绝不操作生产证书
+- [ ] 真实 Docker prune：仅 disposable Docker daemon，验证实际资源删除而不是 mock handler
 
-这类操作应优先使用 mock、临时 Lucky 实例、验证失败路径或专用测试机，而不是生产实例。
+CI probe 失败时优先保留脱敏的返回码、状态机和字段形状；任何密码、2FA secret、token、证书私钥、配置备份正文都不得写入日志/evidence。
 
 ---
 

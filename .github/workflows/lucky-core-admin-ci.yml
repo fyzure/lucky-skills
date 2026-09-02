@@ -1,0 +1,36 @@
+name: lucky-core-admin-ci
+
+on:
+  push:
+    paths:
+      - ".github/workflows/lucky-core-admin-ci.yml"
+      - "tools/lucky_core_admin_ci_probe.py"
+      - "tools/lucky_docker_build_ci_probe.py"
+      - "tools/lucky_rclone_mount_ci_probe.py"
+      - "PLAN.md"
+  pull_request:
+    paths:
+      - ".github/workflows/lucky-core-admin-ci.yml"
+      - "tools/lucky_core_admin_ci_probe.py"
+      - "tools/lucky_docker_build_ci_probe.py"
+      - "tools/lucky_rclone_mount_ci_probe.py"
+      - "PLAN.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-core-admin:
+    name: Lucky disposable core-admin semantics
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Show Docker runtime
+        run: docker version
+
+      - name: Inspect isolated Lucky core-admin frontend semantics
+        run: sudo -E python3 tools/lucky_core_admin_ci_probe.py
