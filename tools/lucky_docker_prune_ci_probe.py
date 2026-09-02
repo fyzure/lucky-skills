@@ -128,13 +128,22 @@ def image_ids(dind_name: str) -> set[str]:
 
 def configure_private_docker_host(base_url: str, token: str) -> None:
     opener = urllib.request.build_opener()
-    status, response = json_request(
-        opener,
-        base_url,
-        "/api/docker/config",
-        admin_token=token,
-    )
-    require_ret_zero(status, response, "read disposable Docker config")
+    deadline = time.monotonic() + 20
+    response: dict[str, Any] | None = None
+    while time.monotonic() < deadline:
+        status, candidate = json_request(
+            opener,
+            base_url,
+            "/api/docker/config",
+            admin_token=token,
+            timeout=3,
+        )
+        if status == 200 and candidate.get("ret") == 0:
+            response = candidate
+            break
+        time.sleep(0.5)
+    if response is None:
+        raise ProbeError("disposable Docker config did not become readable")
     config = response.get("config")
     if not isinstance(config, dict):
         raise ProbeError("Docker config response missing config object")
