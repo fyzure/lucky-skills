@@ -201,15 +201,15 @@
 
 ### StorageManagement
 
-当前：local storage 注册生命周期已经真实闭环；POST 会把新建 item 规范化为 `Enable=true`，显式 disable 后会从 `litelist` 消失，重新 enable 后恢复。`Writable` 已通过 localhost WebDAV consumer 做真实读写验证；`SystemMount` 仍未实践。
+当前：local storage 注册生命周期已经真实闭环；POST 会把新建 item 规范化为 `Enable=true`，显式 disable 后会从 `litelist` 消失，重新 enable 后恢复。`Writable` 已通过 localhost WebDAV consumer 做真实读写验证。StorageManagement 自身的 `SystemMount` 已完成 **Linux target 平台边界**验证：3.0.0 前端只在 `Type != local && os == windows` 时展示该区域并提示 WinFsp；在 GitHub-hosted FUSE-capable Linux disposable Lucky 中强制提交 local SystemMount 会在创建前返回 `ret=4 mountpoint format error`，不会生成 storage item。当前仓库目标为 Linux x86_64，因此不再把 Windows-only mount 当作 Linux 覆盖缺口。
 
 - [x] 使用 `/tmp/TEST-lucky-skills-storage-*` 创建 local storage
 - [x] 验证 POST / PUT / DELETE
 - [x] 验证 writable/read-only 的实际 consumer 执行行为：WebDAV 可写 mount PUT/GET/DELETE 成功，只读 mount PUT 被拒绝且底层文件未出现
 - [x] 验证 list/litelist 与 enable/disable 联动
-- [ ] 验证 SystemMount 最小闭环（仅在可安全卸载的临时目录）
+- [x] 验证 StorageManagement SystemMount 的 Linux target 平台边界：前端仅暴露非 local + Windows/WinFsp 路径；FUSE-capable Linux disposable Lucky 强制请求在创建前被 `mountpoint format error` 拒绝，且完整基线恢复。**不宣称 Windows 实际 mount 已验证**
 - [x] 清理 TEST storage / TEST path，并验证完整列表/litelist 基线恢复
-- [x] 固化 probe / evidence / docs：`tools/lucky_storage_probe.py`
+- [x] 固化 probe / evidence / docs：`tools/lucky_storage_probe.py`、`tools/lucky_storage_mount_ci_probe.py`
 
 ### FTP / WebDAV / SMB / DLNA / FileBrowser
 

@@ -25,7 +25,7 @@
 | SSL 证书映射 | 已验证 `MappingToPath` / `MappingPath` / `MappingChangeScript`，并确认映射文件随证书对象生成 |
 | SSL / ACME | 已验证 TEST 证书真实签发、CRUD/启停、MappingToPath、flush/manualsync 路径；sync-client 实际传输被当前实例 `u=0` 授权等级阻断 |
 | WebTerminal | 已验证 local WebSocket session、detach/attach、localhost SSH host-key 信任及 SFTP 核心文件/归档操作；两个 upload handler 已复现运行时失败 |
-| StorageManagement | 已验证 local storage POST/PUT/DELETE、启停与 litelist 联动；创建会强制变为 enabled，Writable 已通过 WebDAV consumer 做真实读写验证，SystemMount 尚未实践 |
+| StorageManagement | 已验证 local storage POST/PUT/DELETE、启停与 litelist 联动；创建会强制变为 enabled，Writable 已通过 WebDAV consumer 做真实读写验证；SystemMount 对当前 Linux target 已完成平台边界验证：前端仅对非 local + Windows/WinFsp 暴露，Linux 强制请求在创建前以 `mountpoint format error` 拒绝 |
 | WebDAV | 已验证 127.0.0.1 临时服务、TEST 用户、OPTIONS/PROPFIND、store mount 可写/只读权限、日志与完整配置恢复 |
 | FTP | 已验证 GitHub-hosted 临时 Lucky 3.0.0、runner-loopback control/PASV 端口、错误密码拒绝、passive login/LIST/STOR/RETR/DELE、backing-file 校验与完整配置恢复；RS 生产 FTP 仍不启动 |
 | WOL | 已验证 GitHub-hosted 临时 Lucky 3.0.0 + Docker internal bridge 上的真实 wake packet emission：TEST device `CanWakeup=true`、wakeup `ret=0`、精确 102-byte magic packet、UDP/9、device/service baseline 恢复；真实设备 online transition 与 shutdown 未实践 |
@@ -65,7 +65,9 @@ Lucky Skills 使用两层证据：
 - 显式 response schema 已覆盖 **354 条**路由；
 - response 侧未定型 `{}` 叶子已降到 **0**；request 侧仍有 **31** 个。
 
-目前重点覆盖 DDNS、WebService、Docker、FRP、SSL/ACME、Security Groups、IPFilter/PortTrap、PortForward、STUN、WebTerminal、StorageManagement、WebDAV、FTP、WOL、SMB、DLNA、FileBrowser、Rclone、Cron、ThirdPartyAuth/OIDC，以及部分 Status、IPDB、Modules 等接口。第三方 OIDC 已在 GitHub-hosted disposable Lucky 3.0.0 中完成 WebService OAuth relay、owned provider/client、callback、token/userinfo、mapping、disable/re-enable、reauthorize/update、白名单后台 OAuth login 和 revoke/cleanup；最终 `/api/oauth/login` 返回 `ret=0` 与非空登录 token。Rclone SystemMount 也已在 GitHub-hosted disposable Lucky 3.0.0 + FUSE 专用容器中完成真实 mount/write-through/unmount；生产 Lucky 不因此增加容器 capability/device。其它既有模块的隔离行为覆盖与恢复边界保持不变。真实 Docker prune 与 **RS 生产 daemon 上的 image build** 继续禁止；StorageManagement 自身的 SystemMount 和需要专用真实设备的 WOL online-transition 仍保留边界，不为覆盖率强测。
+目前重点覆盖 DDNS、WebService、Docker、FRP、SSL/ACME、Security Groups、IPFilter/PortTrap、PortForward、STUN、WebTerminal、StorageManagement、WebDAV、FTP、WOL、SMB、DLNA、FileBrowser、Rclone、Cron、ThirdPartyAuth/OIDC，以及部分 Status、IPDB、Modules 等接口。第三方 OIDC 已在 GitHub-hosted disposable Lucky 3.0.0 中完成 WebService OAuth relay、owned provider/client、callback、token/userinfo、mapping、disable/re-enable、reauthorize/update、白名单后台 OAuth login 和 revoke/cleanup；最终 `/api/oauth/login` 返回 `ret=0` 与非空登录 token。Rclone SystemMount 也已在 GitHub-hosted disposable Lucky 3.0.0 + FUSE 专用容器中完成真实 mount/write-through/unmount；生产 Lucky 不因此增加容器 capability/device。StorageManagement 自身的 SystemMount 则完成了当前 **Linux x86_64 target 的平台边界验证**：3.0.0 前端仅在非 local + Windows 时展示并提示 WinFsp，FUSE-capable Linux disposable Lucky 强制提交后在创建 item 前返回 `ret=4 mountpoint format error`，无残留 storage。其它既有模块的隔离行为覆盖与恢复边界保持不变。真实 Docker prune 与 **RS 生产 daemon 上的 image build** 继续禁止；需要专用真实设备的 WOL online-transition 仍保留边界，不为覆盖率强测。
+
+StorageManagement SystemMount 与 Rclone SystemMount 不应混为一谈。`tools/lucky_storage_mount_ci_probe.py` 的成功结论不是“Linux mount 成功”，而是证明当前 Lucky 3.0.0 的 StorageManagement UI/后端把该能力限定在 Windows/WinFsp 产品路径：served frontend 的区域 gate 为 `Type != local && os == windows`，保存校验器本身不含 SystemMount 检查；即使 disposable Linux 容器已经具备 `SYS_ADMIN` 与 `/dev/fuse`，强制 local SystemMount API 请求仍在创建前被 `mountpoint format error` 拒绝，且 storage/litelist/Cron/path 基线全部恢复。只有以后建立受控 Windows Lucky + WinFsp + 非 local storage 测试环境时，才可以进一步宣称 StorageManagement 的实际系统挂载行为。
 
 第三方 OIDC 现在同时保留两条证据：生产式 **OpenToken-only** 调用仍不能取得授权 tmpCode（`ret=2`），但 CI 中的合法 disposable Lucky 会话已经完整跑通真实 OAuth E2E。成功路径使用 Lucky 自己的 WebService OAuth relay 和 owned OIDC Provider，最终通过 fresh tmpCode、`status.auth=true`、challenge/RSA `/api/oauth/login` 取得非空 Lucky login token；所有 code/token/password/safe-entry 只存在 runner 内存/临时目录，不写入仓库。
 

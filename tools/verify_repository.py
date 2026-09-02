@@ -552,6 +552,7 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         "create_forces_enable_true",
         "readback_shape",
         "litelist_filter",
+        "system_mount_linux_boundary",
         "cleanup",
     }:
         fail("StorageManagement runtime observations regressed")
@@ -559,8 +560,19 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         value = storage_evidence.get(field)
         if not isinstance(value, str) or not value.strip():
             fail(f"StorageManagement evidence field is missing: {field}")
-    if not (ROOT / "tools" / "lucky_storage_probe.py").is_file():
-        fail("StorageManagement runtime probe tool is missing")
+    for probe_name in ("lucky_storage_probe.py", "lucky_storage_mount_ci_probe.py"):
+        if not (ROOT / "tools" / probe_name).is_file():
+            fail(f"StorageManagement runtime probe tool is missing: {probe_name}")
+    system_mount_model = str(storage_model.get("system_mount") or "")
+    system_mount_boundary = str(
+        storage_observations.get("system_mount_linux_boundary") or ""
+    )
+    for required_phrase in ("Windows", "WinFsp", "ret=4", "mountpoint format error"):
+        if required_phrase not in system_mount_model and required_phrase not in system_mount_boundary:
+            fail(
+                "StorageManagement SystemMount Linux platform-boundary evidence regressed: "
+                + required_phrase
+            )
 
     webdav_evidence = model_evidence.get("webdav_storage_behavior")
     if not isinstance(webdav_evidence, dict):

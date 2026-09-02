@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   storage-mount-behavior:
-    name: Lucky isolated StorageManagement SystemMount behavior
+    name: Lucky StorageManagement SystemMount Linux boundary
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
