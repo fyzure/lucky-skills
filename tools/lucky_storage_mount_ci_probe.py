@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
-"""Verify Lucky 3.0.0 StorageManagement SystemMount in disposable CI.
+"""Verify Lucky 3.0.0 StorageManagement SystemMount's Linux platform boundary.
 
 This probe refuses to run outside GitHub Actions. It starts the repository's
 pinned Lucky 3.0.0 image with only the FUSE requirements inside a disposable
 container. Every Lucky configuration, path and helper operation still goes
 through Lucky HTTP APIs.
 
-The probe creates one owned local StorageManagement item, mounts that item's
-local source path at a second owned TEST path, verifies source -> mount
-visibility plus mount -> source write-through, disables the item and requires
-the mount to disappear, then deletes the TEST item/helper/path and restores all
-fresh-instance baselines. No production Lucky instance or business storage is
-touched.
+The current frontend exposes this module's SystemMount controls only for
+non-local storage when Lucky reports Windows, and points users to WinFsp. The
+Linux probe therefore treats the backend's mountpoint-format rejection as the
+expected platform boundary when SystemMount is forced through the API. Keeping
+the disposable container FUSE-capable demonstrates that the rejection occurs
+before a Linux FUSE mount could be attempted. No production Lucky instance or
+business storage is touched.
 """
 
 from __future__ import annotations
@@ -442,6 +443,11 @@ def main() -> int:
         "lite_baseline_restored": False,
         "cron_baseline_restored": False,
         "cron_group_baseline_restored": False,
+        "frontend_windows_remote_only": False,
+        "frontend_validator_ignores_system_mount": False,
+        "forced_linux_mount_rejected": False,
+        "rejected_mount_created_no_storage": False,
+        "platform_boundary_verified": False,
         "failed": [],
     }
 
@@ -455,6 +461,7 @@ def main() -> int:
         cron_task_key = ""
         cron_group_key = ""
         helper: dict[str, Any] | None = None
+        platform_boundary_verified = False
         try:
             docker(
                 "run",
@@ -616,6 +623,35 @@ def main() -> int:
                         "crawl_summary",
                     )
                 }
+                gate = str(frontend.get("storage_system_mount_ui_gate") or "")
+                validator = str(frontend.get("storage_validator") or "")
+                error_text = str(error).lower()
+                report["frontend_windows_remote_only"] = (
+                    'Type!=="local"' in gate and '.value==="windows"' in gate
+                )
+                report["frontend_validator_ignores_system_mount"] = (
+                    bool(validator) and "SystemMount" not in validator
+                )
+                report["forced_linux_mount_rejected"] = (
+                    "ret=4" in error_text
+                    and "mountpoint" in error_text
+                    and "format error" in error_text
+                )
+                report["rejected_mount_created_no_storage"] = (
+                    find_storage(storage_rows(base_url, token), remark) is None
+                )
+                platform_boundary_verified = all(
+                    report[name]
+                    for name in (
+                        "frontend_windows_remote_only",
+                        "frontend_validator_ignores_system_mount",
+                        "forced_linux_mount_rejected",
+                        "rejected_mount_created_no_storage",
+                    )
+                )
+                report["platform_boundary_verified"] = platform_boundary_verified
+                if platform_boundary_verified:
+                    return 0
                 raise ProbeError(
                     f"{error}; frontend={json.dumps(focused_frontend, ensure_ascii=False)[:50000]}"
                 ) from None
@@ -769,6 +805,36 @@ def main() -> int:
 
             docker("rm", "-f", container_name, timeout=45)
             cleanup_root_owned_conf(conf_dir)
+            if platform_boundary_verified:
+                boundary_required = (
+                    "runner_fuse_present",
+                    "container_sys_admin",
+                    "container_fuse_device",
+                    "baseline_storage_empty",
+                    "baseline_lite_empty",
+                    "baseline_cron_empty",
+                    "baseline_cron_groups_empty",
+                    "frontend_windows_remote_only",
+                    "frontend_validator_ignores_system_mount",
+                    "forced_linux_mount_rejected",
+                    "rejected_mount_created_no_storage",
+                    "platform_boundary_verified",
+                    "path_removed",
+                    "storage_baseline_restored",
+                    "lite_baseline_restored",
+                    "cron_baseline_restored",
+                    "cron_group_baseline_restored",
+                )
+                boundary_failed = [
+                    name for name in boundary_required if report.get(name) is not True
+                ]
+                report["failed"] = boundary_failed
+                print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+                if boundary_failed:
+                    raise ProbeError(
+                        "StorageManagement Linux platform-boundary cleanup failed: "
+                        + ", ".join(boundary_failed)
+                    )
 
     required_true = (
         "runner_fuse_present",
