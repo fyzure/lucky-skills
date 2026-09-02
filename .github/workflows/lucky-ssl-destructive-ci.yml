@@ -1,0 +1,30 @@
+name: lucky-ssl-destructive-ci
+
+on:
+  push:
+    paths:
+      - "tools/lucky_ssl_destructive_ci_probe.py"
+      - ".github/workflows/lucky-ssl-destructive-ci.yml"
+  pull_request:
+    paths:
+      - "tools/lucky_ssl_destructive_ci_probe.py"
+      - ".github/workflows/lucky-ssl-destructive-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: Lucky disposable SSL flush/delete
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Show Docker runtime
+        run: docker version
+
+      - name: Exercise TEST-only SSL flush/delete
+        run: sudo -E python3 tools/lucky_ssl_destructive_ci_probe.py
