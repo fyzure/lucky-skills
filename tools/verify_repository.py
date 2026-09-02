@@ -939,7 +939,7 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         "real_sync",
         "file_copy",
         "stop",
-        "system_mount_boundary",
+        "system_mount",
         "dry_run",
         "state",
         "scope",
@@ -950,7 +950,7 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         "real_run",
         "file_copy",
         "stop",
-        "system_mount_blocked",
+        "system_mount",
         "dry_run",
         "detail_vs_list",
         "cleanup",
@@ -966,13 +966,22 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         fail("Rclone file-copy evidence must retain the owned Cron helper boundary")
     if "State.Status=success" not in str(rclone_model.get("stop")):
         fail("Rclone stop evidence must preserve the post-stop success-state caveat")
-    system_mount_boundary = str(rclone_model.get("system_mount_boundary"))
-    if "operation not permitted" not in system_mount_boundary or "SYS_ADMIN" not in system_mount_boundary:
-        fail("Rclone SystemMount blocked-runtime evidence regressed")
+    system_mount_model = str(rclone_model.get("system_mount"))
+    system_mount_observation = str(rclone_observations.get("system_mount"))
+    if "SystemMount.Root" not in system_mount_model or "MountMsg" not in system_mount_model:
+        fail("Rclone SystemMount behavior evidence regressed")
+    if "write-through" not in system_mount_observation or "disable" not in system_mount_observation:
+        fail("Rclone SystemMount data-plane evidence regressed")
+    if "SYS_ADMIN" not in str(rclone_evidence.get("security")) or "/dev/fuse" not in str(
+        rclone_evidence.get("security")
+    ):
+        fail("Rclone SystemMount isolation boundary regressed")
     if not (ROOT / "tools" / "lucky_rclone_stop_probe.py").is_file():
         fail("Rclone stop runtime probe tool is missing")
     if not (ROOT / "tools" / "lucky_rclone_sync_probe.py").is_file():
         fail("Rclone local sync runtime probe tool is missing")
+    if not (ROOT / "tools" / "lucky_rclone_mount_ci_probe.py").is_file():
+        fail("Rclone SystemMount CI probe tool is missing")
 
     cron_evidence = model_evidence.get("cron_shell_behavior")
     if not isinstance(cron_evidence, dict):

@@ -32,7 +32,7 @@
 | SMB | 已验证 127.0.0.1 高位端口的 guest public share、SMB2.1 NEGOTIATE/session/TREE_CONNECT、CREATE/WRITE/READ/delete-on-close、runtime/logs 与完整配置恢复 |
 | DLNA | 已验证空私网 Docker bridge 上的临时服务、local mount、`/rootDesc.xml`、ContentDirectory SOAP Browse 与完整配置恢复；host-side SSDP M-SEARCH 当前无回包 |
 | FRP | 已验证 loopback frps/frpc TCP proxy，以及独立 provider/visitor frpc 的 STCP visitor；visitor transport encryption+compression 更新后真实数据面仍可用 |
-| Rclone | 已验证 local → local sync 的真实文件复制、内容一致性、空目录传播、DryRun 与 running-task stop；当前 3.0.0 stop 后会标 `success`，但这不代表文件已完整传输 |
+| Rclone | 已验证 local → local sync 的真实文件复制、内容一致性、空目录传播、DryRun、running-task stop，以及 GitHub-hosted FUSE 隔离环境中的 SystemMount mount/write-through/unmount；当前 3.0.0 stop 后会标 `success`，但这不代表文件已完整传输 |
 | Cron | 已验证 `shell_option`、整任务手动 trigger、单 job trigger、每 2 秒真实调度、失败日志与 task/group/path 清理闭环 |
 | Docker Compose | 已验证 isolated fresh sync up/down、current-UI async up/stop/down task、ps/config/logs、start/restart、task-history ownership gate 与六类资源基线恢复 |
 | Docker image import/load | 已验证极小 rootfs tar import、TEST tag、`application/x-tar` save、删除后 load 恢复同一 image identity；`upload-temp` handler 已实测但被未配置 `temp_operation_path` 的实例前置条件阻断 |
@@ -65,13 +65,13 @@ Lucky Skills 使用两层证据：
 - 显式 response schema 已覆盖 **354 条**路由；
 - response 侧未定型 `{}` 叶子已降到 **0**；request 侧仍有 **31** 个。
 
-目前重点覆盖 DDNS、WebService、Docker、FRP、SSL/ACME、Security Groups、IPFilter/PortTrap、PortForward、STUN、WebTerminal、StorageManagement、WebDAV、FTP、WOL、SMB、DLNA、FileBrowser、Rclone、Cron、ThirdPartyAuth/OIDC，以及部分 Status、IPDB、Modules 等接口。第三方 OIDC 已在 GitHub-hosted disposable Lucky 3.0.0 中完成 WebService OAuth relay、owned provider/client、callback、token/userinfo、mapping、disable/re-enable、reauthorize/update、白名单后台 OAuth login 和 revoke/cleanup；最终 `/api/oauth/login` 返回 `ret=0` 与非空登录 token。其它既有模块的隔离行为覆盖与恢复边界保持不变。真实 Docker prune 与 **RS 生产 daemon 上的 image build** 继续禁止；`SystemMount` 和需要专用真实设备的 WOL online-transition 仍保留边界，不为覆盖率强测。
+目前重点覆盖 DDNS、WebService、Docker、FRP、SSL/ACME、Security Groups、IPFilter/PortTrap、PortForward、STUN、WebTerminal、StorageManagement、WebDAV、FTP、WOL、SMB、DLNA、FileBrowser、Rclone、Cron、ThirdPartyAuth/OIDC，以及部分 Status、IPDB、Modules 等接口。第三方 OIDC 已在 GitHub-hosted disposable Lucky 3.0.0 中完成 WebService OAuth relay、owned provider/client、callback、token/userinfo、mapping、disable/re-enable、reauthorize/update、白名单后台 OAuth login 和 revoke/cleanup；最终 `/api/oauth/login` 返回 `ret=0` 与非空登录 token。Rclone SystemMount 也已在 GitHub-hosted disposable Lucky 3.0.0 + FUSE 专用容器中完成真实 mount/write-through/unmount；生产 Lucky 不因此增加容器 capability/device。其它既有模块的隔离行为覆盖与恢复边界保持不变。真实 Docker prune 与 **RS 生产 daemon 上的 image build** 继续禁止；StorageManagement 自身的 SystemMount 和需要专用真实设备的 WOL online-transition 仍保留边界，不为覆盖率强测。
 
 第三方 OIDC 现在同时保留两条证据：生产式 **OpenToken-only** 调用仍不能取得授权 tmpCode（`ret=2`），但 CI 中的合法 disposable Lucky 会话已经完整跑通真实 OAuth E2E。成功路径使用 Lucky 自己的 WebService OAuth relay 和 owned OIDC Provider，最终通过 fresh tmpCode、`status.auth=true`、challenge/RSA `/api/oauth/login` 取得非空 Lucky login token；所有 code/token/password/safe-entry 只存在 runner 内存/临时目录，不写入仓库。
 
 Rclone running-task stop 也已单独实践：probe 只使用 1 MiB owned 本地文件和 `BandwidthLimit=32K` / `Transfers=1` 来延长到可观察的 running 状态，随后立即调用 stop。当前 Lucky 3.0.0 会返回 `ret=0` 并退出 running，但 post-stop `State.Status` 记为 `success`、`LastError` 为空，即使目标文件尚未完成，因此这个状态只能视作“已终止”，不能当作完整同步成功证据。
 
-Rclone SystemMount 在当前部署只记录为 **runtime-blocked**。一次 bounded TEST 尝试在 remote/sync baseline 为空时临时设置 owned cache/upload 目录并创建 local TEST remote；mount request 本身被接受，但 TEST mount point 未映射源目录，专属日志记录 `unmountConflictFail: operation not permitted`。只读 Docker inspect 进一步确认 Lucky 容器非 privileged、无 `SYS_ADMIN` 且无 `/dev/fuse` device mapping。所有 remote/global-config/path 基线已恢复；仓库不会为了覆盖率修改生产容器能力，因此不宣称 mount/unmount E2E 已完成。
+Rclone SystemMount 已从生产部署上的 **runtime-blocked** 边界升级为隔离 `behavior-runtime`。`tools/lucky_rclone_mount_ci_probe.py` 只允许在 GitHub Actions 启动 pinned Lucky 3.0.0；Docker 仅为该 disposable 容器增加 `SYS_ADMIN`、`/dev/fuse` 与 unconfined AppArmor，Lucky 的 remote/global/Cron/path 修改仍全部通过 HTTP API。实测确认本地 remote 的挂载源路径应放在 `SystemMount.Root`，而不是顶层 remote `Root` 或 `Params.LocalPath`；正确配置后 owned source marker 会从 mount point 可见，从 mount point 写入的第二个 marker 也会回到 source。随后通过 `/api/rclone/remotelist/option?enable=false` 真实卸载，删除 TEST remote，并恢复 Rclone global config、Cron task/group 与 TEST path 基线。生产 Lucky 仍保持无 `SYS_ADMIN` / `/dev/fuse` 的原能力边界。
 
 ## 已知限制
 

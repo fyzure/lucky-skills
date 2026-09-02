@@ -230,16 +230,16 @@ WebDAV、SMB 与 FileBrowser 已完成 localhost 完整闭环；DLNA 已在一�
 
 ### Rclone
 
-当前：remote / sync task CRUD 已实践；local → local `sync` 已真实运行，既验证了空目录传播，也用短命 TEST Cron helper 创建随机 marker 文件并确认目标文件内容一致。当前 UI 只提供 `sync` / `bisync`，没有独立 `copy` mode；这里的 actual copy 指 `SyncMode=sync` 中的真实文件复制。随后切换 `DryRun=true` 再运行，确认新增目录和 post-sync marker 都不会落到目标。
+当前：remote / sync task CRUD 已实践；local → local `sync` 已真实运行，既验证了空目录传播，也用短命 TEST Cron helper 创建随机 marker 文件并确认目标文件内容一致。当前 UI 只提供 `sync` / `bisync`，没有独立 `copy` mode；这里的 actual copy 指 `SyncMode=sync` 中的真实文件复制。随后切换 `DryRun=true` 再运行，确认新增目录和 post-sync marker 都不会落到目标。Rclone `SystemMount` 也已迁到 GitHub-hosted disposable Lucky 3.0.0 + FUSE 专用 CI，验证真实 mount、双向文件可见、disable 后 unmount 与完整基线恢复；生产 Lucky 不因此增加容器能力。
 
 - [x] local → local 实际 file copy（`SyncMode=sync`：真实文件出现且内容一致）
 - [x] local → local sync（`CreateEmptyDirs=true` 的源空目录真实传播到目标）
 - [x] DryRun 与真实运行结果对比
 - [x] 验证 task run / State / logs
 - [x] 验证运行中 task stop：1 MiB TEST 文件 + `BandwidthLimit=32K` / `Transfers=1`，观察 running 后立即 stop；当前 3.0.0 stop 后状态记为 `success`，但目标文件未完成
-- [ ] 如安全，验证临时 mount/unmount（当前部署已做 bounded 尝试但被运行环境阻断：Lucky 容器 `Privileged=false`、无 `SYS_ADMIN`、无 `/dev/fuse` 映射；TEST mount 返回 `unmountConflictFail: operation not permitted`。不为覆盖率提升生产容器权限）
+- [x] 验证临时 mount/unmount：`tools/lucky_rclone_mount_ci_probe.py` 仅在 GitHub Actions 启动 pinned Lucky 3.0.0，并只给该 disposable 容器 `SYS_ADMIN` + `/dev/fuse`；`SystemMount.Root` 指向 owned local source，真实验证 source→mount 可见、mount→source write-through、disable 后 unmount 与 remote/global/Cron/path 基线恢复。生产容器保持原能力不变
 - [x] 清理源/目标目录、TEST sync task、Cron helper task/group，并恢复 Rclone/Cron Key 基线
-- [x] 固化 probe / evidence / docs：`tools/lucky_rclone_sync_probe.py`
+- [x] 固化 probe / evidence / docs：`tools/lucky_rclone_sync_probe.py`、`tools/lucky_rclone_stop_probe.py`、`tools/lucky_rclone_mount_ci_probe.py`
 
 ### Cron
 
