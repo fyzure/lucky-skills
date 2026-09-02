@@ -217,7 +217,9 @@ def frontend_storage_mount_snippets(base_url: str) -> dict[str, str]:
                 },
                 sort_keys=True,
             )
-        for needle in needles:
+            snippets["storage_chunk_source"] = " ".join(text.split())[:14000]
+        collect_markers = "lucky_locale-" not in path
+        for needle in needles if collect_markers else ():
             positions = [match.start() for match in re.finditer(re.escape(needle), text)]
             if not positions:
                 continue
@@ -527,7 +529,7 @@ def main() -> int:
             except ProbeError as error:
                 frontend = frontend_storage_mount_snippets(base_url)
                 raise ProbeError(
-                    f"{error}; frontend={json.dumps(frontend, ensure_ascii=False, sort_keys=True)[:30000]}"
+                    f"{error}; frontend={json.dumps(frontend, ensure_ascii=False)[:50000]}"
                 ) from None
             report["storage_created"] = created.get("ret") == 0
             item = wait_for_row(
