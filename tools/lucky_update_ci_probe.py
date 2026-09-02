@@ -429,11 +429,12 @@ def main() -> int:
                 report["nonrecovering_downgrade_verified"] = (
                     report["confirm_ret"] == 0
                     and isinstance(state, dict)
-                    and (
-                        bool(state.get("restarting"))
-                        or int(state.get("restart_count") or 0) > 0
-                        or not bool(state.get("running"))
-                    )
+                    and report["http_interruption_observed"]
+                    and report["service_recovery_failed"]
+                    and bool(state.get("running"))
+                    and not bool(state.get("restarting"))
+                    and int(state.get("restart_count") or 0) == 0
+                    and int(state.get("exit_code") or 0) == 0
                 )
 
             common_verified = all(

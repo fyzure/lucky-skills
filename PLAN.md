@@ -317,7 +317,7 @@ WebDAV、SMB 与 FileBrowser 已完成 localhost 完整闭环；DLNA 已在一�
 
 以下能力继续纳入覆盖，但**只能在 GitHub Actions 的 disposable Lucky / disposable Docker daemon / owned synthetic fixture 中执行**。生产 Lucky、生产证书、生产 Docker daemon 和真实业务设备都不参与这些验证。
 
-- [ ] Lucky 自更新：仅 fresh pinned Lucky，允许 disposable 实例自更新/重启并验证版本或失败语义；不触碰生产二进制
+- [x] Lucky 自更新：`tools/lucky_update_ci_probe.py` 仅在 fresh pinned Lucky 中使用官方 Linux x86_64 发布包；3.0.0 可解析/接受 2.27.2 包且 `/api/update/comfire` 返回 `ret=0`，随后 HTTP 中断且 45 秒内不恢复，而 Docker 容器保持 running / RestartCount=0 / ExitCode=0，已固化为明确的 downgrade non-serving failure semantic；生产二进制不参与
 - [x] 全局配置 restore/import：`tools/lucky_config_restore_ci_probe.py` 在 fresh Lucky 中写入 profile A → `GET /api/configure` 导出 → 改为 profile B → multipart `POST /api/configure` → `restoreConfigureKey` → `GET /api/restoreconfigureconfirm?key=...`；恢复后 profile A 回归并可重新登录，配置 ZIP 不离开 runner
 - [x] `reboot_program`：`tools/lucky_core_admin_ci_probe.py` 在 fresh Lucky + Docker `restart=always` 中真实调用；Lucky 进程 PID 改变、HTTP challenge 恢复，并用变更后的密码重新登录成功
 - [x] 主密码修改：先 `/api/password/verify` 验旧密码，再 PUT fresh-instance `baseconfigure`；旧密码随后登录失败、新随机强密码登录成功

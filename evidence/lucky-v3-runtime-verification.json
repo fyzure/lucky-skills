@@ -90,6 +90,23 @@
       },
       "security": "Configuration archives may contain credentials and private settings. The CI probe never prints, persists to the repository, or transfers the archive outside the fresh runner-loopback Lucky instance. Evidence retains only byte length/category booleans, response key names and the marker-state transition. Production configuration export/import is not used for coverage."
     },
+    "self_update_ci_behavior": {
+      "confidence": "runtime-verified",
+      "model": {
+        "staging": "POST /api/update accepts a Lucky release tar.gz as multipart field file and returns ret=0 plus a parsed info object containing Name, ARCH, OS, Version, GoVersion, Date and MD5.",
+        "confirmation": "PUT /api/update/comfire accepts exactly the parsed release-info fields and returned ret=0 for the disposable downgrade probe.",
+        "downgrade_failure": "When fresh Lucky 3.0.0 was confirmed with the official 2.27.2 Linux x86_64 package, HTTP serving was interrupted and did not recover within 45 seconds. Docker still reported the container running with RestartCount=0 and ExitCode=0, so this is classified as a non-serving downgrade failure semantic rather than successful rollback.",
+        "isolation": "The probe refuses non-GitHub-Actions execution, publishes the fresh Lucky admin port only on runner loopback, downloads only the public official release fixture, destroys the entire container afterward, and never contacts a production Lucky binary or configuration."
+      },
+      "verification": "GitHub Actions tools/lucky_update_ci_probe.py started fresh pinned Lucky 3.0.0, downloaded official lucky_2.27.2_Linux_x86_64.tar.gz, uploaded it through /api/update and observed ret=0 plus parsed Linux/amd64/2.27.2 metadata. It then PUT that returned metadata to /api/update/comfire and observed ret=0. HTTP became unavailable and stayed unavailable for the bounded 45-second recovery window; Docker inspect still showed status=running, restarting=false, restart_count=0, exit_code=0 and oom_killed=false. The disposable container was then removed. This explicitly verifies a dangerous downgrade failure semantic, not a successful downgrade.",
+      "observations": {
+        "package_parse": "The official tar.gz was recognized as Lucky for linux/amd64 version 2.27.2 and staging returned response keys file, info and ret.",
+        "confirm": "Self-update confirmation returned only ret with ret=0 before the HTTP service became unavailable.",
+        "non_serving_state": "After confirmation, repeated HTTP probes failed for at least 45 seconds while the Docker supervisor still considered the container running and had not restarted it.",
+        "cleanup": "The entire disposable updated container and its temporary configuration directory were deleted after classification."
+      },
+      "security": "This evidence deliberately uses an older official release solely to classify failure behavior in an expendable CI instance. It must not be interpreted as permission to downgrade production Lucky. No production binary, credentials, configuration archive or Docker socket is involved."
+    },
     "ipdb_behavior": {
       "confidence": "runtime-verified",
       "model": {

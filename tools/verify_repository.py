@@ -577,6 +577,51 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         if required_phrase not in core_admin_text:
             fail(f"Core admin CI behavior evidence regressed: {required_phrase}")
 
+    self_update_evidence = model_evidence.get("self_update_ci_behavior")
+    if not isinstance(self_update_evidence, dict):
+        fail("Self-update CI behavior evidence is missing")
+    if self_update_evidence.get("confidence") != "runtime-verified":
+        fail("Self-update CI behavior evidence must remain runtime-verified")
+    self_update_model = self_update_evidence.get("model")
+    if not isinstance(self_update_model, dict) or set(self_update_model) != {
+        "staging",
+        "confirmation",
+        "downgrade_failure",
+        "isolation",
+    }:
+        fail("Self-update CI behavior model regressed")
+    self_update_observations = self_update_evidence.get("observations")
+    if not isinstance(self_update_observations, dict) or set(self_update_observations) != {
+        "package_parse",
+        "confirm",
+        "non_serving_state",
+        "cleanup",
+    }:
+        fail("Self-update CI runtime observations regressed")
+    for field in ("verification", "security"):
+        value = self_update_evidence.get(field)
+        if not isinstance(value, str) or not value.strip():
+            fail(f"Self-update CI evidence field is missing: {field}")
+    for path in (
+        ROOT / "tools" / "lucky_update_ci_probe.py",
+        ROOT / ".github" / "workflows" / "lucky-update-ci.yml",
+    ):
+        if not path.is_file():
+            fail(f"Self-update CI artifact is missing: {path.relative_to(ROOT)}")
+    self_update_text = json.dumps(self_update_evidence, ensure_ascii=False).lower()
+    for required_phrase in (
+        "github",
+        "2.27.2",
+        "ret=0",
+        "45 seconds",
+        "restartcount=0",
+        "exitcode=0",
+        "non-serving",
+        "production",
+    ):
+        if required_phrase not in self_update_text:
+            fail(f"Self-update CI behavior evidence regressed: {required_phrase}")
+
     storage_evidence = model_evidence.get("storagemanagement_local_behavior")
     if not isinstance(storage_evidence, dict):
         fail("StorageManagement local behavior evidence is missing")
