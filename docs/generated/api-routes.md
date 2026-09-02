@@ -264,7 +264,7 @@ pageClass: api-routes-page
 | `GET` | `/api/docker/networks` | `read-only` | — | — | `json` | `frontend-call` |
 | `POST` | `/api/docker/networks` | `mutating` | — | `name`, `driver`, `internal`, `enable_ipv6`, `attachable`, `options`, `ipam` | `json` | `frontend-call` |
 | `DELETE` | `/api/docker/networks/{param}` | `mutating` | — | — | `json` | `frontend-call` |
-| `POST` | `/api/docker/prune` | `dangerous` | — | `all`, `volumes` | `json` | `frontend-call` |
+| `POST` | `/api/docker/prune` | `dangerous` | — | `all`, `volumes` | `json` | `runtime-verified` |
 | `DELETE` | `/api/docker/registry/mirrors` | `mutating` | — | `mirror` | `json` | `frontend-call` |
 | `GET` | `/api/docker/registry/mirrors` | `read-only` | — | — | `json` | `frontend-call` |
 | `POST` | `/api/docker/registry/mirrors` | `mutating` | — | `mirror` | `json` | `frontend-call` |

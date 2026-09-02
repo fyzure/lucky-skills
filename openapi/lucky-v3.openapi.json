@@ -57,7 +57,7 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_index-DND3_xvE.js"
         ],
@@ -16729,7 +16729,7 @@
           "lucky_docker-BCN-OILs.js"
         ],
         "x-lucky-risk": "dangerous",
-        "x-schema-evidence": "authorized isolated Lucky instance connected to a non-destructive mock Docker API: {} pruned dangling containers/images/networks; volumes:true additionally invoked volumes/prune; all:true removed the dangling=true filters. containers/images/networks/build_cache aliases did not alter behavior. No prune request reached the real Docker daemon",
+        "x-schema-evidence": "Earlier mock-Docker probing established the request fields and handler fan-out. A later GitHub-hosted real private-DinD probe called {all:true,volumes:true}: an owned stopped container, unused network, anonymous volume and dangling image were actually deleted while a running protected resource set remained. Tagged-but-unused image and BuildKit cache were not removed, so all=true must not be documented as docker image prune -a semantics. No prune request reached a production Docker daemon.",
         "requestBody": {
           "required": true,
           "content": {
