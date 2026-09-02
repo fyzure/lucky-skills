@@ -1,0 +1,36 @@
+name: lucky-storage-mount-ci
+
+on:
+  push:
+    paths:
+      - ".github/workflows/lucky-storage-mount-ci.yml"
+      - "tools/lucky_storage_mount_ci_probe.py"
+      - "tools/lucky_rclone_mount_ci_probe.py"
+      - "tools/lucky_docker_build_ci_probe.py"
+  pull_request:
+    paths:
+      - ".github/workflows/lucky-storage-mount-ci.yml"
+      - "tools/lucky_storage_mount_ci_probe.py"
+      - "tools/lucky_rclone_mount_ci_probe.py"
+      - "tools/lucky_docker_build_ci_probe.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  storage-mount-behavior:
+    name: Lucky isolated StorageManagement SystemMount behavior
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Show FUSE and Docker runtime
+        run: |
+          ls -l /dev/fuse
+          docker version
+
+      - name: Run isolated Lucky StorageManagement SystemMount probe
+        run: sudo -E python3 tools/lucky_storage_mount_ci_probe.py
