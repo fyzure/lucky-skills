@@ -322,7 +322,7 @@ WebDAV、SMB 与 FileBrowser 已完成 localhost 完整闭环；DLNA 已在一�
 - [x] `reboot_program`：`tools/lucky_core_admin_ci_probe.py` 在 fresh Lucky + Docker `restart=always` 中真实调用；Lucky 进程 PID 改变、HTTP challenge 恢复，并用变更后的密码重新登录成功
 - [x] 主密码修改：先 `/api/password/verify` 验旧密码，再 PUT fresh-instance `baseconfigure`；旧密码随后登录失败、新随机强密码登录成功
 - [x] 2FA enable / reset / disable：runner 内存生成 16 位 Base32 secret + RFC 6238 TOTP；启用后无验证码登录失败、正确验证码成功；换钥后旧 key 失效、新 key 成功；关闭后恢复 password-only 登录
-- [ ] 证书强制 renew/delete：仅 CI 自己签发/创建的 TEST 证书，绝不操作生产证书
+- [x] 证书强制 renew/delete：`tools/lucky_ssl_destructive_ci_probe.py` 仅在 fresh Lucky 中导入 CI 自签 TEST 证书（`AddFrom=file`）；`PUT /api/ssl/flush` 明确返回 `ret=1 UnsupportedRefreshType file`、不启动 ACME 且不改指纹，随后真实 DELETE 成功并恢复空 SSL 基线；生产证书不参与
 - [x] 真实 Docker prune：`tools/lucky_docker_prune_ci_probe.py` 仅连接 GitHub Actions 私有 DinD daemon，真实验证资源删除/保留语义；生产 Docker socket 从未挂入该 Lucky
 
 CI probe 失败时优先保留脱敏的返回码、状态机和字段形状；任何密码、2FA secret、token、证书私钥、配置备份正文都不得写入日志/evidence。

@@ -472,6 +472,50 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
     if not (ROOT / "tools" / "lucky_ssl_acme_probe.py").is_file():
         fail("SSL ACME runtime probe tool is missing")
 
+    ssl_destructive_evidence = model_evidence.get("ssl_destructive_ci_behavior")
+    if not isinstance(ssl_destructive_evidence, dict):
+        fail("SSL destructive CI behavior evidence is missing")
+    if ssl_destructive_evidence.get("confidence") != "runtime-verified":
+        fail("SSL destructive CI behavior evidence must remain runtime-verified")
+    ssl_destructive_model = ssl_destructive_evidence.get("model")
+    if not isinstance(ssl_destructive_model, dict) or set(ssl_destructive_model) != {
+        "import",
+        "forced_refresh",
+        "delete",
+        "isolation",
+    }:
+        fail("SSL destructive CI behavior model regressed")
+    ssl_destructive_observations = ssl_destructive_evidence.get("observations")
+    if not isinstance(ssl_destructive_observations, dict) or set(ssl_destructive_observations) != {
+        "import_type",
+        "refresh_rejection",
+        "delete",
+        "cleanup",
+    }:
+        fail("SSL destructive CI runtime observations regressed")
+    for field in ("verification", "security"):
+        value = ssl_destructive_evidence.get(field)
+        if not isinstance(value, str) or not value.strip():
+            fail(f"SSL destructive CI evidence field is missing: {field}")
+    for path in (
+        ROOT / "tools" / "lucky_ssl_destructive_ci_probe.py",
+        ROOT / ".github" / "workflows" / "lucky-ssl-destructive-ci.yml",
+    ):
+        if not path.is_file():
+            fail(f"SSL destructive CI artifact is missing: {path.relative_to(ROOT)}")
+    ssl_destructive_text = json.dumps(ssl_destructive_evidence, ensure_ascii=False).lower()
+    for required_phrase in (
+        "addfrom=file",
+        "unsupportedrefreshtype file",
+        "ret=1",
+        "delete",
+        "empty ssl baseline",
+        "github",
+        "production certificate",
+    ):
+        if required_phrase not in ssl_destructive_text:
+            fail(f"SSL destructive CI behavior evidence regressed: {required_phrase}")
+
     ssl_sync_evidence = model_evidence.get("ssl_sync_client_behavior")
     if not isinstance(ssl_sync_evidence, dict):
         fail("SSL sync-client behavior evidence is missing")

@@ -210,6 +210,23 @@
       },
       "security": "The probe clones existing ACME/DNS-provider fields only in memory, never prints certificate/private-key/provider material, mutates only a unique TEST certificate, and removes only its own TEST filesystem directory."
     },
+    "ssl_destructive_ci_behavior": {
+      "confidence": "runtime-verified",
+      "model": {
+        "import": "Fresh Lucky 3.0.0 accepts a CI-generated self-signed certificate/key through POST /api/ssl when AddFrom=file; unsupported import-type candidates are rejected with UnsupportedType before any certificate item is created.",
+        "forced_refresh": "PUT /api/ssl/flush?key=<Key> against the owned file certificate returns ret=1 with UnsupportedRefreshType file. The certificate does not enter ACMEing and its SHA-256 fingerprint remains unchanged.",
+        "delete": "DELETE /api/ssl?key=<Key> removes the owned TEST certificate and the fresh instance returns to its empty SSL baseline.",
+        "isolation": "The probe refuses non-GitHub-Actions execution, generates certificate/private-key material only in RUNNER_TEMP, publishes the disposable Lucky admin port only to runner loopback and destroys the whole instance afterward."
+      },
+      "verification": "GitHub Actions tools/lucky_ssl_destructive_ci_probe.py generated a short-lived self-signed TEST certificate/key, started fresh pinned Lucky 3.0.0 with an empty SSL baseline and discovered file as the supported AddFrom value for direct certificate material. The imported TEST certificate was listed and its certificate/private-key fields were present on protected detail readback. PUT /api/ssl/flush returned ret=1 with message UnsupportedRefreshType file; ACMEing remained false and the fingerprint did not change. DELETE /api/ssl?key=<owned> returned ret=0, the TEST item disappeared and the SSL list returned to the original empty baseline.",
+      "observations": {
+        "import_type": "The bounded disposable discovery rejected unsupported AddFrom candidates and accepted AddFrom=file for the self-signed certificate.",
+        "refresh_rejection": "Forced refresh on a file certificate returned ret=1 UnsupportedRefreshType file; no ACME attempt or certificate replacement occurred.",
+        "delete": "The owned TEST certificate was deleted through Lucky's SSL API and no certificate item remained.",
+        "cleanup": "The empty SSL baseline was restored before the disposable Lucky container and temporary certificate directory were removed."
+      },
+      "security": "No public DNS, ACME account, Cloudflare credential, production certificate or production Lucky instance is used. Certificate and private-key bytes are never printed or retained in repository evidence."
+    },
     "ssl_sync_client_behavior": {
       "confidence": "runtime-verified",
       "model": {
