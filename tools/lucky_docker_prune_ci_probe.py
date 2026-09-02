@@ -180,6 +180,7 @@ def main() -> int:
 
     target_container = f"{TEST_PREFIX}{nonce}-stopped"
     target_image = f"test-lucky-skills-prune-{nonce}:unused"
+    cache_anchor_image = f"test-lucky-skills-prune-{nonce}:cache-anchor"
     target_network = f"{TEST_PREFIX}{nonce}-network"
     target_volume = f"{TEST_PREFIX}{nonce}-volume"
     protected_container = f"{TEST_PREFIX}{nonce}-protected"
@@ -315,9 +316,20 @@ def main() -> int:
                 dind_name,
                 "build",
                 "--tag",
-                target_image,
+                cache_anchor_image,
                 "/ci-build",
                 timeout=180,
+            )
+            # Use a plain imported/tagged image for the all=true assertion so
+            # BuildKit leases/cache references cannot make the image look
+            # artificially in-use. The separate build above exists only to
+            # observe whether Lucky also touches BuildKit cache.
+            inner(
+                dind_name,
+                "import",
+                "/ci-build/dangling-rootfs.tar",
+                target_image,
+                timeout=60,
             )
             report["target_image_created"] = bool(names(dind_name, "image", target_image))
             dangling_image = inner(
