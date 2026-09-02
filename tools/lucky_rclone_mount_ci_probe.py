@@ -670,12 +670,11 @@ def main() -> int:
                 "Type": "local",
                 "Enable": True,
                 "Remark": remark,
-                # Rclone's local backend takes its filesystem path from the
-                # remote root argument.  ``Params.LocalPath`` belongs to
-                # Lucky's StorageManagement local-item model and is ignored
-                # by the Rclone local backend (which otherwise falls back to
-                # Lucky's working directory, /app in the pinned container).
-                "Root": source,
+                # A local Rclone remote has no provider-specific path config;
+                # the filesystem path used by ``rclone mount`` belongs to the
+                # SystemMount submodel.  Keeping the remote root empty while
+                # setting SystemMount.Root matches ``local:<path>`` semantics.
+                "Root": "",
                 "Params": {},
                 "HttpClienInsecureSkipVerify": False,
                 "HttpClientProxyType": "",
@@ -686,6 +685,7 @@ def main() -> int:
                     "Enable": True,
                     "ReadOnly": False,
                     "MountType": "local",
+                    "Root": source,
                     "MountPoint": mount_path,
                     "Label": "",
                     "OnleyCreateVFS": False,
