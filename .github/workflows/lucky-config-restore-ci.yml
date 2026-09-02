@@ -1,0 +1,34 @@
+name: lucky-config-restore-ci
+
+on:
+  push:
+    paths:
+      - ".github/workflows/lucky-config-restore-ci.yml"
+      - "tools/lucky_config_restore_ci_probe.py"
+      - "tools/lucky_docker_build_ci_probe.py"
+      - "tools/lucky_rclone_mount_ci_probe.py"
+  pull_request:
+    paths:
+      - ".github/workflows/lucky-config-restore-ci.yml"
+      - "tools/lucky_config_restore_ci_probe.py"
+      - "tools/lucky_docker_build_ci_probe.py"
+      - "tools/lucky_rclone_mount_ci_probe.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  config-restore-behavior:
+    name: Lucky disposable configuration restore
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Show Docker runtime
+        run: docker version
+
+      - name: Run isolated configuration restore probe
+        run: sudo -E python3 tools/lucky_config_restore_ci_probe.py
