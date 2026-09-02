@@ -573,7 +573,11 @@ def main() -> int:
             host_config = inspect.get("HostConfig") if isinstance(inspect, dict) else {}
             cap_add = host_config.get("CapAdd") if isinstance(host_config, dict) else []
             devices = host_config.get("Devices") if isinstance(host_config, dict) else []
-            report["container_sys_admin"] = isinstance(cap_add, list) and "SYS_ADMIN" in cap_add
+            normalized_caps = {
+                str(cap).upper().removeprefix("CAP_")
+                for cap in cap_add
+            } if isinstance(cap_add, list) else set()
+            report["container_sys_admin"] = "SYS_ADMIN" in normalized_caps
             report["container_fuse_device"] = isinstance(devices, list) and any(
                 isinstance(device, dict) and device.get("PathInContainer") == "/dev/fuse"
                 for device in devices
