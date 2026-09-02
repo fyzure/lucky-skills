@@ -290,14 +290,37 @@ def check_documentation_freshness() -> None:
     plan = (ROOT / "PLAN.md").read_text(encoding="utf-8")
     if "- [ ]" in plan:
         fail("PLAN.md unexpectedly contains an unchecked coverage item")
-    for required in ("State=Unreachable", "State=Reachable", "既定 P0–P5 实践计划完成"):
+    for required in (
+        "State=Unreachable",
+        "State=Reachable",
+        "既定 P0–P5 实践计划完成",
+        "shutdown 路由/方法存在性由无鉴权 cloud CI 验证",
+        "Cloudflare TEST 资源完成 cloudflared",
+        "frontend-call=0`、`unknown=0",
+        "runtime-rejected",
+    ):
         if required not in plan:
             fail(f"PLAN.md completion summary is stale: {required}")
-    if "真实 powered-device 在线状态变化仍需要专用测试设备" in plan:
-        fail("PLAN.md still contains the pre-virtual-target WOL limitation")
+    for stale in (
+        "POST/PUT 和真实同步从未执行",
+        "没有真实 item CRUD、数据库下载更新和查询闭环",
+        "但 TCP/UDP 数据流没有穿过 Lucky",
+        "只证明 `/api/natdetect/ws` handler 存在",
+        "未真正建立 Cloudflare tunnel/access 链路",
+        "真实 powered-device 在线状态变化仍需要专用测试设备",
+    ):
+        if stale in plan:
+            fail(f"PLAN.md still contains a pre-completion status statement: {stale}")
 
     index = (ROOT / "docs" / "index.md").read_text(encoding="utf-8")
-    for required in ("354 条", "WOL `Unreachable → Reachable`", "fyzure/lucky-skills"):
+    for required in (
+        "354 条",
+        "597 条",
+        "0 条 `frontend-call`、0 条 `unknown`",
+        "runtime-rejected",
+        "WOL `Unreachable → Reachable`",
+        "fyzure/lucky-skills",
+    ):
         if required not in index:
             fail(f"docs/index.md coverage summary is stale: {required}")
 
@@ -332,13 +355,34 @@ def check_documentation_freshness() -> None:
     limitations = (ROOT / "docs" / "evidence-and-limitations.md").read_text(
         encoding="utf-8"
     )
-    if "以 GitHub Actions `docs-ci`" not in limitations:
-        fail("docs/evidence-and-limitations.md still lacks cloud-CI verification guidance")
+    for required in (
+        "597 条 `runtime-verified` + 0 条 `frontend-call` + 0 条 `unknown`",
+        "`runtime-rejected`",
+        "frontend_call_before=0",
+        "为什么不执行全部业务 handler",
+        "GitHub Actions `render-artifacts`",
+        "以 GitHub Actions `docs-ci`",
+    ):
+        if required not in limitations:
+            fail(f"docs/evidence-and-limitations.md coverage text is stale: {required}")
+    for stale in (
+        "| 只读验证 | `/api/status`、`/api/info`、`/api/modules/list` |",
+        "## 为什么不自动验证全部接口",
+        "python3 tools/render_lucky_artifacts.py evidence/lucky-v3-endpoints.json",
+    ):
+        if stale in limitations:
+            fail(f"docs/evidence-and-limitations.md still contains stale guidance: {stale}")
     if "python3 tools/verify_repository.py" in limitations:
         fail("docs/evidence-and-limitations.md still instructs local repository verification")
 
     contributing = (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
-    for required in ("GitHub Actions 作为权威验证环境", "private DinD", "destructive certificate"):
+    for required in (
+        "GitHub Actions 作为权威验证环境",
+        "private DinD",
+        "destructive certificate",
+        "`frontend-call=0`、`unknown=0`",
+        "runtime_rejected_routes",
+    ):
         if required not in contributing:
             fail(f"CONTRIBUTING.md CI safety policy is stale: {required}")
     if "`prune`、批量删除等全局危险操作只能连接 mock/隔离后端" in contributing:
@@ -367,6 +411,25 @@ def check_documentation_freshness() -> None:
     ):
         if required_ref not in workflow_text:
             fail(f"GitHub Actions runtime dependency is missing: {required_ref}")
+
+    skill_text = (ROOT / "skills" / "lucky" / "SKILL.md").read_text(encoding="utf-8")
+    for required in (
+        "597 routes, all `runtime-verified`, with zero `frontend-call` and zero `unknown`",
+        "`runtime-rejected` false positives",
+        "private DinD",
+        "shutdown` has separate unauthenticated cloud evidence",
+        "resetadmin` METHOD+path existence is already runtime-verified",
+    ):
+        if required not in skill_text:
+            fail(f"Lucky SKILL coverage guidance is stale: {required}")
+    for stale in (
+        "route global/destructive operations such as prune to a mock or otherwise isolated backend",
+        "Never call the shutdown route for coverage.",
+        "never call `/api/third/filebrowser/resetadmin` for coverage",
+        "use temporary Lucky + mock Docker or GitHub Actions isolation instead",
+    ):
+        if stale in skill_text:
+            fail(f"Lucky SKILL still contains pre-cloud-closure guidance: {stale}")
 
 
 def check_skill_packaging() -> None:

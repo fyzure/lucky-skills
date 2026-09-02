@@ -6,18 +6,20 @@
 
 | 等级 | 含义 |
 | --- | --- |
-| `frontend-call` | 前端构建产物中同时发现接口路径和 HTTP 方法 |
-| `route-literal-only` | 只发现路径字面量，方法或实际用途仍不确定 |
-| `runtime-verified` | 已在获授权的 Lucky 3.0.0 实例上验证路由、方法或只读行为 |
+| `frontend-call` | 静态前端快照中同时发现接口路径和 HTTP 方法；这是来源证据，不代表 merged catalog 仍停留在此前端等级 |
+| `route-literal-only` | 静态快照只发现路径字面量，方法或实际用途仍不确定 |
+| `runtime-verified` | 已在 pinned Lucky 3.0.0 runtime 上确认 `METHOD + path`，或完成更深的 parser/read/CRUD/behavior 验证 |
+| `runtime-rejected` | 前端明确调用，但在 pinned 目标版本、真实 owned fixture 条件下仍稳定返回路由级 404/405；作为 frontend false positive 保留证据并从 merged catalog 抑制 |
 
-手写文档中的“实测”表示真实实例验证；“前端推断”表示来自当前 v3 前端；历史源码只用于解释背景，不作为 v3 行为证明。
+手写文档中的“实测”表示运行时验证；其中高风险、全局状态和专用数据面覆盖优先使用 GitHub-hosted disposable Lucky / private DinD / owned synthetic fixture。“前端推断”只表示来自当前 v3 前端，历史源码只用于解释背景，不作为 v3 行为证明。
 
 ## 当前验证基线
 
 | 项目 | 当前结果 |
 | --- | --- |
 | 目标版本 | Lucky 3.0.0 wanji / Linux x86_64 |
-| 只读验证 | `/api/status`、`/api/info`、`/api/modules/list` |
+| 路由 / 方法基线 | 静态前端快照 599 条 path+method；其中 597 条进入 merged catalog 且全部 `runtime-verified`，`frontend-call=0`、`unknown=0`；另 2 条 Docker frontend call 已由 private DinD + owned container 证伪为 `runtime-rejected` HTTP 404 |
+| 基础只读 smoke | `/api/status`、`/api/info`、`/api/modules/list`，并在大量模块继续补充授权只读 schema / behavior 证据 |
 | WebService 写入 | 已验证创建 → 回读 → 删除，测试后基线恢复 |
 | WebService reverseproxy 语义 | 已验证完整父规则 `ProxyList` 写入模型、`NginxConf` Header/路径/重定向、Host/helper 字段与自动反代重定向 |
 | 308 重定向 | 已验证 `RedirectType="308"`，GET / POST 均返回 308 |
@@ -40,7 +42,7 @@
 | Docker image import/load | 已验证极小 rootfs tar import、TEST tag、`application/x-tar` save、删除后 load 恢复同一 image identity；`upload-temp` handler 已实测但被未配置 `temp_operation_path` 的实例前置条件阻断 |
 | Docker image build | 已验证 Dockerfile-text build；ZIP/Git handler 在 GitHub-hosted 临时 Lucky + 临时 Docker daemon 上真实构建 `FROM scratch` marker image，Git 使用本地 fake clone、不访问外部 Git 服务，最终 image baseline 恢复 |
 | Security Groups + WebAuth | 已验证 TEST group/local/OAuth mapping、BasicAuth 三态、WebAuth challenge+RSA 登录、组成员 session 放行、无 group 用户拒绝、runtime grant 生成及业务 WebService 子规则无变化 |
-| `UNKNOWN` 路由 | 当前默认合并目录为 0 |
+| `frontend-call` / `UNKNOWN` | 当前默认 merged catalog 均为 0；任何回退都会被 repository verifier 拒绝 |
 | OpenToken 鉴权 | 安全入口 + `openToken` 请求头 |
 | 状态接口限流 | 当前实例约 20 请求/秒 |
 
@@ -50,14 +52,14 @@ reverseproxy / SNI / 证书映射验证同样只保留通用字段语义和脱�
 
 ## 证据如何合并
 
-Lucky Skills 使用两层证据：
+Lucky Skills 持久化两份 evidence 文件，并把三类来源合并为目标版本 catalog：
 
 1. [`lucky-v3-endpoints.json`](../evidence/lucky-v3-endpoints.json)：从前端构建产物提取的静态接口快照；
-2. [`lucky-v3-runtime-verification.json`](../evidence/lucky-v3-runtime-verification.json)：脱敏后的运行时验证、风险覆盖和 schema 补充。
+2. [`lucky-v3-runtime-verification.json`](../evidence/lucky-v3-runtime-verification.json)：脱敏后的运行时验证、风险覆盖和 schema 补充；其中既包含明确成功/失败语义，也包含 GitHub-hosted method calibration 与 `runtime_rejected_routes`。
 
 运行时证据只有在 **Lucky 版本** 和 **静态快照 SHA-256** 都精确匹配时才会合并。任一条件不一致，客户端会 fail-closed，而不是继续套用旧证据。
 
-静态分析主要回答“接口在哪里”；运行时验证主要回答“方法是否存在、风险如何、字段形状是否可靠”。两者都不等同于 Lucky 官方协议定义。
+静态分析主要回答“前端尝试调用什么”；运行时验证进一步决定该 `METHOD + path` 在目标版本上是存在、被证伪，还是具备更深的业务行为证据。两者都不等同于 Lucky 官方协议定义。
 
 ## 当前覆盖情况
 
@@ -66,7 +68,9 @@ Lucky Skills 使用两层证据：
 - 这 219 条中仅剩 **1 条**仍含未类型化顶层属性；
 - 显式 response schema 已覆盖 **354 条**路由；
 - response 侧未定型 `{}` 叶子已降到 **0**；request 侧仍有 **31** 个。
-- 静态前端快照共有 599 条 path+method 记录；两轮 GitHub-hosted `lucky-route-method-ci` 在 fresh pinned Lucky 3.0.0 的 Docker `--internal` 网络中、未登录且未启用 OpenToken，共补齐 98 条 `METHOD + path` 运行时存在性证据，其中危险路由只停在鉴权门。最后 2 条 Docker 前端调用由 `lucky-docker-remaining-routes-ci` 在 private DinD + owned network-none BusyBox container 上用真实 container ID 重测，仍稳定返回 plain HTTP 404，因此作为 `runtime-rejected` frontend false positive 保留证据并从 merged catalog 抑制。最终 merged catalog 为 **597 条 `runtime-verified` + 0 条 `frontend-call` + 0 条 `unknown`**。是否真正执行成功业务行为仍以逐路由 `verification` / `schema_evidence` 为准。
+- 静态前端快照共有 **599 条** path+method 记录；GitHub-hosted `lucky-route-method-ci` 累计固化 **98 条** method-only runtime evidence，其中 96 条命中校准后的 `HTTP 200 / ret=-1 / login invalid` 鉴权门，`GET /api/oauth/status` 与 `PUT /api/logout` 返回独立 route-specific response。危险路由的这一层验证只停在鉴权门，不进入 protected handler。
+- 最后 2 条 Docker frontend call 由 `lucky-docker-remaining-routes-ci` 在 private DinD + owned network-none BusyBox container 上用真实 container ID 重测，仍稳定返回 plain HTTP 404，因此保存为 `runtime-rejected` frontend false positive 并从 merged catalog 抑制。
+- 最终 merged catalog 为 **597 条 `runtime-verified` + 0 条 `frontend-call` + 0 条 `unknown`**；`lucky-route-method-ci` 在当前 HEAD 上再次回归时直接观察到 `frontend_call_before=0`。是否真正执行成功业务行为仍以逐路由 `verification` / `schema_evidence` 为准。
 
 目前重点覆盖 DDNS、WebService、Docker、FRP、SSL/ACME、Security Groups、IPFilter/PortTrap、PortForward、STUN、WebTerminal、StorageManagement、WebDAV、FTP、WOL、SMB、DLNA、FileBrowser、Rclone、Cron、ThirdPartyAuth/OIDC，以及部分 Status、IPDB、Modules 等接口。高风险核心管理操作统一迁到 **GitHub-hosted disposable Lucky**：主密码修改、全局 2FA enable/key-replace/disable、`reboot_program`、配置 export/import/restore、自更新 failure semantic 都已完成真实行为验证，生产 Lucky 不参与。自更新 probe 使用官方 2.27.2 Linux x86_64 发布包验证 3.0.0 的危险 downgrade 边界：`/api/update` 成功解析并返回 `ret=0`，`/api/update/comfire` 也返回 `ret=0`，随后 HTTP 中断且 45 秒内不恢复；Docker 仍报告容器 running、RestartCount=0、ExitCode=0，因此该路径被记录为 **non-serving downgrade failure semantic**，而不是成功升级。Docker prune 也已迁入专用 private DinD：Lucky 只看到 disposable daemon 的 Unix socket，真实删除停止容器、unused network、anonymous volume 与 dangling image，同时保留运行中的保护资源。实测 3.0.0 的 `all=true` 不删除 tagged-but-unused image，BuildKit cache 也未减少，因此文档不把它等同于 `docker image prune -a`。第三方 OIDC 已在 disposable Lucky 3.0.0 中完成完整 OAuth E2E；Rclone SystemMount 已在 FUSE 专用 disposable 容器中完成真实 mount/write-through/unmount；StorageManagement SystemMount 则完成 Linux target 的 Windows/WinFsp 平台边界验证。WOL online-transition 也已由 CI virtual powered fixture 完成 `Unreachable → Reachable` 闭环；物理主机不作为行为 fixture，`shutdown` 只验证到无鉴权路由/方法存在性，不执行真正关机 handler。
 
@@ -94,24 +98,20 @@ Rclone SystemMount 已从生产部署上的 **runtime-blocked** 边界升级为�
 
 因此，接口目录是**经过验证的操作依据**，不是上游兼容性承诺。
 
-## 为什么不自动验证全部接口
+## 为什么不执行全部业务 handler
 
-Lucky 的接口包含删除容器、执行任务、重启、恢复配置、终端和文件写入等高风险操作，而且部分有副作用的接口使用 `GET`。
+当前静态快照中可归一化的 path+method 已经完成运行时收口：597 条被验证为目标版本路由，2 条被运行时证伪为前端 false positive，merged catalog 不再残留 `frontend-call` 或 `unknown`。
 
-所以项目默认优先使用静态证据、未认证方法探针和只读请求；只有在实例所有者明确授权时，才会对新建的一次性测试资源做有界写入验证，并在完成后立即清理。
+但“路由存在”不等于“应该把每个危险 handler 真执行一遍”。Lucky 包含删除容器、清空统计、重启、恢复配置、终端和文件写入等高风险操作，而且部分副作用接口使用 `GET`。因此 method-only 证据优先使用无鉴权探针停在登录门；更深的危险行为只在 GitHub-hosted disposable Lucky、private DinD 或 owned synthetic fixture 中按需要验证。生产 Lucky 和现有业务对象不为覆盖率承担破坏性验证。
 
 ## 更新快照
 
-拿到新版本前端资源后：
+拿到新版本前端资源后，先更新静态快照并重新审核运行时 sidecar 绑定。生成 Markdown/OpenAPI 不在本机手工执行，而是推送后使用 GitHub Actions `render-artifacts`：
 
 ```bash
 python3 tools/extract_lucky_frontend.py /path/to/lucky-js-assets \
   --version <版本号> \
   --output evidence/lucky-v3-endpoints.json
-
-python3 tools/render_lucky_artifacts.py evidence/lucky-v3-endpoints.json \
-  --markdown docs/generated/api-routes.md \
-  --openapi openapi/lucky-v3.openapi.json
 ```
 
-只要版本或静态快照发生变化，就必须重新审核运行时证据并更新绑定哈希；旧验证不会自动沿用。提交这些变更后，以 GitHub Actions `docs-ci` 的 repository verifier、Python 3.10–3.13 测试、extractor、VitePress/Worker build/deploy 为权威验证结果；若变更涉及高风险或数据面行为，还必须运行相应的 disposable `lucky-*-ci` workflow。
+只要版本或静态快照发生变化，就必须重新审核运行时证据并更新绑定哈希；旧验证不会自动沿用。提交这些变更后，先由 `render-artifacts` 云端生成并提交 `docs/generated/api-routes.md` 与 OpenAPI，再以 GitHub Actions `docs-ci` 的 repository verifier、Python 3.10–3.13 测试、extractor、VitePress/Worker build/deploy 为权威验证结果；若变更涉及高风险或数据面行为，还必须运行相应的 disposable `lucky-*-ci` workflow。

@@ -15,6 +15,8 @@
 2. **脱敏运行时证据**：`evidence/lucky-v3-runtime-verification.json` 记录授权只读探针、一次性 TEST 资源 CRUD/行为探针及其字段形状、状态机和清理结果；秘密值、真实业务标识、证书私钥、Token 和配置备份正文不进入 evidence。
 3. **GitHub-hosted disposable CI**：高风险、高权限或需要可控网络/设备的数据面验证统一放到 fresh Lucky / private DinD / Docker `--internal` / FUSE 专用容器 / owned virtual fixture 中执行。主密码与 2FA、`reboot_program`、配置 restore/import、自更新 failure semantic、真实 Docker prune、证书 destructive、OAuth/OIDC、NAT-PMP、UPnP、WOL powered-state、Rclone SystemMount 等均有独立 CI 行为证据；此外 `lucky-route-method-ci` 在不登录、不启用 OpenToken 的 fresh pinned Lucky 内网 fixture 中，用随机 missing-route 404 控制校准方法存在性，危险路由也只允许停在鉴权门。`lucky-docker-remaining-routes-ci` 则把 Lucky 连接到 private DinD，并用真实 owned BusyBox container 证明两条残留 Docker frontend call 在 Lucky 3.0.0 后端仍为 HTTP 404，从而作为 `runtime-rejected` false positive 抑制而不是伪装成已实现路由。
 
+当前这三层证据已经把静态快照的 599 条 path+method 收口为：**597 条 merged `runtime-verified`、0 条 `frontend-call`、0 条 `unknown`，另 2 条 `runtime-rejected` frontend false positive**。因此“frontend-call”仍会大量出现在原始静态快照中，但它只是来源标签，不代表当前 merged catalog 的验证状态。
+
 少量早期低风险或业务语义探针曾在实例所有者明确授权的现有 Lucky 上执行，并通过唯一 TEST 资源、最小变更和基线恢复约束风险；这些历史证据不会被解释为“以后应在生产环境重复验证”。当前需要破坏性、高权限或全局状态变更的覆盖一律优先使用 disposable CI。
 
 对应 workflow 包括 `lucky-core-admin-ci`、`lucky-config-restore-ci`、`lucky-update-ci`、`lucky-docker-prune-ci`、`lucky-ssl-destructive-ci`、`lucky-oauth-ci`、`lucky-natpmp-ci`、`lucky-upnp-ci`、`lucky-wol-ci`、`lucky-rclone-mount-ci`、`lucky-storage-mount-ci`、`lucky-route-method-ci`、`lucky-docker-remaining-routes-ci` 等；`docs-ci` 负责 Python 3.10–3.13 仓库验证、VitePress/Worker 构建与文档部署。

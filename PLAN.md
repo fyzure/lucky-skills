@@ -23,13 +23,15 @@
 
 最终目标不是让所有路由都变成 `behavior-runtime`，而是让每个模块的**核心业务能力**至少有一条真实闭环证据。
 
+路由存在性 confidence 与上面的行为深度是两个维度。当前 Lucky 3.0.0 静态快照 599 条 path+method 已完成运行时收口：597 条进入 merged catalog 且全部 `runtime-verified`，`frontend-call=0`、`unknown=0`；另外 2 条 Docker frontend call 由 GitHub-hosted private DinD + owned container 证伪为 `runtime-rejected` HTTP 404 并从目标 catalog 抑制。
+
 ---
 
 ## P0 — 优先补齐
 
 ### DDNS
 
-当前：schema 很完整，已有只读业务任务，但 POST/PUT 和真实同步从未执行。
+当前：已完成 TEST task POST/PUT/enable-disable、URL 取 IPv4、Webhook、manualSync 与 Cloudflare TEST A 记录真实更新，结束后 Lucky 任务与 DNS 记录均恢复基线；可重复流程已固化为 `tools/lucky_ddns_probe.py`。
 
 - [x] 创建独立 `TEST-lucky-skills-ddns-*` 任务
 - [x] 使用测试子域名，不修改现有业务记录
@@ -83,7 +85,7 @@
 
 ### IPDB
 
-当前：GET/schema/parser 为主，没有真实 item CRUD、数据库下载更新和查询闭环。
+当前：已完成 TEST item POST/PUT/DELETE、隔离 GeoCN MMDB 上传/下载/切换、IPv4/IPv6 query 与文件/item 基线恢复；可重复流程已固化为 `tools/lucky_ipdb_probe.py`。
 
 - [x] 创建独立 `TEST-lucky-skills-ipdb-*` item
 - [x] 验证 POST / PUT / DELETE
@@ -116,7 +118,7 @@
 
 ### PortForward
 
-当前：disabled rule CRUD 已真实实践，但 TCP/UDP 数据流没有穿过 Lucky。
+当前：TCP/UDP TEST PortForward 已完成真实双向数据流、日志/统计与删除后监听关闭验证，不再停留在 disabled CRUD。
 
 - [x] 启动本机临时 TCP echo server
 - [x] 创建 TEST TCP PortForward
@@ -143,7 +145,7 @@
 
 ### NAT Detect WebSocket
 
-当前：只证明 `/api/natdetect/ws` handler 存在。
+当前：已完成真实 `/api/natdetect/ws` WebSocket 握手、消息 schema、一次 NAT detect job 与正常结束/关闭语义验证。
 
 - [x] 建立真实 WebSocket
 - [x] 记录握手和消息类型，不保留公网 IP 原值
@@ -166,7 +168,7 @@
 
 ### Cloudflared
 
-当前：disabled access instance CRUD 已实践，未真正建立 Cloudflare tunnel/access 链路。
+当前：已使用隔离 Cloudflare TEST 资源完成 cloudflared instance、真实连接、CNAME create/check/delete、ingress CRUD、临时本地服务经 Cloudflare 访问、status/logs 与 zone cleanup 闭环。
 
 - [x] 使用 DevSpace 中 Cloudflare API Token 创建隔离测试 DNS/资源
 - [x] 创建 TEST Cloudflared instance
@@ -256,13 +258,13 @@ WebDAV、SMB 与 FileBrowser 已完成 localhost 完整闭环；DLNA 已在一�
 
 ### WOL
 
-当前：device CRUD、真实 wake packet emission 与 virtual powered target 的离线→在线状态闭环均已在 GitHub-hosted disposable Lucky + Docker `--internal` bridge 中完成；没有向物理 LAN、真实设备或公网发送 WOL。物理主机不是本计划的覆盖目标，`shutdown` 继续明确不为覆盖率强测。
+当前：device CRUD、真实 wake packet emission 与 virtual powered target 的离线→在线状态闭环均已在 GitHub-hosted disposable Lucky + Docker `--internal` bridge 中完成；没有向物理 LAN、真实设备或公网发送 WOL。`GET /api/wol/device/shutdown` 的 METHOD+path 存在性也已由无鉴权 cloud CI 命中 Lucky 鉴权门；真正关机 handler 不为覆盖率执行。
 
 - [x] `tools/lucky_wol_ci_probe.py` 在 isolated internal bridge 上创建 locally-administered TEST MAC/device，临时启用 WOL Server 后调用 `/api/wol/device/wakeup`，抓到并逐字节验证标准 **102-byte magic packet**
 - [x] 固化 wake 端口语义：Lucky 3.0.0 实际发往 **UDP/9**，没有使用 TEST device 中另设的随机 `Port`
 - [x] 验证 `BroadcastIPs` populated item 为 string，并恢复 device 空基线 + Server/Client disabled 基线
 - [x] 验证 powered test device 的 offline → online 状态变化：`tools/lucky_wol_ci_probe.py` 在 Docker `--internal` bridge 中预留固定 TEST IP/MAC，初始目标不存在时 Lucky 明确回读 `State=Unreachable / ReachabilityState=Unreachable`；捕获精确 magic packet 后 CI 夹具才启动该固定 IP/MAC 的虚拟 powered target，Lucky 随后回读 `State=Reachable / ReachabilityState=Reachable` 且 `ReachableTargetList` 包含 TEST IP
-- [x] shutdown 保持故意不执行；阶段性覆盖不要求真实关机
+- [x] shutdown 路由/方法存在性由无鉴权 cloud CI 验证；真正关机 handler 保持故意不执行
 
 ### ThirdPartyAuthManager
 
@@ -307,7 +309,7 @@ WebDAV、SMB 与 FileBrowser 已完成 localhost 完整闭环；DLNA 已在一�
 
 ### Prune
 
-- [x] 使用 temporary Lucky + mock Docker API 验证 handler
+- [x] 保留早期 temporary Lucky + mock Docker API handler smoke 作为历史证据；权威 destructive 行为结论以后续 GitHub Actions private DinD 真实 prune 为准
 - [x] 在 GitHub Actions 的 **disposable Docker daemon** 上执行真实 prune：Lucky 只连接私有 DinD socket；停止容器、未使用 network、anonymous volume、dangling image 被删除，运行中保护资源保持；3.0.0 的 `all=true` 不会删除 tagged-but-unused image，BuildKit cache 也未减少
 - [x] 生产 Docker daemon 永不用于 prune 覆盖验证
 

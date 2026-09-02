@@ -32,9 +32,9 @@ features:
 
 ## 当前覆盖
 
-当前目标为 **Lucky 3.0.0 wanji / Linux x86_64**。接口目录由前端静态分析与脱敏运行时验证合并生成；`PLAN.md` 中既定覆盖项已经全部闭环。高风险核心管理、真实 Docker prune、证书 destructive、自更新与 WOL powered-state 均迁到 GitHub-hosted disposable CI，不以生产环境承担覆盖风险。
+当前目标为 **Lucky 3.0.0 wanji / Linux x86_64**。接口目录由前端静态分析与脱敏运行时验证合并生成；`PLAN.md` 中既定覆盖项已经全部闭环。静态前端快照共有 **599 条 path+method**，其中 **597 条**在目标版本 runtime 中确认存在并进入 merged catalog，全部为 `runtime-verified`；**0 条 `frontend-call`、0 条 `unknown`**。另外 2 条 Docker frontend call 在 private DinD + owned container 上仍稳定返回 HTTP 404，作为 `runtime-rejected` false positive 保留证据并从目标 catalog 抑制。
 
-当前 merged catalog 共有 **243 条 POST/PUT/PATCH**，其中 **219 条**生成 OpenAPI `requestBody`；仅 **1 条**仍含未类型化顶层请求属性，显式 response schema 已覆盖 **354 条**路由。行为层已经包括完整 OIDC 登录 E2E、NAT-PMP/UPnP 数据面、Rclone FUSE SystemMount、Docker build/prune、配置 restore、密码/2FA/reboot、自更新 failure semantic，以及 WOL `Unreachable → Reachable` virtual powered transition。
+当前 merged catalog 共有 **243 条 POST/PUT/PATCH**，其中 **219 条**生成 OpenAPI `requestBody`；仅 **1 条**仍含未类型化顶层请求属性，显式 response schema 已覆盖 **354 条**路由。GitHub-hosted route-method CI 累计固化 98 条 method-only runtime evidence，危险接口只验证到鉴权门，不执行 protected handler。行为层已经包括完整 OIDC 登录 E2E、NAT-PMP/UPnP 数据面、Rclone FUSE SystemMount、Docker build/prune、配置 restore、密码/2FA/reboot、自更新 failure semantic，以及 WOL `Unreachable → Reachable` virtual powered transition。高风险回归均留在 disposable CI，不以生产环境承担覆盖风险。
 
 详细统计和限制见[证据与覆盖范围](./evidence-and-limitations.md)。
 
