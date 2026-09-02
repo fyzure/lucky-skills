@@ -50,7 +50,7 @@ from lucky_docker_build_ci_probe import (
 TEST_PREFIX = "TEST-lucky-skills-wol-ci-"
 
 
-def network_addresses(network_name: str) -> tuple[str, str]:
+def network_addresses(network_name: str) -> tuple[str, str, str]:
     raw = docker("network", "inspect", network_name, timeout=30)
     rows = json.loads(raw)
     if not isinstance(rows, list) or len(rows) != 1:
@@ -71,7 +71,13 @@ def network_addresses(network_name: str) -> tuple[str, str]:
             except ValueError as exc:
                 raise ProbeError("Docker internal bridge IPAM values are invalid") from exc
             if isinstance(network, ipaddress.IPv4Network) and gateway_ip in network and network.is_private:
-                return gateway, str(network.broadcast_address)
+                # Reserve one deterministic fixture address well away from the
+                # bridge gateway. Docker's allocator will not use it before we
+                # explicitly start the virtual powered target with --ip.
+                target_ip = str(network.network_address + min(50, network.num_addresses - 2))
+                if target_ip == gateway:
+                    target_ip = str(network.network_address + 2)
+                return gateway, str(network.broadcast_address), target_ip
     raise ProbeError("Docker internal bridge did not expose a private IPv4 subnet/gateway")
 
 
@@ -177,6 +183,37 @@ def test_mac() -> tuple[str, bytes]:
     return text, raw
 
 
+def wait_device_state(
+    base_url: str,
+    token: str,
+    key: str,
+    *,
+    timeout: float,
+    want_online: bool,
+) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout
+    latest: dict[str, Any] = {}
+    while time.monotonic() < deadline:
+        rows = get_devices(base_url, token)
+        current = next((row for row in rows if device_key(row) == key), None)
+        if isinstance(current, dict):
+            latest = current
+            state = str(current.get("State") or "").lower()
+            reachability = str(current.get("ReachabilityState") or "").lower()
+            online_macs = current.get("OnlineMacList")
+            reachable_targets = current.get("ReachableTargetList")
+            observed_online = (
+                state in {"online", "connected", "reachable"}
+                or reachability in {"online", "connected", "reachable"}
+                or (isinstance(online_macs, list) and bool(online_macs))
+                or (isinstance(reachable_targets, list) and bool(reachable_targets))
+            )
+            if observed_online == want_online and (want_online or state != "unknown"):
+                return current
+        time.sleep(1)
+    return latest
+
+
 def main() -> int:
     runner_temp = require_github_hosted_runner()
     if shutil.which("docker") is None or shutil.which("openssl") is None:
@@ -185,6 +222,7 @@ def main() -> int:
     nonce = secrets.token_hex(5)
     container_name = f"lucky-wol-ci-{nonce}"
     network_name = f"lucky-wol-ci-{nonce}"
+    target_name = f"lucky-wol-target-{nonce}"
     bridge_name = f"lwol-{nonce[:8]}"
     open_token = secrets.token_hex(16)
     device_name = TEST_PREFIX + nonce
@@ -207,6 +245,14 @@ def main() -> int:
         "can_wakeup_before_action": False,
         "state_before_action": "",
         "reachability_state_before_action": "",
+        "virtual_target_ip": "",
+        "virtual_target_started": False,
+        "offline_state_observed": False,
+        "state_after_power_on": "",
+        "reachability_state_after_power_on": "",
+        "online_mac_observed": False,
+        "reachable_target_observed": False,
+        "online_transition_verified": False,
         "wakeup_ret_zero": False,
         "magic_packet_received": False,
         "magic_packet_exact": False,
@@ -242,8 +288,9 @@ def main() -> int:
         server_enabled = False
 
         try:
-            gateway, broadcast = network_addresses(network_name)
+            gateway, broadcast, target_ip = network_addresses(network_name)
             report["network_internal"] = True
+            report["virtual_target_ip"] = target_ip
             wol_port = 20000 + secrets.randbelow(30000)
             if not hasattr(socket, "AF_PACKET"):
                 raise ProbeError("runner Python lacks AF_PACKET support")
@@ -328,7 +375,7 @@ def main() -> int:
                 "DeviceName": device_name,
                 "MacList": [mac_text],
                 "BroadcastIPs": [broadcast],
-                "ProbeTargets": [],
+                "ProbeTargets": [target_ip],
                 "Port": wol_port,
                 "Relay": False,
                 "Repeat": 1,
@@ -369,6 +416,22 @@ def main() -> int:
                 reachability_value if isinstance(reachability_value, str) else ""
             )
 
+            offline_row = wait_device_state(
+                base_url,
+                open_token,
+                created_key,
+                timeout=20,
+                want_online=False,
+            )
+            offline_state = str(offline_row.get("State") or "")
+            offline_reachability = str(offline_row.get("ReachabilityState") or "")
+            report["state_before_action"] = offline_state
+            report["reachability_state_before_action"] = offline_reachability
+            report["offline_state_observed"] = (
+                offline_state.lower() in {"offline", "disconnected", "unreachable"}
+                or offline_reachability.lower() in {"offline", "disconnected", "unreachable"}
+            )
+
             query = urllib.parse.urlencode({"key": created_key})
             wake = api_json(base_url, open_token, f"/api/wol/device/wakeup?{query}")
             report["wakeup_ret_zero"] = wake.get("ret") == 0
@@ -379,6 +442,63 @@ def main() -> int:
             report["magic_packet_exact"] = packet == expected_packet
             report["configured_port_used"] = bool(packet) and observed_destination_port == wol_port
             report["observed_wakeup_udp_port"] = observed_destination_port
+
+            # The virtual powered fixture responds to the exact magic packet
+            # by bringing up a network endpoint with the configured TEST MAC
+            # and ProbeTarget IP. No shutdown API is used; teardown is managed
+            # entirely by the CI harness.
+            docker(
+                "run",
+                "-d",
+                "--name",
+                target_name,
+                "--network",
+                network_name,
+                "--ip",
+                target_ip,
+                "--mac-address",
+                mac_text,
+                "--entrypoint",
+                "/bin/sh",
+                PINNED_LUCKY_IMAGE,
+                "-c",
+                "sleep 120",
+                timeout=60,
+            )
+            report["virtual_target_started"] = True
+
+            online_row = wait_device_state(
+                base_url,
+                open_token,
+                created_key,
+                timeout=35,
+                want_online=True,
+            )
+            report["state_after_power_on"] = str(online_row.get("State") or "")
+            report["reachability_state_after_power_on"] = str(
+                online_row.get("ReachabilityState") or ""
+            )
+            online_macs = online_row.get("OnlineMacList")
+            reachable_targets = online_row.get("ReachableTargetList")
+            report["online_mac_observed"] = (
+                isinstance(online_macs, list)
+                and any(str(item).lower() == mac_text.lower() for item in online_macs)
+            )
+            report["reachable_target_observed"] = (
+                isinstance(reachable_targets, list)
+                and target_ip in {str(item) for item in reachable_targets}
+            )
+            state_after = report["state_after_power_on"].lower()
+            reachability_after = report["reachability_state_after_power_on"].lower()
+            report["online_transition_verified"] = (
+                report["offline_state_observed"]
+                and (
+                    report["online_mac_observed"]
+                    or report["reachable_target_observed"]
+                    or state_after in {"online", "connected", "reachable"}
+                    or reachability_after in {"online", "connected", "reachable"}
+                )
+            )
 
             delete_query = urllib.parse.urlencode({"key": created_key})
             api_json(base_url, open_token, f"/api/wol/device?{delete_query}", method="DELETE")
@@ -426,6 +546,7 @@ def main() -> int:
                     pass
             if capture is not None:
                 capture.close()
+            run(["docker", "rm", "-f", target_name], check=False, timeout=45)
             run(["docker", "rm", "-f", container_name], check=False, timeout=45)
             run(["docker", "network", "rm", network_name], check=False, timeout=45)
             cleanup_root_owned_conf(conf_dir)
@@ -445,6 +566,9 @@ def main() -> int:
         "wakeup_ret_zero",
         "magic_packet_received",
         "magic_packet_exact",
+        "virtual_target_started",
+        "offline_state_observed",
+        "online_transition_verified",
         "device_deleted",
         "baseline_restored",
     )
