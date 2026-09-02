@@ -49,7 +49,7 @@ UPnP mapping 也已通过 `tools/lucky_upnp_ci_probe.py` 独立完成，不是�
 
 `tools/lucky_wol_ci_probe.py` 已在 GitHub-hosted 的 disposable Lucky 3.0.0 上验证真实 wake 数据面，但隔离目标不是一台真实机器：probe 创建唯一 Docker `--internal` bridge，Lucky admin 端口不 publish，临时 WOL device 使用 locally-administered 随机 MAC 与该 bridge 的私网 broadcast address；WOL Server 只在这个临时实例中由 API 从 disabled 切到 enabled。`GET /api/wol/device/wakeup?key=<TEST>` 返回 `ret=0` 后，raw capture **只绑定这张 internal bridge**，实际捕获到标准 102-byte magic packet（`ff`×6 + TEST MAC×16）。当前 Lucky 3.0.0 实测把 wake datagram 发往 **UDP/9**，即使 device 的 `Port` 字段设成另一个随机值也不会使用该值。结束后 device 被删除，Server/Client 恢复原 disabled 基线，临时容器/network 全部销毁；`shutdown` 从未调用。
 
-这个闭环只证明 Lucky 确实发出了正确 WOL packet，不证明某台真实机器已经从离线变在线。synthetic TEST device 在 wake 前 `CanWakeup=true`、`State=Unknown`；在线状态变化必须留给明确可控的 powered test device，不应把 packet emission 当作 endpoint power-state 成功。
+WOL CI 现在还包含一个明确可控的 **virtual powered target**。internal bridge 预留固定 TEST IP/MAC，目标初始不存在时，Lucky 对配置了 `ProbeTargets=[TEST IP]` 的 device 明确回读 `State=Unreachable / ReachabilityState=Unreachable`。只有 raw capture 确认收到精确 magic packet 后，CI harness 才以该固定 IP/MAC 启动虚拟 target；Lucky 随后回读 `State=Reachable / ReachabilityState=Reachable`，并在 `ReachableTargetList` 中报告 TEST IP。因此当前证据已经覆盖“离线 → 收到 WOL → 虚拟设备上电 → Lucky 观察到在线”的状态闭环；这仍是隔离的虚拟 powered fixture，不冒充物理主机，`shutdown` 也仍未调用。
 
 ## 计划任务
 

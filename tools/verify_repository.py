@@ -789,7 +789,7 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         "service_lifecycle",
         "wake_packet",
         "destination_port",
-        "state_boundary",
+        "powered_transition",
         "isolation",
     }:
         fail("WOL CI behavior model regressed")
@@ -812,7 +812,18 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         fail("WOL UDP/9 destination evidence regressed")
     if "--internal" not in str(wol_model.get("isolation")):
         fail("WOL internal-network isolation evidence regressed")
-    if "shutdown" not in str(wol_model.get("state_boundary")).lower():
+    powered_transition = str(wol_model.get("powered_transition") or "")
+    for required_phrase in (
+        "state=unreachable",
+        "reachabilitystate=unreachable",
+        "state=reachable",
+        "reachabilitystate=reachable",
+        "reachabletargetlist",
+        "shutdown",
+    ):
+        if required_phrase not in powered_transition.lower():
+            fail(f"WOL powered-transition evidence regressed: {required_phrase}")
+    if "shutdown" not in powered_transition.lower():
         fail("WOL shutdown safety boundary evidence regressed")
     if not (ROOT / "tools" / "lucky_wol_ci_probe.py").is_file():
         fail("WOL CI runtime probe tool is missing")

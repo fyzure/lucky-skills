@@ -30,7 +30,7 @@
 | StorageManagement | 已验证 local storage POST/PUT/DELETE、启停与 litelist 联动；创建会强制变为 enabled，Writable 已通过 WebDAV consumer 做真实读写验证；SystemMount 对当前 Linux target 已完成平台边界验证：前端仅对非 local + Windows/WinFsp 暴露，Linux 强制请求在创建前以 `mountpoint format error` 拒绝 |
 | WebDAV | 已验证 127.0.0.1 临时服务、TEST 用户、OPTIONS/PROPFIND、store mount 可写/只读权限、日志与完整配置恢复 |
 | FTP | 已验证 GitHub-hosted 临时 Lucky 3.0.0、runner-loopback control/PASV 端口、错误密码拒绝、passive login/LIST/STOR/RETR/DELE、backing-file 校验与完整配置恢复；RS 生产 FTP 仍不启动 |
-| WOL | 已验证 GitHub-hosted 临时 Lucky 3.0.0 + Docker internal bridge 上的真实 wake packet emission：TEST device `CanWakeup=true`、wakeup `ret=0`、精确 102-byte magic packet、UDP/9、device/service baseline 恢复；真实设备 online transition 与 shutdown 未实践 |
+| WOL | 已验证 GitHub-hosted 临时 Lucky 3.0.0 + Docker internal bridge 上的真实 wake packet emission 与虚拟 powered target 状态变化：wake 前 `Unreachable`，精确 102-byte magic packet / UDP/9 后夹具启动固定 TEST IP/MAC，Lucky 回读 `Reachable` 且 `ReachableTargetList` 命中；shutdown 仍未实践 |
 | SMB | 已验证 127.0.0.1 高位端口的 guest public share、SMB2.1 NEGOTIATE/session/TREE_CONNECT、CREATE/WRITE/READ/delete-on-close、runtime/logs 与完整配置恢复 |
 | DLNA | 已验证空私网 Docker bridge 上的临时服务、local mount、`/rootDesc.xml`、ContentDirectory SOAP Browse 与完整配置恢复；host-side SSDP M-SEARCH 当前无回包 |
 | FRP | 已验证 loopback frps/frpc TCP proxy，以及独立 provider/visitor frpc 的 STCP visitor；visitor transport encryption+compression 更新后真实数据面仍可用 |
