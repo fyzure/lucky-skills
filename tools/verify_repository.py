@@ -386,9 +386,12 @@ def check_skill_packaging() -> None:
     if not isinstance(author, dict):
         fail("Codex plugin author must be an object")
     reject_unknown_fields(author, PLUGIN_AUTHOR_FIELDS, prefix="author")
-    require_non_empty_string(author, "name", prefix="author")
+    if require_non_empty_string(author, "name", prefix="author") != "fyzure":
+        fail("Codex plugin author.name must match the current fyzure project identity")
     validate_optional_non_empty_string(author, "email", prefix="author")
     validate_optional_https_url(author, "url", prefix="author")
+    if author.get("url") != "https://github.com/fyzure":
+        fail("Codex plugin author.url must point to the current fyzure GitHub profile")
 
     validate_optional_contract_path(manifest, "skills", "skills")
     validate_optional_contract_path(manifest, "apps", ".app.json")
@@ -408,6 +411,8 @@ def check_skill_packaging() -> None:
         "category",
     ):
         require_non_empty_string(interface, field, prefix="interface")
+    if interface.get("developerName") != "fyzure":
+        fail("Codex plugin interface.developerName must match the current fyzure identity")
     validate_default_prompts(interface)
     capabilities = interface.get("capabilities")
     if not isinstance(capabilities, list) or not all(

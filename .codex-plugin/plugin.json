@@ -1,10 +1,10 @@
 {
   "name": "lucky-skills",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Safely inspect and manage authorized Lucky v3 instances through the OpenToken API.",
   "author": {
-    "name": "UnlastingR",
-    "url": "https://github.com/UnlastingR"
+    "name": "fyzure",
+    "url": "https://github.com/fyzure"
   },
   "homepage": "https://github.com/fyzure/lucky-skills",
   "repository": "https://github.com/fyzure/lucky-skills",
@@ -19,8 +19,8 @@
   "interface": {
     "displayName": "Lucky Skills",
     "shortDescription": "Inspect and manage authorized Lucky v3 instances safely",
-    "longDescription": "Use guarded OpenToken workflows to inspect Lucky status and modules, troubleshoot reverse proxies, DDNS and certificates, and make explicitly requested configuration changes with read-before-write safeguards.",
-    "developerName": "UnlastingR",
+    "longDescription": "Use guarded OpenToken workflows and evidence-backed route policies to inspect Lucky, troubleshoot services, and make explicitly requested configuration changes with read-before-write safeguards; destructive regression coverage stays in disposable CI fixtures.",
+    "developerName": "fyzure",
     "category": "Developer Tools",
     "capabilities": [
       "Interactive",
