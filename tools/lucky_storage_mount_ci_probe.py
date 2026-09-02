@@ -17,10 +17,14 @@ touched.
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
+import re
 import secrets
 import tempfile
 import time
+import urllib.parse
+import urllib.request
 from pathlib import Path
 from typing import Any
 
@@ -53,6 +57,8 @@ from lucky_rclone_mount_ci_probe import (
 
 
 TEST_PREFIX = "TEST-lucky-skills-storage-mount-ci-"
+STORAGE_CHUNK_NAME = "lucky_storagemanagement-CxTMWo8S.js"
+STORAGE_CHUNK_SHA256 = "d7e27ed9f7a99dcca0e011ab05b5d11e4776647133f293823b6fdf814c1b7e5f"
 
 
 def storage_rows(base_url: str, token: str) -> list[dict[str, Any]]:
@@ -165,6 +171,79 @@ def storage_log_diagnostics(base_url: str, token: str) -> dict[str, Any]:
         except Exception as error:  # noqa: BLE001 - failure diagnostics only
             result[label] = {"error": type(error).__name__, "message": str(error)[:500]}
     return result
+
+
+def frontend_storage_mount_snippets(base_url: str) -> dict[str, str]:
+    """Recover served frontend context for StorageManagement mount validation."""
+
+    origin = urllib.parse.urlsplit(base_url)
+    queue = [f"/static/js/{STORAGE_CHUNK_NAME}", "/"]
+    seen: set[str] = set()
+    fetched = 0
+    max_bytes = 24 * 1024 * 1024
+    snippets: dict[str, str] = {}
+    needles = (
+        "MountPoint",
+        "MountType",
+        "SystemMount",
+        "OnleyCreateVFS",
+        "mountpoint",
+        "Mount point",
+    )
+    while queue and len(seen) < 140 and fetched < max_bytes:
+        path = queue.pop(0)
+        if path in seen:
+            continue
+        seen.add(path)
+        request = urllib.request.Request(
+            base_url + path,
+            headers={"User-Agent": "lucky-skills-storage-mount-ci-inspector/1"},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=8) as response:
+                raw = response.read(min(4 * 1024 * 1024, max_bytes - fetched))
+        except Exception:  # noqa: BLE001 - failure diagnostics only
+            continue
+        fetched += len(raw)
+        text = raw.decode("utf-8", errors="replace")
+        digest = hashlib.sha256(raw).hexdigest()
+        if path.endswith(STORAGE_CHUNK_NAME):
+            snippets["storage_chunk"] = json.dumps(
+                {
+                    "path": path,
+                    "bytes": len(raw),
+                    "sha256": digest,
+                    "expected_hash": digest == STORAGE_CHUNK_SHA256,
+                },
+                sort_keys=True,
+            )
+        for needle in needles:
+            positions = [match.start() for match in re.finditer(re.escape(needle), text)]
+            if not positions:
+                continue
+            chunks: list[str] = []
+            for position in positions[:5]:
+                start = max(0, position - 1600)
+                end = min(len(text), position + 2600)
+                chunks.append(" ".join(text[start:end].split()))
+            snippets[f"{path}:{needle}"] = " || ".join(chunks)[:16000]
+
+        candidates = set(
+            re.findall(r"(?:src=|href=)?[\"']([^\"']+\.js(?:\?[^\"']*)?)[\"']", text)
+        )
+        candidates.update(
+            re.findall(r"(?:\.\/)?(static/js/[A-Za-z0-9_./-]+\.js)", text)
+        )
+        for candidate in candidates:
+            resolved = urllib.parse.urljoin(base_url + path, candidate)
+            parsed = urllib.parse.urlsplit(resolved)
+            if parsed.scheme != origin.scheme or parsed.netloc != origin.netloc:
+                continue
+            candidate_path = parsed.path
+            if candidate_path.endswith(".js") and candidate_path not in seen:
+                queue.append(candidate_path)
+    snippets["crawl_summary"] = f"files={len(seen)} bytes={fetched}"
+    return snippets
 
 
 def remove_test_storage(base_url: str, token: str) -> int:
@@ -436,14 +515,20 @@ def main() -> int:
                     "OnleyCreateVFS": False,
                 },
             }
-            created = api(
-                base_url,
-                token,
-                "POST",
-                "/api/storagemanagement/list",
-                payload=candidate,
-                label="create mounted StorageManagement item",
-            )
+            try:
+                created = api(
+                    base_url,
+                    token,
+                    "POST",
+                    "/api/storagemanagement/list",
+                    payload=candidate,
+                    label="create mounted StorageManagement item",
+                )
+            except ProbeError as error:
+                frontend = frontend_storage_mount_snippets(base_url)
+                raise ProbeError(
+                    f"{error}; frontend={json.dumps(frontend, ensure_ascii=False, sort_keys=True)[:30000]}"
+                ) from None
             report["storage_created"] = created.get("ret") == 0
             item = wait_for_row(
                 lambda: storage_rows(base_url, token),
