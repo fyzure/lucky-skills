@@ -152,6 +152,7 @@ def find_confirmation_key(response: dict[str, Any]) -> str:
     """Extract only an opaque confirmation key without logging the response."""
 
     preferred = (
+        "restoreConfigureKey",
         "key",
         "Key",
         "restoreKey",
