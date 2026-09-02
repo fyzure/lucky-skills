@@ -546,7 +546,13 @@ def main() -> int:
                 },
                 "SystemMount": {
                     "Enable": True,
-                    "MountType": "local",
+                    # StorageManagement's own Lucky 3.0.0 frontend initializes
+                    # new items with MountType=network.  This differs from the
+                    # separate Rclone SystemMount model: on Linux, using
+                    # MountType=local with an absolute mount path is rejected
+                    # by the StorageManagement backend as a mountpoint format
+                    # error before FUSE is attempted.
+                    "MountType": "network",
                     "MountPoint": mount_path,
                     "Label": "",
                     "OnleyCreateVFS": False,
