@@ -2,9 +2,9 @@
 """Inspect and stage Lucky self-update only in disposable GitHub Actions CI.
 
 The probe starts a fresh pinned Lucky 3.0.0 container on runner loopback,
-copies that disposable container's own /app/lucky binary into RUNNER_TEMP,
-uploads it back through the current /api/update file endpoint, records only
-safe response shape/version metadata, then cancels the staged update.  It does
+downloads one official Lucky Linux x86_64 release tarball as a package-format
+fixture, uploads it through the current /api/update file endpoint, records only
+safe response shape/version metadata, then cancels any staged update. It does
 not confirm replacement in this first stage.
 
 No production instance or production binary is contacted.
@@ -41,6 +41,11 @@ from lucky_rclone_mount_ci_probe import choose_loopback_port
 
 
 MAX_UPDATE_BYTES = 128 * 1024 * 1024
+FIXTURE_VERSION = "2.27.2"
+FIXTURE_URL = (
+    "https://github.com/gdy666/lucky/releases/download/v2.27.2/"
+    "lucky_2.27.2_Linux_x86_64.tar.gz"
+)
 
 
 def auth_headers(token: str) -> dict[str, str]:
@@ -57,14 +62,17 @@ def multipart_binary(filename: str, data: bytes) -> tuple[bytes, str]:
     head = (
         f"--{boundary}\r\n"
         f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'
-        "Content-Type: application/octet-stream\r\n\r\n"
+        "Content-Type: application/gzip\r\n\r\n"
     ).encode("utf-8")
     tail = f"\r\n--{boundary}--\r\n".encode("ascii")
     return head + data + tail, f"multipart/form-data; boundary={boundary}"
 
 
-def upload_update(base_url: str, token: str, binary: bytes) -> tuple[int, dict[str, Any]]:
-    body, content_type = multipart_binary("lucky", binary)
+def upload_update(base_url: str, token: str, package: bytes) -> tuple[int, dict[str, Any]]:
+    body, content_type = multipart_binary(
+        f"lucky_{FIXTURE_VERSION}_Linux_x86_64.tar.gz",
+        package,
+    )
     headers = auth_headers(token)
     headers["Content-Type"] = content_type
     request = urllib.request.Request(
@@ -103,6 +111,23 @@ def safe_metadata(value: Any) -> Any:
                 result[name] = {"type": type(item).__name__}
         return result
     return {"type": type(value).__name__}
+
+
+def download_fixture() -> bytes:
+    request = urllib.request.Request(
+        FIXTURE_URL,
+        headers={"User-Agent": "lucky-skills-update-ci/1"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            data = response.read(MAX_UPDATE_BYTES + 1)
+    except urllib.error.HTTPError as error:
+        raise ProbeError(f"official update fixture HTTP {error.code}") from None
+    if not data or len(data) > MAX_UPDATE_BYTES:
+        raise ProbeError("official update fixture was empty or exceeded CI safety limit")
+    if not data.startswith(b"\x1f\x8b"):
+        raise ProbeError("official update fixture was not gzip data")
+    return data
 
 
 def frontend_update_context(base_url: str) -> dict[str, Any]:
@@ -176,8 +201,10 @@ def main() -> int:
     report: dict[str, Any] = {
         "lucky_version": "",
         "network_scope": "runner-loopback",
-        "current_binary_copied": False,
-        "current_binary_size": 0,
+        "fixture_version": FIXTURE_VERSION,
+        "fixture_downloaded": False,
+        "fixture_size": 0,
+        "fixture_sha256": "",
         "upload_http_status": 0,
         "upload_ret": None,
         "upload_response_keys": [],
@@ -190,7 +217,6 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="lucky-update-ci-", dir=runner_temp) as tmp_raw:
         tmp = Path(tmp_raw)
         conf_dir = tmp / "conf"
-        binary_path = tmp / "lucky-current"
         conf_dir.mkdir()
         try:
             docker(
@@ -225,21 +251,19 @@ def main() -> int:
                 raise ProbeError(f"unexpected Lucky version {version!r}")
 
             report["frontend"] = frontend_update_context(base_url)
-            docker("cp", f"{container_name}:/app/lucky", str(binary_path), timeout=60)
-            binary = binary_path.read_bytes()
-            if not binary or len(binary) > MAX_UPDATE_BYTES:
-                raise ProbeError("copied Lucky binary was empty or exceeded CI safety limit")
-            report["current_binary_copied"] = True
-            report["current_binary_size"] = len(binary)
+            package = download_fixture()
+            report["fixture_downloaded"] = True
+            report["fixture_size"] = len(package)
+            report["fixture_sha256"] = hashlib.sha256(package).hexdigest()
 
-            upload_status, upload = upload_update(base_url, token, binary)
+            upload_status, upload = upload_update(base_url, token, package)
             report["upload_http_status"] = upload_status
             report["upload_ret"] = upload.get("ret")
             report["upload_response_keys"] = sorted(str(key) for key in upload.keys())
             report["upload_safe_metadata"] = {
                 str(key): safe_metadata(value)
                 for key, value in upload.items()
-                if key not in {"msg", "message", "file", "path"}
+                if key not in {"file", "path"}
             }
             report["upload_accepted"] = upload_status == 200 and upload.get("ret") == 0
 
@@ -253,8 +277,13 @@ def main() -> int:
             )
             report["cancel_ret_zero"] = cancel_status == 200 and cancel.get("ret") == 0
 
+            response_was_classified = (
+                upload_status == 200
+                and type(upload.get("ret")) is int
+                and report["cancel_ret_zero"]
+            )
             print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
-            return 0 if report["upload_accepted"] and report["cancel_ret_zero"] else 2
+            return 0 if response_was_classified else 2
         finally:
             docker("rm", "-f", container_name, timeout=45)
             cleanup_root_owned_conf(conf_dir)
