@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import hashlib
+import difflib
 import json
 import re
 import sys
@@ -5338,6 +5339,17 @@ def check_generated_artifacts() -> None:
         if generated_markdown.read_bytes() != committed_markdown.read_bytes():
             fail("generated API route Markdown is stale")
         if generated_openapi.read_bytes() != openapi_path.read_bytes():
+            diff = list(
+                difflib.unified_diff(
+                    openapi_path.read_text(encoding="utf-8").splitlines(),
+                    generated_openapi.read_text(encoding="utf-8").splitlines(),
+                    fromfile="committed openapi/lucky-v3.openapi.json",
+                    tofile="generated openapi/lucky-v3.openapi.json",
+                    lineterm="",
+                )
+            )
+            if diff:
+                print("\n".join(diff[:120]), file=sys.stderr)
             fail("generated OpenAPI document is stale")
 
 
