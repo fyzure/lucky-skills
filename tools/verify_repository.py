@@ -313,6 +313,20 @@ def check_documentation_freshness() -> None:
     if "显式 response schema 已提升到 **353 条**" in api_client:
         fail("docs/api-client.md still contains the old 353-route count")
 
+    installation = (ROOT / "docs" / "installation.md").read_text(encoding="utf-8")
+    if "GitHub Actions `docs-ci` 为权威结果" not in installation:
+        fail("docs/installation.md still lacks the cloud-CI validation rule")
+    if "python3 tools/verify_repository.py" in installation:
+        fail("docs/installation.md still instructs local repository verification")
+
+    limitations = (ROOT / "docs" / "evidence-and-limitations.md").read_text(
+        encoding="utf-8"
+    )
+    if "以 GitHub Actions `docs-ci`" not in limitations:
+        fail("docs/evidence-and-limitations.md still lacks cloud-CI verification guidance")
+    if "python3 tools/verify_repository.py" in limitations:
+        fail("docs/evidence-and-limitations.md still instructs local repository verification")
+
     contributing = (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
     for required in ("GitHub Actions 作为权威验证环境", "private DinD", "destructive certificate"):
         if required not in contributing:

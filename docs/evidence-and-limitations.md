@@ -111,8 +111,6 @@ python3 tools/extract_lucky_frontend.py /path/to/lucky-js-assets \
 python3 tools/render_lucky_artifacts.py evidence/lucky-v3-endpoints.json \
   --markdown docs/generated/api-routes.md \
   --openapi openapi/lucky-v3.openapi.json
-
-python3 tools/verify_repository.py
 ```
 
-只要版本或静态快照发生变化，就必须重新审核运行时证据并更新绑定哈希；旧验证不会自动沿用。
+只要版本或静态快照发生变化，就必须重新审核运行时证据并更新绑定哈希；旧验证不会自动沿用。提交这些变更后，以 GitHub Actions `docs-ci` 的 repository verifier、Python 3.10–3.13 测试、extractor、VitePress/Worker build/deploy 为权威验证结果；若变更涉及高风险或数据面行为，还必须运行相应的 disposable `lucky-*-ci` workflow。

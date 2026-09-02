@@ -114,8 +114,7 @@ unset LUCKY_OPEN_TOKEN LUCKY_BASE_URL
 
 ```bash
 git pull --ff-only
-python3 tools/verify_repository.py
 python3 tools/lucky_api.py status
 ```
 
-更新不会自动修改 Lucky 配置。
+本地只做连通性/只读调用即可；仓库一致性检查、测试、frontend extractor 回归和文档构建/部署以 GitHub Actions `docs-ci` 为权威结果。涉及 disposable 行为 probe 的改动还应等待对应 `lucky-*-ci` workflow 通过。更新代码本身不会自动修改 Lucky 配置。
