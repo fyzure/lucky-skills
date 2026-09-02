@@ -424,13 +424,9 @@ def main() -> int:
                 },
                 "enable disposable global 2FA",
             )
-            twofa_response, twofa_config = read_baseconfigure(base_url, token)
-            report["twofa_enabled"] = bool(twofa_config.get("TwoFAEnable")) and bool(
-                twofa_response.get("TwoFAKeySet")
-            )
-            if not report["twofa_enabled"]:
-                raise ProbeError("global 2FA did not become enabled")
-
+            # Changing login policy invalidates the current admin token. Prove
+            # the new gate first, then use the newly authenticated token for
+            # configuration readback.
             without_2fa_ok, _ = login_admin(base_url, tmp, password=new_password)
             report["login_without_twofa_rejected"] = not without_2fa_ok
             first_code = totp(first_2fa_secret)
@@ -443,6 +439,12 @@ def main() -> int:
             report["login_with_first_twofa"] = first_2fa_ok
             if not first_2fa_ok:
                 raise ProbeError("2FA-enabled login with current code failed")
+            twofa_response, twofa_config = read_baseconfigure(base_url, token)
+            report["twofa_enabled"] = bool(twofa_config.get("TwoFAEnable")) and bool(
+                twofa_response.get("TwoFAKeySet")
+            )
+            if not report["twofa_enabled"]:
+                raise ProbeError("global 2FA did not become enabled")
 
             # Replace the global 2FA key while enabled. Avoid the vanishingly
             # small case where both secrets produce the same current code so
@@ -465,6 +467,9 @@ def main() -> int:
             )
             report["twofa_key_replaced"] = True
 
+            # Key replacement invalidates the token for the same reason. The
+            # old secret must fail and the replacement secret must establish a
+            # fresh session.
             old_2fa_ok, _ = login_admin(
                 base_url,
                 tmp,
@@ -495,12 +500,14 @@ def main() -> int:
                 },
                 "disable disposable global 2FA",
             )
-            _disabled_response, disabled_config = read_baseconfigure(base_url, token)
-            report["twofa_disabled"] = disabled_config.get("TwoFAEnable") is False
+            # Disabling 2FA invalidates the 2FA-authenticated token. Re-login
+            # password-only, then confirm the persisted state.
             no_2fa_ok, token = login_admin(base_url, tmp, password=new_password)
             report["login_without_twofa_after_disable"] = no_2fa_ok
             if not no_2fa_ok:
                 raise ProbeError("login without 2FA failed after disabling 2FA")
+            _disabled_response, disabled_config = read_baseconfigure(base_url, token)
+            report["twofa_disabled"] = disabled_config.get("TwoFAEnable") is False
 
             # reboot_program is exercised only after authentication is back to
             # password-only. Docker restart=always provides the disposable
