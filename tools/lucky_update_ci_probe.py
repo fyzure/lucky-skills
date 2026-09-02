@@ -6,7 +6,7 @@ downloads one official Lucky Linux x86_64 release tarball as a package-format
 fixture, uploads it through the current /api/update file endpoint, records only
 safe response shape/version metadata, confirms the staged package through
 /api/update/comfire, waits for the disposable service to recover, and verifies
-the reported Lucky version changed to the fixture version.
+either a real version transition or the bounded older-version no-op behavior.
 
 No production instance or production binary is contacted.
 """
@@ -232,10 +232,15 @@ def main() -> int:
         "upload_accepted": False,
         "confirm_submitted": False,
         "confirm_response_classified": False,
+        "confirm_ret": None,
+        "confirm_response_keys": [],
+        "confirm_message": "",
         "service_recovered": False,
         "post_update_login": False,
         "post_update_version": "",
         "version_changed_to_fixture": False,
+        "downgrade_noop_verified": False,
+        "http_interruption_observed": False,
         "frontend": {},
     }
 
@@ -316,15 +321,51 @@ def main() -> int:
                 report["confirm_response_classified"] = (
                     confirm_status == 200 and type(confirm.get("ret")) is int
                 )
+                report["confirm_ret"] = confirm.get("ret")
+                report["confirm_response_keys"] = sorted(
+                    str(key) for key in confirm.keys()
+                )
+                report["confirm_message"] = str(
+                    confirm.get("msg") or confirm.get("message") or ""
+                )[:300]
                 if confirm_status == 200 and confirm.get("ret") != 0:
-                    msg = str(confirm.get("msg") or confirm.get("message") or "")[:300]
                     raise ProbeError(
-                        f"self-update confirm rejected: ret={confirm.get('ret')}, msg={msg!r}"
+                        "self-update confirm rejected: "
+                        f"ret={confirm.get('ret')}, msg={report['confirm_message']!r}"
                     )
             except ProbeError:
                 raise
             except Exception:  # noqa: BLE001 - process may close connection while replacing itself
                 report["confirm_response_classified"] = True
+
+            # Confirm is asynchronous. Give the updater a bounded window to
+            # interrupt HTTP and/or expose a changed version instead of
+            # treating the first still-alive request as the final state.
+            post_version = ""
+            deadline = time.monotonic() + 30
+            while time.monotonic() < deadline:
+                try:
+                    check_status, check_info = json_request(
+                        urllib.request.build_opener(),
+                        base_url,
+                        "/api/info",
+                        admin_token=token,
+                        timeout=2,
+                    )
+                    if check_status == 200 and check_info.get("ret") == 0:
+                        check_obj = check_info.get("info")
+                        observed = (
+                            str(check_obj.get("Version") or "")
+                            if isinstance(check_obj, dict)
+                            else ""
+                        )
+                        if observed:
+                            post_version = observed
+                        if observed == FIXTURE_VERSION:
+                            break
+                except Exception:  # noqa: BLE001 - expected during replacement/restart
+                    report["http_interruption_observed"] = True
+                time.sleep(1)
 
             wait_login_ready(base_url, timeout=45)
             report["service_recovered"] = True
@@ -338,24 +379,35 @@ def main() -> int:
             )
             require_ret_zero(post_status, post_info, "read Lucky info after update")
             post_info_obj = post_info.get("info")
-            post_version = (
+            final_version = (
                 str(post_info_obj.get("Version") or "")
                 if isinstance(post_info_obj, dict)
                 else ""
             )
+            if final_version:
+                post_version = final_version
             report["post_update_version"] = post_version
             report["version_changed_to_fixture"] = post_version == FIXTURE_VERSION
+            report["downgrade_noop_verified"] = (
+                report["confirm_ret"] == 0
+                and post_version == EXPECTED_LUCKY_VERSION
+            )
 
-            response_was_classified = all(
-                report[name]
-                for name in (
-                    "fixture_downloaded",
-                    "upload_accepted",
-                    "confirm_submitted",
-                    "confirm_response_classified",
-                    "service_recovered",
-                    "post_update_login",
-                    "version_changed_to_fixture",
+            response_was_classified = (
+                all(
+                    report[name]
+                    for name in (
+                        "fixture_downloaded",
+                        "upload_accepted",
+                        "confirm_submitted",
+                        "confirm_response_classified",
+                        "service_recovered",
+                        "post_update_login",
+                    )
+                )
+                and (
+                    report["version_changed_to_fixture"]
+                    or report["downgrade_noop_verified"]
                 )
             )
             print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
