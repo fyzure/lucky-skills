@@ -215,6 +215,35 @@ def frontend_storage_mount_snippets(base_url: str) -> dict[str, str]:
         is_storage_panel = "localesv2.storageManagement" in text
         if is_storage_panel:
             snippets["storage_panel_path"] = path
+            gate_match = re.search(
+                r"[A-Za-z_$][A-Za-z0-9_$]*\.value\.Type!==[\"']local[\"']&&"
+                r"[A-Za-z_$][A-Za-z0-9_$]*\.value===[\"']windows[\"']",
+                text,
+            )
+            if gate_match:
+                gate_start = max(0, gate_match.start() - 160)
+                gate_end = min(len(text), gate_match.end() + 260)
+                snippets["storage_system_mount_ui_gate"] = " ".join(
+                    text[gate_start:gate_end].split()
+                )
+
+            save_match = re.search(
+                r"([A-Za-z_$][A-Za-z0-9_$]*)=async\(\)=>\{if\("
+                r"([A-Za-z_$][A-Za-z0-9_$]*)\(\)\)",
+                text,
+            )
+            if save_match:
+                validator_name = save_match.group(2)
+                validator_start = text.rfind(
+                    f"{validator_name}=()=>{{", 0, save_match.start()
+                )
+                if validator_start >= 0:
+                    snippets["storage_save_guard"] = " ".join(
+                        text[save_match.start():min(len(text), save_match.start() + 360)].split()
+                    )
+                    snippets["storage_validator"] = " ".join(
+                        text[validator_start:save_match.start()].split()
+                    )[-9000:]
             for needle in (
                 "SystemMount",
                 "MountPoint",
@@ -580,9 +609,10 @@ def main() -> int:
                     key: frontend.get(key, "")
                     for key in (
                         "storage_panel_path",
-                        "storage_panel_context",
+                        "storage_system_mount_ui_gate",
+                        "storage_save_guard",
+                        "storage_validator",
                         "storage_chunk",
-                        "storage_chunk_source",
                         "crawl_summary",
                     )
                 }
