@@ -57,7 +57,7 @@
             }
           }
         },
-        "x-evidence-confidence": "runtime-verified",
+        "x-evidence-confidence": "frontend-call",
         "x-evidence-bundles": [
           "lucky_index-DND3_xvE.js"
         ],
