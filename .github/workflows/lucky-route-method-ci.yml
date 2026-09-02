@@ -1,0 +1,37 @@
+name: lucky-route-method-ci
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/lucky-route-method-ci.yml"
+      - "tools/lucky_route_method_ci_probe.py"
+      - "lucky_api/catalog.py"
+      - "evidence/lucky-v3-endpoints.json"
+      - "evidence/lucky-v3-runtime-verification.json"
+  pull_request:
+    paths:
+      - ".github/workflows/lucky-route-method-ci.yml"
+      - "tools/lucky_route_method_ci_probe.py"
+      - "lucky_api/catalog.py"
+      - "evidence/lucky-v3-endpoints.json"
+      - "evidence/lucky-v3-runtime-verification.json"
+
+permissions:
+  contents: read
+
+jobs:
+  route-method-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Verify remaining non-dangerous route methods
+        run: python tools/lucky_route_method_ci_probe.py --report "$RUNNER_TEMP/lucky-route-method-report.json"
