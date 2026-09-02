@@ -1,0 +1,32 @@
+name: lucky-update-ci
+
+on:
+  push:
+    paths:
+      - ".github/workflows/lucky-update-ci.yml"
+      - "tools/lucky_update_ci_probe.py"
+      - "tools/lucky_docker_build_ci_probe.py"
+  pull_request:
+    paths:
+      - ".github/workflows/lucky-update-ci.yml"
+      - "tools/lucky_update_ci_probe.py"
+      - "tools/lucky_docker_build_ci_probe.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  update-behavior:
+    name: Lucky disposable self-update staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Show Docker runtime
+        run: docker version
+
+      - name: Stage and cancel update on fresh Lucky
+        run: sudo -E python3 tools/lucky_update_ci_probe.py
