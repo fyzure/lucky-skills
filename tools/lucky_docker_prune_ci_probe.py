@@ -119,6 +119,48 @@ def build_cache_count(dind_name: str) -> int:
     return 0
 
 
+def configure_private_docker_host(base_url: str, token: str) -> None:
+    opener = urllib.request.build_opener()
+    status, response = json_request(
+        opener,
+        base_url,
+        "/api/docker/config",
+        admin_token=token,
+    )
+    require_ret_zero(status, response, "read disposable Docker config")
+    config = response.get("config")
+    if not isinstance(config, dict):
+        raise ProbeError("Docker config response missing config object")
+    updated = dict(config)
+    updated["docker_host"] = "unix:///var/run/docker.sock"
+    status, saved = json_request(
+        opener,
+        base_url,
+        "/api/docker/config",
+        method="POST",
+        payload=updated,
+        admin_token=token,
+    )
+    require_ret_zero(status, saved, "configure private Docker socket")
+
+    deadline = time.monotonic() + 20
+    while time.monotonic() < deadline:
+        try:
+            check_status, check = json_request(
+                opener,
+                base_url,
+                "/api/docker/info",
+                admin_token=token,
+                timeout=3,
+            )
+            if check_status == 200 and check.get("ret") == 0:
+                return
+        except Exception:  # noqa: BLE001 - Docker reconnect poll
+            pass
+        time.sleep(0.5)
+    raise ProbeError("Lucky did not connect to the private Docker socket after API config")
+
+
 def main() -> int:
     runner_temp = require_github_hosted_runner()
     pull_pinned_image()
@@ -289,6 +331,8 @@ def main() -> int:
             report["lucky_version"] = version
             if version != EXPECTED_LUCKY_VERSION:
                 raise ProbeError(f"unexpected Lucky version {version!r}")
+
+            configure_private_docker_host(base_url, token)
 
             # Prove Lucky is connected to the private daemon before pruning.
             status, docker_info = json_request(
