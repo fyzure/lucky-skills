@@ -16,8 +16,10 @@ active protected resources remain. All Lucky operations use HTTP APIs.
 
 from __future__ import annotations
 
+import io
 import json
 import secrets
+import tarfile
 import tempfile
 import time
 import urllib.request
@@ -119,6 +121,11 @@ def build_cache_count(dind_name: str) -> int:
     return 0
 
 
+def image_ids(dind_name: str) -> set[str]:
+    output = inner(dind_name, "images", "--no-trunc", "--quiet")
+    return {line.strip() for line in output.splitlines() if line.strip()}
+
+
 def configure_private_docker_host(base_url: str, token: str) -> None:
     opener = urllib.request.build_opener()
     status, response = json_request(
@@ -188,14 +195,19 @@ def main() -> int:
         "target_image_created": False,
         "target_network_created": False,
         "target_volume_created": False,
+        "anonymous_volume_created": False,
+        "dangling_image_created": False,
         "protected_running": False,
         "build_cache_before": 0,
         "build_cache_after": 0,
         "prune_response_keys": [],
+        "prune_report": {},
         "target_container_removed": False,
         "target_image_removed": False,
         "target_network_removed": False,
-        "target_volume_removed": False,
+        "named_volume_preserved": False,
+        "anonymous_volume_removed": False,
+        "dangling_image_removed": False,
         "build_cache_reduced": False,
         "protected_container_preserved": False,
         "protected_network_preserved": False,
@@ -214,6 +226,13 @@ def main() -> int:
             "FROM busybox:1.37.0\nRUN printf 'owned-prune-cache' > /owned-prune-cache\n",
             encoding="utf-8",
         )
+        dangling_tar = build_ctx / "dangling-rootfs.tar"
+        with tarfile.open(dangling_tar, "w") as archive:
+            marker = b"owned-dangling-prune-image"
+            info = tarfile.TarInfo("owned-prune-marker")
+            info.size = len(marker)
+            info.mode = 0o644
+            archive.addfile(info, io.BytesIO(marker))
 
         try:
             docker("pull", DIND_IMAGE, timeout=180)
@@ -288,6 +307,10 @@ def main() -> int:
             report["target_volume_created"] = target_volume in names(
                 dind_name, "volume", target_volume
             )
+            anonymous_volume = inner(dind_name, "volume", "create").strip()
+            report["anonymous_volume_created"] = bool(anonymous_volume) and anonymous_volume in names(
+                dind_name, "volume", anonymous_volume
+            )
             inner(
                 dind_name,
                 "build",
@@ -297,6 +320,15 @@ def main() -> int:
                 timeout=180,
             )
             report["target_image_created"] = bool(names(dind_name, "image", target_image))
+            dangling_image = inner(
+                dind_name,
+                "import",
+                "/ci-build/dangling-rootfs.tar",
+                timeout=60,
+            ).strip()
+            report["dangling_image_created"] = bool(dangling_image) and dangling_image in image_ids(
+                dind_name
+            )
             report["build_cache_before"] = build_cache_count(dind_name)
 
             # Lucky sees only the named-volume socket of the inner daemon. The
@@ -354,6 +386,9 @@ def main() -> int:
             )
             require_ret_zero(status, prune, "real disposable Docker prune")
             report["prune_response_keys"] = sorted(prune.keys())
+            prune_report = prune.get("report")
+            if isinstance(prune_report, dict):
+                report["prune_report"] = prune_report
 
             report["target_container_removed"] = not names(
                 dind_name, "container", target_container
@@ -362,7 +397,13 @@ def main() -> int:
             report["target_network_removed"] = not names(
                 dind_name, "network", target_network
             )
-            report["target_volume_removed"] = not names(dind_name, "volume", target_volume)
+            report["named_volume_preserved"] = target_volume in names(
+                dind_name, "volume", target_volume
+            )
+            report["anonymous_volume_removed"] = not names(
+                dind_name, "volume", anonymous_volume
+            )
+            report["dangling_image_removed"] = dangling_image not in image_ids(dind_name)
             report["build_cache_after"] = build_cache_count(dind_name)
             report["build_cache_reduced"] = (
                 report["build_cache_before"] > 0
@@ -387,12 +428,15 @@ def main() -> int:
                 "target_image_created",
                 "target_network_created",
                 "target_volume_created",
+                "anonymous_volume_created",
+                "dangling_image_created",
                 "protected_running",
                 "target_container_removed",
                 "target_image_removed",
                 "target_network_removed",
-                "target_volume_removed",
-                "build_cache_reduced",
+                "named_volume_preserved",
+                "anonymous_volume_removed",
+                "dangling_image_removed",
                 "protected_container_preserved",
                 "protected_network_preserved",
                 "protected_volume_preserved",
