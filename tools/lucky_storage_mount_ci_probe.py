@@ -182,11 +182,15 @@ def frontend_storage_mount_snippets(base_url: str) -> dict[str, str]:
     fetched = 0
     max_bytes = 24 * 1024 * 1024
     snippets: dict[str, str] = {}
+    storage_importers: dict[str, str] = {}
     needles = (
         "MountPoint",
         "MountType",
         "SystemMount",
         "OnleyCreateVFS",
+        "SystemMountTips",
+        "MountPointOrPartition",
+        "/api/storagemanagement/list",
         "mountpoint",
         "Mount point",
     )
@@ -207,6 +211,14 @@ def frontend_storage_mount_snippets(base_url: str) -> dict[str, str]:
         fetched += len(raw)
         text = raw.decode("utf-8", errors="replace")
         digest = hashlib.sha256(raw).hexdigest()
+        if STORAGE_CHUNK_NAME in text and not path.endswith(STORAGE_CHUNK_NAME):
+            positions = [match.start() for match in re.finditer(re.escape(STORAGE_CHUNK_NAME), text)]
+            chunks: list[str] = []
+            for position in positions[:6]:
+                start = max(0, position - 2200)
+                end = min(len(text), position + 4200)
+                chunks.append(" ".join(text[start:end].split()))
+            storage_importers[path] = " || ".join(chunks)[:24000]
         if path.endswith(STORAGE_CHUNK_NAME):
             snippets["storage_chunk"] = json.dumps(
                 {
@@ -245,6 +257,7 @@ def frontend_storage_mount_snippets(base_url: str) -> dict[str, str]:
             if candidate_path.endswith(".js") and candidate_path not in seen:
                 queue.append(candidate_path)
     snippets["crawl_summary"] = f"files={len(seen)} bytes={fetched}"
+    snippets["storage_importers"] = json.dumps(storage_importers, ensure_ascii=False)
     return snippets
 
 
