@@ -226,12 +226,19 @@ def frontend_storage_mount_snippets(base_url: str) -> dict[str, str]:
                 positions = [match.start() for match in re.finditer(re.escape(needle), text)]
                 if not positions:
                     continue
-                contexts: list[str] = []
-                for position in positions[:10]:
-                    start = max(0, position - 4500)
-                    end = min(len(text), position + 6500)
-                    contexts.append(" ".join(text[start:end].split()))
-                storage_panel_context[needle] = " || ".join(contexts)[:36000]
+                contexts: list[dict[str, Any]] = []
+                for position in positions[:20]:
+                    start = max(0, position - 900)
+                    end = min(len(text), position + 1600)
+                    contexts.append(
+                        {
+                            "position": position,
+                            "context": " ".join(text[start:end].split()),
+                        }
+                    )
+                storage_panel_context[needle] = json.dumps(
+                    contexts, ensure_ascii=False
+                )[:18000]
         if STORAGE_CHUNK_NAME in text and not path.endswith(STORAGE_CHUNK_NAME):
             positions = [match.start() for match in re.finditer(re.escape(STORAGE_CHUNK_NAME), text)]
             chunks: list[str] = []
