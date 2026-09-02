@@ -33,5 +33,5 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Verify remaining non-dangerous route methods
+      - name: Verify remaining auth-gated route methods
         run: python tools/lucky_route_method_ci_probe.py --report "$RUNNER_TEMP/lucky-route-method-report.json"

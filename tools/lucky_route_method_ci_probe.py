@@ -3,9 +3,10 @@
 
 This probe is deliberately narrower than a behavior test. It starts the
 repository-pinned Lucky 3.0.0 image on a Docker ``--internal`` network, never
-logs in, never enables OpenToken, and probes only merged routes that are still
-``frontend-call`` and are classified read-only or mutating. Dangerous routes
-are skipped entirely.
+logs in, never enables OpenToken, and probes merged routes that are still
+``frontend-call``. Because every request is intentionally unauthenticated,
+even routes classified dangerous are accepted only when they stop at Lucky's
+authentication gate; the protected handler itself is not entered.
 
 For each HTTP method the probe compares a known protected route with a random
 missing route. A target is accepted when it either reaches the same calibrated
@@ -47,7 +48,7 @@ PINNED_LUCKY_IMAGE = (
 EXPECTED_LUCKY_VERSION = "3.0.0"
 ADMIN_PORT = 16601
 MAX_HTTP_BYTES = 64 * 1024
-MAX_FRONTEND_CALL_AFTER_PROBE = 50
+MAX_FRONTEND_CALL_AFTER_PROBE = 2
 HTTP_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 POSITIVE_CONTROLS = {
@@ -57,12 +58,12 @@ POSITIVE_CONTROLS = {
     "DELETE": "/api/cron/list",
 }
 
-# These are not dangerous in the catalog, but could disrupt the one shared
-# disposable instance if authentication behavior ever changed. They are not
-# needed to meet the requested coverage target, so keep them out of this probe.
-STATEFUL_EXCLUSIONS = {
-    ("PUT", "/api/logout"),
-    ("PUT", "/api/lucky/service"),
+# These two Docker frontend routes return HTTP 404 on a fresh Lucky instance
+# without a configured Docker daemon. They are verified separately against a
+# private DinD-backed disposable fixture where an owned container exists.
+CONDITIONAL_DOCKER_ROUTES = {
+    ("GET", "/api/docker/containers/{param}/files/download"),
+    ("GET", "/api/docker/containers/{param}/upgrade-check"),
 }
 
 
@@ -216,12 +217,8 @@ def load_targets() -> tuple[list[dict[str, Any]], list[dict[str, Any]], int]:
         path = str(route["path"])
         risk = classify_known_operation(method, path).value
         row = {"method": method, "path": path, "risk": risk}
-        if risk == "dangerous":
-            row["reason"] = "dangerous"
-            skipped.append(row)
-            continue
-        if (method, path) in STATEFUL_EXCLUSIONS:
-            row["reason"] = "stateful-exclusion"
+        if (method, path) in CONDITIONAL_DOCKER_ROUTES:
+            row["reason"] = "private-dind-fixture"
             skipped.append(row)
             continue
         targets.append(row)
@@ -335,6 +332,11 @@ def main() -> int:
         print("ROUTE_METHOD_REPORT=" + serialized)
         if args.report:
             args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        if unverified:
+            raise ProbeError(
+                "route-method verification left unexpected unverified routes: "
+                + ", ".join(f"{row['method']} {row['path']}" for row in unverified)
+            )
         if len(verified) < required_new_verifications:
             raise ProbeError(
                 "route-method coverage target missed: "

@@ -1,0 +1,37 @@
+name: lucky-docker-remaining-routes-ci
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/lucky-docker-remaining-routes-ci.yml"
+      - "tools/lucky_docker_remaining_routes_ci_probe.py"
+      - "tools/lucky_docker_prune_ci_probe.py"
+      - "tools/lucky_docker_build_ci_probe.py"
+      - "evidence/lucky-v3-runtime-verification.json"
+  pull_request:
+    paths:
+      - ".github/workflows/lucky-docker-remaining-routes-ci.yml"
+      - "tools/lucky_docker_remaining_routes_ci_probe.py"
+      - "tools/lucky_docker_prune_ci_probe.py"
+      - "tools/lucky_docker_build_ci_probe.py"
+      - "evidence/lucky-v3-runtime-verification.json"
+
+permissions:
+  contents: read
+
+jobs:
+  docker-remaining-routes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Verify conditional Docker routes on private DinD
+        run: python tools/lucky_docker_remaining_routes_ci_probe.py
