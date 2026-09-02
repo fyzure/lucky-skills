@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   update-behavior:
-    name: Lucky disposable self-update staging
+    name: Lucky disposable self-update behavior
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -28,5 +28,5 @@ jobs:
       - name: Show Docker runtime
         run: docker version
 
-      - name: Stage and cancel update on fresh Lucky
+      - name: Apply update on fresh Lucky
         run: sudo -E python3 tools/lucky_update_ci_probe.py

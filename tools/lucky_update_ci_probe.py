@@ -4,8 +4,9 @@
 The probe starts a fresh pinned Lucky 3.0.0 container on runner loopback,
 downloads one official Lucky Linux x86_64 release tarball as a package-format
 fixture, uploads it through the current /api/update file endpoint, records only
-safe response shape/version metadata, then cancels any staged update. It does
-not confirm replacement in this first stage.
+safe response shape/version metadata, confirms the staged package through
+/api/update/comfire, waits for the disposable service to recover, and verifies
+the reported Lucky version changed to the fixture version.
 
 No production instance or production binary is contacted.
 """
@@ -17,6 +18,7 @@ import json
 import re
 import secrets
 import tempfile
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -130,6 +132,24 @@ def download_fixture() -> bytes:
     return data
 
 
+def wait_login_ready(base_url: str, timeout: int = 45) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            status, payload = json_request(
+                urllib.request.build_opener(),
+                base_url,
+                "/api/login/challenge",
+                timeout=2,
+            )
+            if status == 200 and payload.get("ret") == 0:
+                return
+        except Exception:  # noqa: BLE001 - update restart readiness loop
+            pass
+        time.sleep(0.5)
+    raise ProbeError("Lucky did not recover after confirmed self-update")
+
+
 def frontend_update_context(base_url: str) -> dict[str, Any]:
     """Return focused non-locale contexts around update upload/confirm calls."""
 
@@ -210,7 +230,12 @@ def main() -> int:
         "upload_response_keys": [],
         "upload_safe_metadata": {},
         "upload_accepted": False,
-        "cancel_ret_zero": False,
+        "confirm_submitted": False,
+        "confirm_response_classified": False,
+        "service_recovered": False,
+        "post_update_login": False,
+        "post_update_version": "",
+        "version_changed_to_fixture": False,
         "frontend": {},
     }
 
@@ -266,21 +291,72 @@ def main() -> int:
                 if key not in {"file", "path"}
             }
             report["upload_accepted"] = upload_status == 200 and upload.get("ret") == 0
+            if not report["upload_accepted"]:
+                raise ProbeError("official release package was not accepted for staging")
 
-            # Always exercise cancellation when the upload reached the handler;
-            # this keeps the first-stage inspector from confirming replacement.
-            cancel_status, cancel = json_request(
+            info_payload = upload.get("info")
+            if not isinstance(info_payload, dict):
+                raise ProbeError("accepted update package returned no info object")
+            required_info = ("Name", "ARCH", "OS", "Version", "GoVersion", "Date", "MD5")
+            if not all(key in info_payload for key in required_info):
+                raise ProbeError("accepted update package info missed required fields")
+            confirm_payload = {key: info_payload[key] for key in required_info}
+
+            report["confirm_submitted"] = True
+            try:
+                confirm_status, confirm = json_request(
+                    urllib.request.build_opener(),
+                    base_url,
+                    "/api/update/comfire",
+                    method="PUT",
+                    payload=confirm_payload,
+                    admin_token=token,
+                    timeout=12,
+                )
+                report["confirm_response_classified"] = (
+                    confirm_status == 200 and type(confirm.get("ret")) is int
+                )
+                if confirm_status == 200 and confirm.get("ret") != 0:
+                    msg = str(confirm.get("msg") or confirm.get("message") or "")[:300]
+                    raise ProbeError(
+                        f"self-update confirm rejected: ret={confirm.get('ret')}, msg={msg!r}"
+                    )
+            except ProbeError:
+                raise
+            except Exception:  # noqa: BLE001 - process may close connection while replacing itself
+                report["confirm_response_classified"] = True
+
+            wait_login_ready(base_url, timeout=45)
+            report["service_recovered"] = True
+            post_token = login_default_admin(base_url, tmp)
+            report["post_update_login"] = bool(post_token)
+            post_status, post_info = json_request(
                 urllib.request.build_opener(),
                 base_url,
-                "/api/update/cancel",
-                admin_token=token,
+                "/api/info",
+                admin_token=post_token,
             )
-            report["cancel_ret_zero"] = cancel_status == 200 and cancel.get("ret") == 0
+            require_ret_zero(post_status, post_info, "read Lucky info after update")
+            post_info_obj = post_info.get("info")
+            post_version = (
+                str(post_info_obj.get("Version") or "")
+                if isinstance(post_info_obj, dict)
+                else ""
+            )
+            report["post_update_version"] = post_version
+            report["version_changed_to_fixture"] = post_version == FIXTURE_VERSION
 
-            response_was_classified = (
-                upload_status == 200
-                and type(upload.get("ret")) is int
-                and report["cancel_ret_zero"]
+            response_was_classified = all(
+                report[name]
+                for name in (
+                    "fixture_downloaded",
+                    "upload_accepted",
+                    "confirm_submitted",
+                    "confirm_response_classified",
+                    "service_recovered",
+                    "post_update_login",
+                    "version_changed_to_fixture",
+                )
             )
             print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
             return 0 if response_was_classified else 2
