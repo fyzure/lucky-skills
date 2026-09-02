@@ -334,6 +334,30 @@ def check_documentation_freshness() -> None:
     if "`prune`、批量删除等全局危险操作只能连接 mock/隔离后端" in contributing:
         fail("CONTRIBUTING.md still documents the pre-private-DinD prune policy")
 
+    workflow_text = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in sorted((ROOT / ".github" / "workflows").glob("*.yml"))
+    )
+    for stale_ref in (
+        "actions/checkout@v4",
+        "actions/checkout@v5",
+        "actions/checkout@v6",
+        "actions/setup-python@v5",
+        "actions/setup-python@v6",
+        "actions/setup-node@v4",
+        "actions/setup-node@v5",
+        "actions/setup-node@v6",
+    ):
+        if stale_ref in workflow_text:
+            fail(f"GitHub Actions runtime dependency is stale: {stale_ref}")
+    for required_ref in (
+        "actions/checkout@v7",
+        "actions/setup-python@v7",
+        "actions/setup-node@v7",
+    ):
+        if required_ref not in workflow_text:
+            fail(f"GitHub Actions runtime dependency is missing: {required_ref}")
+
 
 def check_skill_packaging() -> None:
     repo_skill_path = ROOT / ".agents" / "skills" / "lucky" / "SKILL.md"
