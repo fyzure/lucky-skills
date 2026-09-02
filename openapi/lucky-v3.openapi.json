@@ -1407,7 +1407,7 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_cloudflared-CZXQeEtG.js"
         ],
@@ -5459,7 +5459,7 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_ddns-rma111lI.js"
         ],
@@ -8393,7 +8393,7 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_docker-BCN-OILs.js"
         ],
@@ -11328,7 +11328,7 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_docker-BCN-OILs.js"
         ],
@@ -11925,65 +11925,6 @@
             }
           }
         }
-      }
-    },
-    "/api/docker/containers/{param}/files/download": {
-      "get": {
-        "summary": "Lucky API route: GET /api/docker/containers/{param}/files/download",
-        "description": "Reverse-documented from frontend evidence and version-bound runtime verification; route confidence does not by itself imply complete successful business behavior.",
-        "operationId": "get_api_docker_containers_param_files_download",
-        "tags": [
-          "docker"
-        ],
-        "security": [
-          {
-            "OpenToken": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Binary download inferred from the frontend responseType.",
-            "content": {
-              "application/octet-stream": {
-                "schema": {
-                  "type": "string",
-                  "format": "binary"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "HTTP error or a Lucky business error (which may also use HTTP 200).",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LuckyEnvelope"
-                }
-              }
-            }
-          }
-        },
-        "x-evidence-confidence": "frontend-call",
-        "x-evidence-bundles": [
-          "lucky_docker-BCN-OILs.js"
-        ],
-        "x-lucky-risk": "read-only",
-        "parameters": [
-          {
-            "name": "param",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "path",
-            "in": "query",
-            "required": false,
-            "schema": {}
-          }
-        ]
       }
     },
     "/api/docker/containers/{param}/files/list": {
@@ -13548,7 +13489,7 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_docker-BCN-OILs.js"
         ],
@@ -13647,58 +13588,6 @@
             }
           }
         }
-      }
-    },
-    "/api/docker/containers/{param}/upgrade-check": {
-      "get": {
-        "summary": "Lucky API route: GET /api/docker/containers/{param}/upgrade-check",
-        "description": "Reverse-documented from frontend evidence and version-bound runtime verification; route confidence does not by itself imply complete successful business behavior.",
-        "operationId": "get_api_docker_containers_param_upgrade_check",
-        "tags": [
-          "docker"
-        ],
-        "security": [
-          {
-            "OpenToken": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Lucky JSON response; envelope shape varies by endpoint.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LuckyEnvelope"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "HTTP error or a Lucky business error (which may also use HTTP 200).",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LuckyEnvelope"
-                }
-              }
-            }
-          }
-        },
-        "x-evidence-confidence": "frontend-call",
-        "x-evidence-bundles": [
-          "lucky_docker-BCN-OILs.js"
-        ],
-        "x-lucky-risk": "read-only",
-        "parameters": [
-          {
-            "name": "param",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ]
       }
     },
     "/api/docker/disk-usage": {
@@ -17775,7 +17664,7 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_docker-BCN-OILs.js"
         ],
@@ -17942,7 +17831,7 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_docker-BCN-OILs.js"
         ],
@@ -17994,7 +17883,7 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_docker-BCN-OILs.js"
         ],
@@ -23867,7 +23756,7 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_ipfilter-CGTD3trT.js"
         ],
@@ -23909,7 +23798,7 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_ipfilter-CGTD3trT.js"
         ],
@@ -24302,7 +24191,7 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_ipfilter-CGTD3trT.js"
         ],
@@ -25195,7 +25084,7 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_index-DND3_xvE.js"
         ],
@@ -25383,7 +25272,7 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_index-DND3_xvE.js"
         ],
@@ -29718,7 +29607,7 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_index-DND3_xvE.js"
         ],
@@ -31158,7 +31047,7 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_panel-cAWqYdFv.js"
         ],
@@ -33380,7 +33269,7 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_index-DND3_xvE.js"
         ],
@@ -36821,7 +36710,7 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_panel-D9SxgvCq.js"
         ],
@@ -37832,7 +37721,7 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_index-DND3_xvE.js"
         ],
@@ -41606,7 +41495,7 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_reverseproxy-Wnx_PpU0.js"
         ],
@@ -41817,7 +41706,7 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_reverseproxy-Wnx_PpU0.js"
         ],
@@ -42210,7 +42099,7 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_reverseproxy-Wnx_PpU0.js"
         ],
@@ -43392,7 +43281,7 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_reverseproxy-Wnx_PpU0.js"
         ],
@@ -46089,7 +45978,7 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_index-DND3_xvE.js"
         ],
@@ -47091,7 +46980,7 @@
             }
           }
         },
-        "x-evidence-confidence": "frontend-call",
+        "x-evidence-confidence": "runtime-verified",
         "x-evidence-bundles": [
           "lucky_useWolI18n-D9PD6Ww6.js"
         ],

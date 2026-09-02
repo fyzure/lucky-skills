@@ -4,9 +4,9 @@ pageClass: api-routes-page
 
 # API 路由参考
 
-> 目标版本：Lucky 3.0.0。共收录 599 个“路径 + 方法”记录。
+> 目标版本：Lucky 3.0.0。共收录 597 个“路径 + 方法”记录。
 > 此表由前端构建产物静态证据与可选的版本绑定运行时验证合并生成，不代表上游承诺的稳定公共 API；`UNKNOWN` 表示仍只有路径字面量证据。
-> 当前证据等级：`runtime-verified` 573 条，`frontend-call` 26 条，其他 0 条。
+> 当前证据等级：`runtime-verified` 597 条，`frontend-call` 0 条，其他 0 条。
 > `runtime-verified` 表示目标版本上的路由/方法或受控运行时行为已有证据；它不等于“完整成功业务 E2E”，具体执行深度仍应结合该路由的 schema/runtime evidence 判断。
 
 ## `2fa`
@@ -43,7 +43,7 @@ pageClass: api-routes-page
 | `PUT` | `/api/cloudflared/orderadjustment` | `mutating` | — | `array<string>` | `json` | `runtime-verified` |
 | `GET` | `/api/cloudflared/{param}/cname/check` | `read-only` | `hostname` | — | `json` | `runtime-verified` |
 | `POST` | `/api/cloudflared/{param}/cname/create` | `mutating` | — | `hostname`, `proxied` | `json` | `runtime-verified` |
-| `DELETE` | `/api/cloudflared/{param}/cname/delete` | `dangerous` | `hostname` | — | `json` | `frontend-call` |
+| `DELETE` | `/api/cloudflared/{param}/cname/delete` | `dangerous` | `hostname` | — | `json` | `runtime-verified` |
 | `DELETE` | `/api/cloudflared/{param}/ingress` | `mutating` | `hostname`, `path` | — | `json` | `runtime-verified` |
 | `GET` | `/api/cloudflared/{param}/ingress` | `read-only` | — | — | `json` | `runtime-verified` |
 | `POST` | `/api/cloudflared/{param}/ingress` | `mutating` | — | `hostname`, `path`, `service`, `originRequest` | `json` | `runtime-verified` |
@@ -109,7 +109,7 @@ pageClass: api-routes-page
 | `GET` | `/api/ddns/credential-sources` | `read-only` | — | — | `json` | `runtime-verified` |
 | `GET` | `/api/ddns/enable` | `mutating` | `enable`, `key` | — | `json` | `runtime-verified` |
 | `GET` | `/api/ddns/expanded` | `mutating` | `expanded`, `key` | — | `json` | `runtime-verified` |
-| `GET` | `/api/ddns/getipfromcmdtest` | `dangerous` | `command`, `iptype` | — | `json` | `frontend-call` |
+| `GET` | `/api/ddns/getipfromcmdtest` | `dangerous` | `command`, `iptype` | — | `json` | `runtime-verified` |
 | `GET` | `/api/ddns/ipsectionexpanded` | `mutating` | `expanded`, `key` | — | `json` | `runtime-verified` |
 | `GET` | `/api/ddns/lastlogs` | `read-only` | — | — | `json` | `runtime-verified` |
 | `GET` | `/api/ddns/logs` | `read-only` | `page`, `pageSize` | — | `json` | `runtime-verified` |
@@ -161,7 +161,7 @@ pageClass: api-routes-page
 | `POST` | `/api/docker/compose/up-async` | `mutating` | — | `project_name`, `project_path`, `config_file_name`, `working_dir`, `compose_content`, `force_recreate`, `build` | `json` | `runtime-verified` |
 | `POST` | `/api/docker/compose/update-config` | `mutating` | — | `content`, `project_path` | `json` | `runtime-verified` |
 | `POST` | `/api/docker/compose/update-dockerfile` | `mutating` | — | `content`, `project_path` | `json` | `runtime-verified` |
-| `DELETE` | `/api/docker/compose/{param}/backup/cancel` | `dangerous` | — | — | `json` | `frontend-call` |
+| `DELETE` | `/api/docker/compose/{param}/backup/cancel` | `dangerous` | — | — | `json` | `runtime-verified` |
 | `DELETE` | `/api/docker/compose/{param}/backups` | `mutating` | — | `backup` | `json` | `runtime-verified` |
 | `GET` | `/api/docker/compose/{param}/backups` | `read-only` | — | — | `json` | `runtime-verified` |
 | `DELETE` | `/api/docker/compose/{param}/backups/all` | `mutating` | — | — | `json` | `runtime-verified` |
@@ -194,7 +194,7 @@ pageClass: api-routes-page
 | `GET` | `/api/docker/containers/{param}/compose-config` | `read-only` | — | — | `json` | `runtime-verified` |
 | `POST` | `/api/docker/containers/{param}/copy` | `dangerous` | — | `name` | `json` | `runtime-verified` |
 | `POST` | `/api/docker/containers/{param}/edit` | `dangerous` | — | `name`, `config`, `hostConfig`, `auto_start`, `remove_old` | `json` | `runtime-verified` |
-| `POST` | `/api/docker/containers/{param}/export` | `dangerous` | — | — | `blob` | `frontend-call` |
+| `POST` | `/api/docker/containers/{param}/export` | `dangerous` | — | — | `blob` | `runtime-verified` |
 | `DELETE` | `/api/docker/containers/{param}/files` | `mutating` | — | `path`, `recursive` | `json` | `runtime-verified` |
 | `POST` | `/api/docker/containers/{param}/files/chmod` | `dangerous` | — | `path`, `permissions` | `json` | `runtime-verified` |
 | `POST` | `/api/docker/containers/{param}/files/compress` | `dangerous` | — | `output_name`, `output_path`, `paths` | `json` | `runtime-verified` |
@@ -202,7 +202,6 @@ pageClass: api-routes-page
 | `POST` | `/api/docker/containers/{param}/files/copy` | `dangerous` | — | `dst_path`, `src_path` | `json` | `runtime-verified` |
 | `POST` | `/api/docker/containers/{param}/files/decompress` | `dangerous` | — | `file_path`, `output_path` | `json` | `runtime-verified` |
 | `POST` | `/api/docker/containers/{param}/files/decompress-async` | `mutating` | — | `file_path`, `output_path` | `json` | `runtime-verified` |
-| `GET` | `/api/docker/containers/{param}/files/download` | `read-only` | `path` | — | `blob` | `frontend-call` |
 | `GET` | `/api/docker/containers/{param}/files/list` | `read-only` | `path` | — | `json` | `runtime-verified` |
 | `POST` | `/api/docker/containers/{param}/files/mkdir` | `mutating` | — | `path` | `json` | `runtime-verified` |
 | `GET` | `/api/docker/containers/{param}/files/preview-archive` | `read-only` | `path` | — | `json` | `runtime-verified` |
@@ -223,9 +222,8 @@ pageClass: api-routes-page
 | `GET` | `/api/docker/containers/{param}/stats` | `read-only` | — | — | `json` | `runtime-verified` |
 | `GET` | `/api/docker/containers/{param}/stats-cached` | `read-only` | — | — | `json` | `runtime-verified` |
 | `POST` | `/api/docker/containers/{param}/stop` | `dangerous` | — | `timeout` | `json` | `runtime-verified` |
-| `POST` | `/api/docker/containers/{param}/unpause` | `dangerous` | — | — | `json` | `frontend-call` |
+| `POST` | `/api/docker/containers/{param}/unpause` | `dangerous` | — | — | `json` | `runtime-verified` |
 | `POST` | `/api/docker/containers/{param}/upgrade` | `dangerous` | — | `object` | `json` | `runtime-verified` |
-| `GET` | `/api/docker/containers/{param}/upgrade-check` | `read-only` | — | — | `json` | `frontend-call` |
 | `GET` | `/api/docker/disk-usage` | `read-only` | — | — | `json` | `runtime-verified` |
 | `GET` | `/api/docker/images` | `read-only` | `all` | — | `json` | `runtime-verified` |
 | `POST` | `/api/docker/images/backup-tag` | `mutating` | — | `image_ref` | `json` | `runtime-verified` |
@@ -282,11 +280,11 @@ pageClass: api-routes-page
 | `GET` | `/api/docker/volumes` | `read-only` | — | — | `json` | `runtime-verified` |
 | `POST` | `/api/docker/volumes` | `mutating` | — | `name`, `driver` | `json` | `runtime-verified` |
 | `GET` | `/api/docker/volumes/backup/status` | `read-only` | — | — | `json` | `runtime-verified` |
-| `GET` | `/api/docker/volumes/export` | `dangerous` | `name` | — | `blob` | `frontend-call` |
+| `GET` | `/api/docker/volumes/export` | `dangerous` | `name` | — | `blob` | `runtime-verified` |
 | `POST` | `/api/docker/volumes/import` | `dangerous` | — | `file`, `volume_name`, `driver` | `json` | `runtime-verified` |
 | `DELETE` | `/api/docker/volumes/{param}` | `mutating` | — | — | `json` | `runtime-verified` |
-| `POST` | `/api/docker/volumes/{param}/backup` | `dangerous` | — | — | `json` | `frontend-call` |
-| `DELETE` | `/api/docker/volumes/{param}/backup/cancel` | `dangerous` | — | — | `json` | `frontend-call` |
+| `POST` | `/api/docker/volumes/{param}/backup` | `dangerous` | — | — | `json` | `runtime-verified` |
+| `DELETE` | `/api/docker/volumes/{param}/backup/cancel` | `dangerous` | — | — | `json` | `runtime-verified` |
 | `DELETE` | `/api/docker/volumes/{param}/backups` | `mutating` | — | `backup` | `json` | `runtime-verified` |
 | `GET` | `/api/docker/volumes/{param}/backups` | `read-only` | — | — | `json` | `runtime-verified` |
 | `POST` | `/api/docker/volumes/{param}/backups/restore` | `dangerous` | — | `backup` | `json` | `runtime-verified` |
@@ -392,14 +390,14 @@ pageClass: api-routes-page
 | `GET` | `/api/ipfliter/oneclickrecord` | `mutating` | `ip` | — | `json` | `runtime-verified` |
 | `GET` | `/api/ipfliter/porttrap/blockedips` | `read-only` | `page`, `pageSize` | — | `json` | `runtime-verified` |
 | `POST` | `/api/ipfliter/porttrap/blockedips/batch-delete` | `mutating` | — | `ips` | `json` | `runtime-verified` |
-| `POST` | `/api/ipfliter/porttrap/blockedips/clear` | `dangerous` | — | — | `json` | `frontend-call` |
-| `GET` | `/api/ipfliter/porttrap/blockedips/export` | `dangerous` | — | — | `json` | `frontend-call` |
+| `POST` | `/api/ipfliter/porttrap/blockedips/clear` | `dangerous` | — | — | `json` | `runtime-verified` |
+| `GET` | `/api/ipfliter/porttrap/blockedips/export` | `dangerous` | — | — | `json` | `runtime-verified` |
 | `POST` | `/api/ipfliter/porttrap/blockedips/refresh-ipinfo` | `mutating` | — | — | `json` | `runtime-verified` |
 | `GET` | `/api/ipfliter/porttrap/blockedips/search` | `read-only` | `page`, `pageSize`, `q`, `type` | — | `json` | `runtime-verified` |
 | `DELETE` | `/api/ipfliter/porttrap/blockedips/{param}` | `mutating` | — | — | `json` | `runtime-verified` |
 | `GET` | `/api/ipfliter/porttrap/logs` | `read-only` | `page`, `pageSize` | — | `json` | `runtime-verified` |
 | `GET` | `/api/ipfliter/porttrap/stats` | `read-only` | — | — | `json` | `runtime-verified` |
-| `POST` | `/api/ipfliter/porttrap/stats/reset` | `dangerous` | — | — | `json` | `frontend-call` |
+| `POST` | `/api/ipfliter/porttrap/stats/reset` | `dangerous` | — | — | `json` | `runtime-verified` |
 | `GET` | `/api/ipfliter/porttrapconf` | `read-only` | — | — | `json` | `runtime-verified` |
 | `PUT` | `/api/ipfliter/porttrapconf` | `mutating` | — | `AllowRuleKeys`, `DefaultAllowIPs`, `Enable`, `IPv6PrefixLen`, `Script`, `ScriptEnable`, `ScriptTriggerInterval`, `TCPPorts`, `TargetRuleKey`, `UDPPorts`, `WebhookBody`, `WebhookDisableCallbackSuccessContentCheck`, `WebhookEnable`, `WebhookHeaders`, `WebhookMethod`, `WebhookProxy`, `WebhookProxyAddr`, `WebhookProxyPassword`, `WebhookProxyUser`, `WebhookRetryCount`, `WebhookRetryInterval`, `WebhookSuccessContent`, `WebhookTimeout`, `WebhookTriggerInterval`, `WebhookURL` | `json` | `runtime-verified` |
 
@@ -430,7 +428,7 @@ pageClass: api-routes-page
 
 | 方法 | 路径 | 风险 | 查询字段 | 请求体 | 响应 | 证据等级 |
 |---|---|---|---|---|---|---|
-| `PUT` | `/api/logout` | `mutating` | — | — | `json` | `frontend-call` |
+| `PUT` | `/api/logout` | `mutating` | — | — | `json` | `runtime-verified` |
 
 ## `logs`
 
@@ -448,7 +446,7 @@ pageClass: api-routes-page
 
 | 方法 | 路径 | 风险 | 查询字段 | 请求体 | 响应 | 证据等级 |
 |---|---|---|---|---|---|---|
-| `PUT` | `/api/lucky/service` | `mutating` | `option` | — | `json` | `frontend-call` |
+| `PUT` | `/api/lucky/service` | `mutating` | `option` | — | `json` | `runtime-verified` |
 
 ## `modules`
 
@@ -556,7 +554,7 @@ pageClass: api-routes-page
 
 | 方法 | 路径 | 风险 | 查询字段 | 请求体 | 响应 | 证据等级 |
 |---|---|---|---|---|---|---|
-| `GET` | `/api/reboot_program` | `dangerous` | — | — | `json` | `frontend-call` |
+| `GET` | `/api/reboot_program` | `dangerous` | — | — | `json` | `runtime-verified` |
 
 ## `restoreconfigureconfirm`
 
@@ -591,7 +589,7 @@ pageClass: api-routes-page
 |---|---|---|---|---|---|---|
 | `GET` | `/api/smb/configure` | `read-only` | — | — | `json` | `runtime-verified` |
 | `PUT` | `/api/smb/configure` | `mutating` | — | `AutoFirewall`, `DiscoveryIP`, `Enable`, `EnableMDNS`, `EnableNBNS`, `EnableWSDD`, `Encryption`, `GuestEnable`, `ListenIP`, `ListenNetwork`, `ListenPort`, `LiteSMBLogLevel`, `LiteSMBLogToTerminal`, `MaxConnections`, `Multichannel`, `PublicMountList`, `SMBConfVersion`, `ServerName`, `Signing`, `Users`, `Workgroup` | `json` | `runtime-verified` |
-| `POST` | `/api/smb/connections/{param}/disconnect` | `dangerous` | — | — | `json` | `frontend-call` |
+| `POST` | `/api/smb/connections/{param}/disconnect` | `dangerous` | — | — | `json` | `runtime-verified` |
 | `GET` | `/api/smb/lastlogs` | `read-only` | `page`, `pageSize` | — | `json` | `runtime-verified` |
 | `GET` | `/api/smb/logs` | `read-only` | `page`, `pageSize` | — | `json` | `runtime-verified` |
 | `GET` | `/api/smb/runtime` | `read-only` | — | — | `json` | `runtime-verified` |
@@ -625,7 +623,7 @@ pageClass: api-routes-page
 |---|---|---|---|---|---|---|
 | `GET` | `/api/status` | `read-only` | — | — | `json` | `runtime-verified` |
 | `GET` | `/api/status/history` | `read-only` | `start`, `end`, `bucket` | — | `json` | `runtime-verified` |
-| `POST` | `/api/status/history/clear` | `dangerous` | — | — | `json` | `frontend-call` |
+| `POST` | `/api/status/history/clear` | `dangerous` | — | — | `json` | `runtime-verified` |
 | `GET` | `/api/status/history/meta` | `read-only` | — | — | `json` | `runtime-verified` |
 | `GET` | `/api/status/host-connections` | `read-only` | — | — | `json` | `runtime-verified` |
 | `GET` | `/api/status/host-overview` | `read-only` | — | — | `json` | `runtime-verified` |
@@ -697,7 +695,7 @@ pageClass: api-routes-page
 | `PUT` | `/api/third/filebrowser/configure` | `mutating` | — | `Address`, `AutoFirewall`, `BaseURL`, `CacheDir`, `ConfVersion`, `DBFile`, `DirPerm`, `DisableExec`, `DisablePreviewResize`, `DisableThumbnails`, `DisableTypeDetectionByHeader`, `Enable`, `FilePerm`, `HTTPEnable`, `IMGProcessors`, `ListenNetwork`, `MountList`, `Port`, `RedisCacheUrl`, `TLSEnable`, `TLSListenPort`, `TokenExpirationHour`, `TrustHostList` | `json` | `runtime-verified` |
 | `GET` | `/api/third/filebrowser/lastlogs` | `read-only` | `page`, `pageSize` | — | `json` | `runtime-verified` |
 | `GET` | `/api/third/filebrowser/logs` | `read-only` | `page`, `pageSize` | — | `json` | `runtime-verified` |
-| `GET` | `/api/third/filebrowser/resetadmin` | `dangerous` | — | — | `json` | `frontend-call` |
+| `GET` | `/api/third/filebrowser/resetadmin` | `dangerous` | — | — | `json` | `runtime-verified` |
 | `GET` | `/api/third/filebrowser/status` | `read-only` | — | — | `json` | `runtime-verified` |
 
 ## `thirdPartyAuthManager`
@@ -725,7 +723,7 @@ pageClass: api-routes-page
 
 | 方法 | 路径 | 风险 | 查询字段 | 请求体 | 响应 | 证据等级 |
 |---|---|---|---|---|---|---|
-| `GET` | `/api/update/cancel` | `dangerous` | — | — | `json` | `frontend-call` |
+| `GET` | `/api/update/cancel` | `dangerous` | — | — | `json` | `runtime-verified` |
 | `PUT` | `/api/update/comfire` | `dangerous` | — | `Name`, `ARCH`, `OS`, `Version`, `GoVersion`, `Date`, `MD5` | `json` | `runtime-verified` |
 
 ## `v2l`
@@ -780,17 +778,17 @@ pageClass: api-routes-page
 | `GET` | `/api/webservice/settings` | `read-only` | — | — | `json` | `runtime-verified` |
 | `PUT` | `/api/webservice/settings` | `mutating` | — | `LogLevel`, `Statistics`, `WebAuthSessionTTLMinutes` | `json` | `runtime-verified` |
 | `GET` | `/api/webservice/statistics/capabilities` | `read-only` | — | — | `json` | `runtime-verified` |
-| `POST` | `/api/webservice/statistics/clear` | `dangerous` | — | — | `json` | `frontend-call` |
+| `POST` | `/api/webservice/statistics/clear` | `dangerous` | — | — | `json` | `runtime-verified` |
 | `GET` | `/api/webservice/statistics/daily` | `read-only` | — | — | `json` | `runtime-verified` |
 | `GET` | `/api/webservice/statistics/events` | `read-only` | — | — | `json` | `runtime-verified` |
-| `GET` | `/api/webservice/statistics/export` | `dangerous` | — | — | `blob` | `frontend-call` |
+| `GET` | `/api/webservice/statistics/export` | `dangerous` | — | — | `blob` | `runtime-verified` |
 | `GET` | `/api/webservice/statistics/geo/aggregate` | `read-only` | — | — | `json` | `runtime-verified` |
 | `POST` | `/api/webservice/statistics/geo/rebuild` | `mutating` | — | `mode` | `json` | `runtime-verified` |
 | `POST` | `/api/webservice/statistics/geo/rebuild/cancel` | `mutating` | — | — | `json` | `runtime-verified` |
 | `GET` | `/api/webservice/statistics/geo/rebuild/status` | `read-only` | — | — | `json` | `runtime-verified` |
 | `GET` | `/api/webservice/statistics/history` | `read-only` | — | — | `json` | `runtime-verified` |
 | `POST` | `/api/webservice/statistics/import` | `dangerous` | `mode` | `file` | `json` | `runtime-verified` |
-| `POST` | `/api/webservice/statistics/import/cancel` | `dangerous` | — | — | `json` | `frontend-call` |
+| `POST` | `/api/webservice/statistics/import/cancel` | `dangerous` | — | — | `json` | `runtime-verified` |
 | `POST` | `/api/webservice/statistics/import/start` | `dangerous` | `mode` | `file` | `json` | `runtime-verified` |
 | `GET` | `/api/webservice/statistics/import/status` | `read-only` | — | — | `json` | `runtime-verified` |
 | `GET` | `/api/webservice/statistics/ip-info-refresh` | `mutating` | — | — | `json` | `runtime-verified` |
@@ -809,7 +807,7 @@ pageClass: api-routes-page
 | `POST` | `/api/webservice/webauth/sessions/clear-subrule` | `mutating` | — | `ruleKey`, `subRuleKey` | `json` | `runtime-verified` |
 | `POST` | `/api/webservice/webauth/sessions/delete` | `dangerous` | — | `sessionIds` | `json` | `runtime-verified` |
 | `DELETE` | `/api/webservice/webauth/sessions/{param}` | `mutating` | — | — | `json` | `runtime-verified` |
-| `DELETE` | `/api/webservice/{param}/disconnect/{param2}` | `dangerous` | — | — | `json` | `frontend-call` |
+| `DELETE` | `/api/webservice/{param}/disconnect/{param2}` | `dangerous` | — | — | `json` | `runtime-verified` |
 | `GET` | `/api/webservice/{param}/httpserver/logs` | `read-only` | `page`, `pageSize` | — | `json` | `runtime-verified` |
 | `PUT` | `/api/webservice/{param}/subrulegrouporderupdate` | `mutating` | — | `subRulesMap`, `orderList`, `defaultProxyGroupKey` | `json` | `runtime-verified` |
 | `GET` | `/api/webservice/{param}/{param2}/accessdetail` | `read-only` | `page`, `pageSize` | — | `json` | `runtime-verified` |
@@ -852,7 +850,7 @@ pageClass: api-routes-page
 | `POST` | `/api/webterminal/sftp/{param}/mkdir` | `mutating` | — | `path` | `json` | `runtime-verified` |
 | `GET` | `/api/webterminal/sftp/{param}/preview-archive` | `read-only` | `path` | — | `json` | `runtime-verified` |
 | `GET` | `/api/webterminal/sftp/{param}/read` | `read-only` | `path` | — | `json` | `runtime-verified` |
-| `DELETE` | `/api/webterminal/sftp/{param}/remove` | `dangerous` | `path` | — | `json` | `frontend-call` |
+| `DELETE` | `/api/webterminal/sftp/{param}/remove` | `dangerous` | `path` | — | `json` | `runtime-verified` |
 | `POST` | `/api/webterminal/sftp/{param}/rename` | `dangerous` | — | `newPath`, `oldPath` | `json` | `runtime-verified` |
 | `POST` | `/api/webterminal/sftp/{param}/touch` | `mutating` | — | `path` | `json` | `runtime-verified` |
 | `POST` | `/api/webterminal/sftp/{param}/upload` | `dangerous` | — | `file`, `path`, `filename` | `json` | `runtime-verified` |
@@ -871,7 +869,7 @@ pageClass: api-routes-page
 | `DELETE` | `/api/wol/device` | `mutating` | `key` | — | `json` | `runtime-verified` |
 | `POST` | `/api/wol/device` | `mutating` | — | `Key`, `DeviceName`, `MacList`, `BroadcastIPs`, `ProbeTargets`, `Port`, `Relay`, `Repeat`, `IOT_DianDeng_Enable`, `IOT_DianDeng_AUTHKEY`, `IOT_DianDeng_InsecureSkipVerify`, `IOT_DianDengBindComponentEnable`, `IOT_DianDengBindComponent`, `IOT_Bemfa_Enable`, `IOT_Bemfa_SecretKey`, `IOT_Bemfa_Topic`, `IOT_Bemfa_InsecureSkipVerify` | `json` | `runtime-verified` |
 | `PUT` | `/api/wol/device` | `mutating` | — | `Key`, `DeviceName`, `MacList`, `BroadcastIPs`, `ProbeTargets`, `Port`, `Relay`, `Repeat`, `IOT_DianDeng_Enable`, `IOT_DianDeng_AUTHKEY`, `IOT_DianDeng_InsecureSkipVerify`, `IOT_DianDengBindComponentEnable`, `IOT_DianDengBindComponent`, `IOT_Bemfa_Enable`, `IOT_Bemfa_SecretKey`, `IOT_Bemfa_Topic`, `IOT_Bemfa_InsecureSkipVerify` | `json` | `runtime-verified` |
-| `GET` | `/api/wol/device/shutdown` | `dangerous` | `key` | — | `json` | `frontend-call` |
+| `GET` | `/api/wol/device/shutdown` | `dangerous` | `key` | — | `json` | `runtime-verified` |
 | `GET` | `/api/wol/device/wakeup` | `mutating` | `key` | — | `json` | `runtime-verified` |
 | `PUT` | `/api/wol/deviceorderadjustment` | `mutating` | — | `array<string>` | `json` | `runtime-verified` |
 | `GET` | `/api/wol/devices` | `read-only` | — | — | `json` | `runtime-verified` |
