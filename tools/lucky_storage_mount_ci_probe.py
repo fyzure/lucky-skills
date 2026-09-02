@@ -183,6 +183,7 @@ def frontend_storage_mount_snippets(base_url: str) -> dict[str, str]:
     max_bytes = 24 * 1024 * 1024
     snippets: dict[str, str] = {}
     storage_importers: dict[str, str] = {}
+    storage_panel_context: dict[str, str] = {}
     needles = (
         "MountPoint",
         "MountType",
@@ -211,6 +212,26 @@ def frontend_storage_mount_snippets(base_url: str) -> dict[str, str]:
         fetched += len(raw)
         text = raw.decode("utf-8", errors="replace")
         digest = hashlib.sha256(raw).hexdigest()
+        is_storage_panel = "localesv2.storageManagement" in text
+        if is_storage_panel:
+            snippets["storage_panel_path"] = path
+            for needle in (
+                "SystemMount",
+                "MountPoint",
+                "MountType",
+                "OnleyCreateVFS",
+                "format error",
+                "mountpoint",
+            ):
+                positions = [match.start() for match in re.finditer(re.escape(needle), text)]
+                if not positions:
+                    continue
+                contexts: list[str] = []
+                for position in positions[:10]:
+                    start = max(0, position - 4500)
+                    end = min(len(text), position + 6500)
+                    contexts.append(" ".join(text[start:end].split()))
+                storage_panel_context[needle] = " || ".join(contexts)[:36000]
         if STORAGE_CHUNK_NAME in text and not path.endswith(STORAGE_CHUNK_NAME):
             positions = [match.start() for match in re.finditer(re.escape(STORAGE_CHUNK_NAME), text)]
             chunks: list[str] = []
@@ -258,6 +279,7 @@ def frontend_storage_mount_snippets(base_url: str) -> dict[str, str]:
                 queue.append(candidate_path)
     snippets["crawl_summary"] = f"files={len(seen)} bytes={fetched}"
     snippets["storage_importers"] = json.dumps(storage_importers, ensure_ascii=False)
+    snippets["storage_panel_context"] = json.dumps(storage_panel_context, ensure_ascii=False)
     return snippets
 
 
@@ -547,6 +569,8 @@ def main() -> int:
                         "storage_chunk",
                         "storage_chunk_source",
                         "storage_importers",
+                        "storage_panel_path",
+                        "storage_panel_context",
                         "crawl_summary",
                     )
                 }
