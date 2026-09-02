@@ -104,6 +104,11 @@ class RuntimeVerificationTests(unittest.TestCase):
                     "risk": "dangerous",
                     "confidence": "runtime-verified",
                 },
+                {
+                    "path": "/api/prefix/{param}",
+                    "method": "GET",
+                    "risk": "read-only",
+                },
             ],
         }
         with tempfile.TemporaryDirectory() as directory:
@@ -127,7 +132,9 @@ class RuntimeVerificationTests(unittest.TestCase):
             catalog.classify("POST", "/api/configure"),
             OperationRisk.DANGEROUS,
         )
-        self.assertIsNotNone(catalog.match("GET", "/api/prefix/value"))
+        prefixed = catalog.match("GET", "/api/prefix/value")
+        self.assertIsNotNone(prefixed)
+        self.assertEqual(prefixed.confidence, "runtime-verified")  # type: ignore[union-attr]
 
     def test_static_catalog_keeps_verified_toggle_gets_mutating_without_runtime_sidecar(self) -> None:
         snapshot = {

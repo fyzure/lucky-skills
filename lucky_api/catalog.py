@@ -304,7 +304,13 @@ def _apply_runtime_verification(
         merged = dict(base)
         merged.update(item)
         merged.setdefault("module", _route_module(path))
-        merged.setdefault("confidence", "runtime-verified")
+        # A runtime sidecar entry is stronger route/method evidence than the
+        # static frontend discovery that it overlays.  The static record
+        # already carries confidence="frontend-call", so setdefault() here
+        # would incorrectly preserve that weaker value for sidecar entries
+        # which intentionally omit an explicit confidence field.
+        if "confidence" not in item:
+            merged["confidence"] = "runtime-verified"
         merged.setdefault("query_keys", [])
         merged.setdefault("body_keys", [])
         merged.setdefault("has_body", False)

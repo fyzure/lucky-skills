@@ -13,7 +13,7 @@ import hashlib
 import json
 import re
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -360,6 +360,7 @@ def write_markdown(snapshot: dict, output: Path) -> None:
     groups: dict[str, list[dict]] = defaultdict(list)
     for route in snapshot["routes"]:
         groups[route["module"]].append(route)
+    confidence_counts = Counter(route.get("confidence", "unknown") for route in snapshot["routes"])
     lines = [
         "---",
         "pageClass: api-routes-page",
@@ -369,6 +370,8 @@ def write_markdown(snapshot: dict, output: Path) -> None:
         "",
         f"> 目标版本：Lucky {snapshot['target']['version']}。共收录 {snapshot['route_count']} 个“路径 + 方法”记录。",
         "> 此表由前端构建产物静态证据与可选的版本绑定运行时验证合并生成，不代表上游承诺的稳定公共 API；`UNKNOWN` 表示仍只有路径字面量证据。",
+        f"> 当前证据等级：`runtime-verified` {confidence_counts.get('runtime-verified', 0)} 条，`frontend-call` {confidence_counts.get('frontend-call', 0)} 条，其他 {snapshot['route_count'] - confidence_counts.get('runtime-verified', 0) - confidence_counts.get('frontend-call', 0)} 条。",
+        "> `runtime-verified` 表示目标版本上的路由/方法或受控运行时行为已有证据；它不等于“完整成功业务 E2E”，具体执行深度仍应结合该路由的 schema/runtime evidence 判断。",
         "",
     ]
     for module in sorted(groups):
@@ -415,8 +418,8 @@ def write_openapi(snapshot: dict, output: Path) -> None:
         if route["method"] == "UNKNOWN":
             continue
         operation = {
-            "summary": f"Lucky frontend call: {route['method']} {route['path']}",
-            "description": "Reverse-documented from frontend and optional runtime evidence; schemas may still be incomplete.",
+            "summary": f"Lucky API route: {route['method']} {route['path']}",
+            "description": "Reverse-documented from frontend evidence and version-bound runtime verification; route confidence does not by itself imply complete successful business behavior.",
             "operationId": operation_id(route["method"], route["path"]),
             "tags": [route["module"]],
             "security": [{"OpenToken": []}],

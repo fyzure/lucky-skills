@@ -9,6 +9,7 @@ import json
 import re
 import sys
 import tempfile
+from collections import Counter
 from pathlib import Path, PurePosixPath
 from urllib.parse import urlparse
 
@@ -5483,6 +5484,18 @@ def check_generated_artifacts() -> None:
     check_runtime_verification(snapshot_path, snapshot)
     runtime_path = snapshot_path.with_name("lucky-v3-runtime-verification.json")
     merged_snapshot = load_merged_snapshot(snapshot_path, runtime_verification=runtime_path)
+    confidence_counts = Counter(
+        str(item.get("confidence", "")) for item in merged_snapshot.get("routes", [])
+    )
+    expected_confidence_counts = {
+        "runtime-verified": 499,
+        "frontend-call": 100,
+    }
+    if dict(confidence_counts) != expected_confidence_counts:
+        fail(
+            "merged route confidence coverage regressed: "
+            f"expected {expected_confidence_counts}, got {dict(confidence_counts)}"
+        )
     if snapshot["route_count"] != len(snapshot["routes"]):
         fail("snapshot route_count does not match routes")
     if snapshot["bundle_count"] != len(snapshot["bundle_sha256"]):

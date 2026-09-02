@@ -104,7 +104,7 @@ python3 tools/lucky_api.py status
 
 ## 当前覆盖
 
-当前目标为 **Lucky 3.0.0 wanji / Linux x86_64**。默认目录已将已知 `UNKNOWN` 路由完成归类，并对主要写接口和常用模块补充请求/响应 schema。当前 merged catalog 共有 **243 条 POST/PUT/PATCH**，其中 **219 条**生成 OpenAPI `requestBody`；仅 **1 条**仍含未类型化顶层请求属性，显式 response schema 已覆盖 **354 条**路由。
+当前目标为 **Lucky 3.0.0 wanji / Linux x86_64**。默认目录已将已知 `UNKNOWN` 路由完成归类，并对主要写接口和常用模块补充请求/响应 schema。当前 599 条 merged route 中 **499 条为 `runtime-verified`、100 条仍为 `frontend-call`、0 条 unknown**；共有 **243 条 POST/PUT/PATCH**，其中 **219 条**生成 OpenAPI `requestBody`，仅 **1 条**仍含未类型化顶层请求属性，显式 response schema 已覆盖 **354 条**路由。`runtime-verified` 表示目标版本的路由/方法或受控运行时行为已有证据，具体行为深度仍以逐路由 evidence 为准。
 
 | 行为范围 | 当前证据 |
 | --- | --- |

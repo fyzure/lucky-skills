@@ -66,6 +66,7 @@ Lucky Skills 使用两层证据：
 - 这 219 条中仅剩 **1 条**仍含未类型化顶层属性；
 - 显式 response schema 已覆盖 **354 条**路由；
 - response 侧未定型 `{}` 叶子已降到 **0**；request 侧仍有 **31** 个。
+- 599 条 merged route 的证据等级为 **499 条 `runtime-verified` + 100 条 `frontend-call` + 0 条 `unknown`**；runtime sidecar 中的路由默认覆盖静态 `frontend-call` 证据等级，但是否真正执行了成功业务行为仍以逐路由 `verification` / `schema_evidence` 为准。
 
 目前重点覆盖 DDNS、WebService、Docker、FRP、SSL/ACME、Security Groups、IPFilter/PortTrap、PortForward、STUN、WebTerminal、StorageManagement、WebDAV、FTP、WOL、SMB、DLNA、FileBrowser、Rclone、Cron、ThirdPartyAuth/OIDC，以及部分 Status、IPDB、Modules 等接口。高风险核心管理操作统一迁到 **GitHub-hosted disposable Lucky**：主密码修改、全局 2FA enable/key-replace/disable、`reboot_program`、配置 export/import/restore、自更新 failure semantic 都已完成真实行为验证，生产 Lucky 不参与。自更新 probe 使用官方 2.27.2 Linux x86_64 发布包验证 3.0.0 的危险 downgrade 边界：`/api/update` 成功解析并返回 `ret=0`，`/api/update/comfire` 也返回 `ret=0`，随后 HTTP 中断且 45 秒内不恢复；Docker 仍报告容器 running、RestartCount=0、ExitCode=0，因此该路径被记录为 **non-serving downgrade failure semantic**，而不是成功升级。Docker prune 也已迁入专用 private DinD：Lucky 只看到 disposable daemon 的 Unix socket，真实删除停止容器、unused network、anonymous volume 与 dangling image，同时保留运行中的保护资源。实测 3.0.0 的 `all=true` 不删除 tagged-but-unused image，BuildKit cache 也未减少，因此文档不把它等同于 `docker image prune -a`。第三方 OIDC 已在 disposable Lucky 3.0.0 中完成完整 OAuth E2E；Rclone SystemMount 已在 FUSE 专用 disposable 容器中完成真实 mount/write-through/unmount；StorageManagement SystemMount 则完成 Linux target 的 Windows/WinFsp 平台边界验证。WOL online-transition 也已由 CI virtual powered fixture 完成 `Unreachable → Reachable` 闭环，物理主机与 shutdown 不作为覆盖目标。
 
