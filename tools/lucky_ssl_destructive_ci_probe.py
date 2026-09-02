@@ -143,6 +143,7 @@ def main() -> int:
         "certificate_material_present": False,
         "flush_http_status": 0,
         "flush_ret": None,
+        "flush_message": "",
         "flush_response_keys": [],
         "flush_classified": False,
         "flush_started_acme": False,
@@ -258,6 +259,9 @@ def main() -> int:
             )
             report["flush_http_status"] = flush_status
             report["flush_ret"] = flush.get("ret")
+            report["flush_message"] = str(
+                flush.get("msg") or flush.get("message") or ""
+            )[:200]
             report["flush_response_keys"] = sorted(str(key) for key in flush.keys())
             report["flush_classified"] = flush_status == 200 and type(flush.get("ret")) is int
 
