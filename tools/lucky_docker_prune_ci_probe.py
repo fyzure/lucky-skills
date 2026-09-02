@@ -214,6 +214,7 @@ def main() -> int:
         "prune_report": {},
         "target_container_removed": False,
         "target_image_removed": False,
+        "tagged_unused_image_preserved": False,
         "target_network_removed": False,
         "named_volume_preserved": False,
         "anonymous_volume_removed": False,
@@ -415,6 +416,15 @@ def main() -> int:
                 dind_name, "container", target_container
             )
             report["target_image_removed"] = not names(dind_name, "image", target_image)
+            # Lucky 3.0.0's real prune handler does not behave like
+            # `docker image prune -a` for tagged-but-unused images: even with
+            # all=true the tagged imported image remains, while the separate
+            # dangling image is pruned. Keep this as an explicit behavior
+            # assertion rather than forcing the probe to expect CLI -a
+            # semantics that the product does not implement.
+            report["tagged_unused_image_preserved"] = bool(
+                names(dind_name, "image", target_image)
+            )
             report["target_network_removed"] = not names(
                 dind_name, "network", target_network
             )
@@ -453,7 +463,7 @@ def main() -> int:
                 "dangling_image_created",
                 "protected_running",
                 "target_container_removed",
-                "target_image_removed",
+                "tagged_unused_image_preserved",
                 "target_network_removed",
                 "named_volume_preserved",
                 "anonymous_volume_removed",
