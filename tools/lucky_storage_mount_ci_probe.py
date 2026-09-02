@@ -566,11 +566,10 @@ def main() -> int:
                 focused_frontend = {
                     key: frontend.get(key, "")
                     for key in (
-                        "storage_chunk",
-                        "storage_chunk_source",
-                        "storage_importers",
                         "storage_panel_path",
                         "storage_panel_context",
+                        "storage_chunk",
+                        "storage_chunk_source",
                         "crawl_summary",
                     )
                 }
