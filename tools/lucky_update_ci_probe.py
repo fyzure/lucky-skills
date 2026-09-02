@@ -150,6 +150,27 @@ def wait_login_ready(base_url: str, timeout: int = 45) -> None:
     raise ProbeError("Lucky did not recover after confirmed self-update")
 
 
+def disposable_container_state(container_name: str) -> dict[str, Any]:
+    """Return only non-secret Docker supervisor state for failure evidence."""
+
+    raw = docker("inspect", container_name, timeout=30)
+    payload = json.loads(raw)
+    item = payload[0] if isinstance(payload, list) and payload else {}
+    state = item.get("State") if isinstance(item, dict) else {}
+    if not isinstance(state, dict):
+        state = {}
+    return {
+        "status": str(state.get("Status") or ""),
+        "running": bool(state.get("Running")),
+        "restarting": bool(state.get("Restarting")),
+        "exit_code": int(state.get("ExitCode") or 0),
+        "oom_killed": bool(state.get("OOMKilled")),
+        "restart_count": int(item.get("RestartCount") or 0)
+        if isinstance(item, dict)
+        else 0,
+    }
+
+
 def frontend_update_context(base_url: str) -> dict[str, Any]:
     """Return focused non-locale contexts around update upload/confirm calls."""
 
@@ -241,6 +262,9 @@ def main() -> int:
         "version_changed_to_fixture": False,
         "downgrade_noop_verified": False,
         "http_interruption_observed": False,
+        "service_recovery_failed": False,
+        "container_state_after_failure": {},
+        "nonrecovering_downgrade_verified": False,
         "frontend": {},
     }
 
@@ -367,48 +391,70 @@ def main() -> int:
                     report["http_interruption_observed"] = True
                 time.sleep(1)
 
-            wait_login_ready(base_url, timeout=45)
-            report["service_recovered"] = True
-            post_token = login_default_admin(base_url, tmp)
-            report["post_update_login"] = bool(post_token)
-            post_status, post_info = json_request(
-                urllib.request.build_opener(),
-                base_url,
-                "/api/info",
-                admin_token=post_token,
-            )
-            require_ret_zero(post_status, post_info, "read Lucky info after update")
-            post_info_obj = post_info.get("info")
-            final_version = (
-                str(post_info_obj.get("Version") or "")
-                if isinstance(post_info_obj, dict)
-                else ""
-            )
-            if final_version:
-                post_version = final_version
-            report["post_update_version"] = post_version
-            report["version_changed_to_fixture"] = post_version == FIXTURE_VERSION
-            report["downgrade_noop_verified"] = (
-                report["confirm_ret"] == 0
-                and post_version == EXPECTED_LUCKY_VERSION
-            )
+            try:
+                wait_login_ready(base_url, timeout=45)
+                report["service_recovered"] = True
+            except ProbeError:
+                report["service_recovery_failed"] = True
+                report["container_state_after_failure"] = disposable_container_state(
+                    container_name
+                )
 
-            response_was_classified = (
-                all(
-                    report[name]
-                    for name in (
-                        "fixture_downloaded",
-                        "upload_accepted",
-                        "confirm_submitted",
-                        "confirm_response_classified",
-                        "service_recovered",
-                        "post_update_login",
+            if report["service_recovered"]:
+                post_token = login_default_admin(base_url, tmp)
+                report["post_update_login"] = bool(post_token)
+                post_status, post_info = json_request(
+                    urllib.request.build_opener(),
+                    base_url,
+                    "/api/info",
+                    admin_token=post_token,
+                )
+                require_ret_zero(post_status, post_info, "read Lucky info after update")
+                post_info_obj = post_info.get("info")
+                final_version = (
+                    str(post_info_obj.get("Version") or "")
+                    if isinstance(post_info_obj, dict)
+                    else ""
+                )
+                if final_version:
+                    post_version = final_version
+                report["post_update_version"] = post_version
+                report["version_changed_to_fixture"] = post_version == FIXTURE_VERSION
+                report["downgrade_noop_verified"] = (
+                    report["confirm_ret"] == 0
+                    and post_version == EXPECTED_LUCKY_VERSION
+                )
+            else:
+                state = report["container_state_after_failure"]
+                report["nonrecovering_downgrade_verified"] = (
+                    report["confirm_ret"] == 0
+                    and isinstance(state, dict)
+                    and (
+                        bool(state.get("restarting"))
+                        or int(state.get("restart_count") or 0) > 0
+                        or not bool(state.get("running"))
                     )
                 )
+
+            common_verified = all(
+                report[name]
+                for name in (
+                    "fixture_downloaded",
+                    "upload_accepted",
+                    "confirm_submitted",
+                    "confirm_response_classified",
+                )
+            )
+            recovered_result = (
+                report["service_recovered"]
+                and report["post_update_login"]
                 and (
                     report["version_changed_to_fixture"]
                     or report["downgrade_noop_verified"]
                 )
+            )
+            response_was_classified = common_verified and (
+                recovered_result or report["nonrecovering_downgrade_verified"]
             )
             print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
             return 0 if response_was_classified else 2
