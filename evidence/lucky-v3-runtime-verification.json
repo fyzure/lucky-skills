@@ -6,7 +6,7 @@
     "version": "3.0.0"
   },
   "static_snapshot_sha256": "015fda0d7286b1312a771b44127a4bc194cf2da2a57b0a2b1b4236ec5a85ae18",
-  "methodology": "Authorized runtime route and schema verification. HTTP method existence was primarily proven with unauthenticated GET/POST/PUT/DELETE/PATCH requests that stop at Lucky authentication; method discovery does not execute protected mutating handlers. Selected GET routes were additionally verified with the repository OpenToken client. Request schemas were recovered from frontend pass-through/object literals and, where applicable, cross-checked against authorized read-only GET shapes. For nested-schema enrichment, current Lucky 3.0.0 frontend bundles were inspected only in memory and authorized GET responses were reduced to field names/JSON types; live domains, identifiers, paths, addresses and secret values were not persisted. Where frontend/read-only evidence was insufficient and the instance owner explicitly authorized it, selected routes used bounded API write probes against newly created disposable resources, followed by immediate cleanup and baseline verification; each such route records its exact boundary in schema_evidence. Dangerous/global operations are never exercised against existing business resources. High-risk account-management behavior is instead verified only on GitHub-hosted fresh pinned Lucky containers: disposable password changes, global 2FA enable/key replacement/disable and reboot_program now have real login/process recovery evidence without retaining credentials or TOTP material. For the six Docker legacy wrappers that lacked current UI call sites, upgrade/build used dedicated disposable BusyBox resources, Git/ZIP/import used validation-failure paths, and prune was exercised only by a temporary Lucky instance connected to a non-destructive mock Docker API. No real Docker prune handler reached the production Docker daemon.",
+  "methodology": "Authorized runtime route and schema verification. HTTP method existence was primarily proven with unauthenticated GET/POST/PUT/DELETE/PATCH requests that stop at Lucky authentication; method discovery does not execute protected mutating handlers. Selected GET routes were additionally verified with the repository OpenToken client. Request schemas were recovered from frontend pass-through/object literals and, where applicable, cross-checked against authorized read-only GET shapes. For nested-schema enrichment, current Lucky 3.0.0 frontend bundles were inspected only in memory and authorized GET responses were reduced to field names/JSON types; live domains, identifiers, paths, addresses and secret values were not persisted. Where frontend/read-only evidence was insufficient and the instance owner explicitly authorized it, selected routes used bounded API write probes against newly created disposable resources, followed by immediate cleanup and baseline verification; each such route records its exact boundary in schema_evidence. Dangerous/global operations are never exercised against existing business resources. High-risk account-management behavior is instead verified only on GitHub-hosted fresh pinned Lucky containers: disposable password changes, global 2FA enable/key replacement/disable, reboot_program and configuration export/import/restore have real recovery evidence without retaining credentials, TOTP material or archive contents. Docker prune is also runtime-verified only in GitHub Actions: Lucky is connected exclusively to a private disposable DinD Unix socket, never the runner/production Docker socket. No dangerous global handler is exercised against production state.",
   "suppress_literals": [
     "/api/cloudflared",
     "/api/ddns/manualSync",
@@ -71,6 +71,24 @@
         "reboot_recovery": "reboot_program changed the Lucky process PID; HTTP recovered and the changed password still authenticated after restart."
       },
       "security": "All account credentials, RSA login plaintext, TOTP secrets/codes and admin tokens exist only in the GitHub runner process memory or root-owned temporary files needed by the existing login helper. Logs/evidence retain only booleans and generic state transitions. The container is runner-loopback-only and disposable; production Lucky is never contacted by this probe."
+    },
+    "config_restore_ci_behavior": {
+      "confidence": "runtime-verified",
+      "model": {
+        "export": "Authenticated GET /api/configure returns a non-empty application/octet-stream attachment containing the disposable Lucky configuration archive.",
+        "import": "The current Lucky 3.0.0 restore upload accepts a multipart/form-data POST /api/configure with the archive in field file and returns ret=0 plus an opaque restoreConfigureKey.",
+        "confirmation": "GET /api/restoreconfigureconfirm?key=<restoreConfigureKey> confirms the staged restore. Import/confirmation may invalidate the current session or restart/reload state, so callers should wait for the login challenge and authenticate again before verifying restored settings.",
+        "behavior": "A disposable marker field exported in profile A was changed to profile B before import; after upload plus confirmation, the field returned to profile A, proving the archive was actually applied rather than merely accepted.",
+        "isolation": "The probe runs only on a fresh pinned Lucky container published to runner loopback. The exported archive is held only in runner memory/temporary storage and is uploaded only back to the same disposable instance."
+      },
+      "verification": "A GitHub-hosted run of tools/lucky_config_restore_ci_probe.py started fresh Lucky 3.0.0, wrote a disposable FrontendLanguage profile A, re-authenticated and exported /api/configure. The export was a non-empty application/octet-stream attachment. The probe changed the same marker to a distinct profile B, re-authenticated, multipart-uploaded the exported archive to POST /api/configure and observed response keys file, restoreConfigureKey and ret with ret=0. It then called /api/restoreconfigureconfirm with the opaque key, waited for the login challenge, logged in again and verified the marker returned from profile B to profile A. The final report had failed=[]; archive bytes, archive path, restore key and full configuration values are not persisted in evidence.",
+      "observations": {
+        "export_envelope": "The verified export used Content-Type application/octet-stream with attachment Content-Disposition and a non-empty Lucky 3.0.0 archive.",
+        "import_envelope": "Successful multipart import returned exactly the observed top-level keys file, restoreConfigureKey and ret; only the key names are retained, not the temporary file path or confirmation value.",
+        "restore_transition": "Profile A was exported, profile B was written and confirmed before import, then profile A reappeared only after upload plus restore confirmation.",
+        "session_recovery": "After restore confirmation the probe waited for /api/login/challenge and established a fresh admin session before protected readback."
+      },
+      "security": "Configuration archives may contain credentials and private settings. The CI probe never prints, persists to the repository, or transfers the archive outside the fresh runner-loopback Lucky instance. Evidence retains only byte length/category booleans, response key names and the marker-state transition. Production configuration export/import is not used for coverage."
     },
     "ipdb_behavior": {
       "confidence": "runtime-verified",
@@ -529,6 +547,26 @@
       },
       "security": "This probe refuses to run outside GitHub Actions, requires RUNNER_TEMP, pins the exact Lucky image digest already verified by the project, binds the admin port only to runner loopback, mounts only the runner Docker socket plus owned temporary paths, uses FROM scratch contexts, substitutes a local fake clone for external Git access, never invokes prune and never runs against the RS production Docker daemon. Generated admin/OpenToken values, image IDs and marker values are not retained in evidence."
     },
+    "docker_prune_ci_behavior": {
+      "confidence": "runtime-verified",
+      "model": {
+        "isolation": "The GitHub Actions probe starts a private Docker-in-Docker daemon and exposes its Unix socket to the disposable Lucky container through a dedicated named volume. Lucky never receives the runner or production Docker socket.",
+        "pruned_resources": "POST /api/docker/prune with {all:true,volumes:true} removed an owned stopped container, an unused TEST network, an anonymous volume and a separately created dangling image on the private daemon.",
+        "preserved_resources": "A running protected container plus its attached network, named volume and image remained. An additional unused named volume also remained, matching Docker volume-prune semantics for named volumes in this run.",
+        "all_image_semantics": "Lucky 3.0.0 all=true did not remove a tagged-but-unused imported image; only the dangling image was reported under images_deleted. This is weaker than docker image prune -a semantics and is preserved as observed product behavior.",
+        "build_cache": "The private daemon had observable BuildKit cache before the call, but the count did not decrease. The current real handler therefore does not establish build-cache pruning even though older mock probing exposed related Docker API branches.",
+        "response": "Successful real prune returned ret=0 and a report object containing containers_deleted, images_deleted, networks_deleted, volumes_deleted and space_reclaimed."
+      },
+      "verification": "tools/lucky_docker_prune_ci_probe.py ran only on a GitHub-hosted runner. It started a disposable Docker 28.0.4 DinD daemon, created owned removable and protected resources, then started pinned Lucky 3.0.0 with only the DinD socket volume. After Lucky's Docker configuration became ready, the probe called POST /api/docker/prune with all=true and volumes=true. The stopped container, TEST network, anonymous volume and dangling image disappeared and were named in the returned report where applicable; the running protected resource set remained. The tagged-but-unused TEST image remained despite all=true, and BuildKit cache count was unchanged. The final report had failed=[] and teardown destroyed the entire DinD/Lucky environment.",
+      "observations": {
+        "delete_set": "target_container_removed, target_network_removed, anonymous_volume_removed and dangling_image_removed were true",
+        "preserve_set": "protected_container/network/volume/image plus the unused named volume were preserved",
+        "tagged_image": "tagged_unused_image_preserved=true while target_image_removed=false, demonstrating that all=true did not provide image-prune -a behavior",
+        "build_cache": "build_cache_before=4 and build_cache_after=4 in the successful run",
+        "cleanup": "All resources existed only inside the disposable DinD daemon, which was removed after the probe; no production Docker resource could be addressed by the tested Lucky instance."
+      },
+      "security": "The probe refuses non-GitHub-Actions execution and never mounts /var/run/docker.sock from the runner into Lucky. The only Docker endpoint visible to Lucky belongs to the disposable DinD daemon through an owned socket volume. TEST identifiers and daemon resource IDs are not persisted as evidence."
+    },
     "security_group_webauth_behavior": {
       "confidence": "runtime-verified",
       "model": {
@@ -565,7 +603,7 @@
       "risk": "dangerous",
       "response_type": "json",
       "confidence": "runtime-verified",
-      "verification": "Unauthenticated POST reached Lucky authentication; handler was not executed. Current Lucky 3.0.0 frontend restores configuration with an XMLHttpRequest POST and parses responseText as JSON before handling the Lucky envelope, confirming a JSON response type."
+      "verification": "GitHub-hosted disposable Lucky 3.0.0 accepted its own exported configuration archive as multipart/form-data field file and returned ret=0 with response keys file and restoreConfigureKey. The opaque key was then passed to GET /api/restoreconfigureconfirm and the exported marker configuration was restored. Archive bytes/path/key are not retained."
     },
     {
       "path": "/api/docker/images/save.withoutcompression",
@@ -3937,7 +3975,9 @@
       "risk": "dangerous",
       "request_body_schema": {"type": "object", "properties": {"all": {"type": "boolean"}, "volumes": {"type": "boolean"}}},
       "response_schema": {"type": "object", "properties": {"ret": {"type": "integer"}, "report": {"type": "object", "properties": {"containers_deleted": {"type": ["array", "null"]}, "images_deleted": {"type": ["array", "null"]}, "networks_deleted": {"type": ["array", "null"]}, "volumes_deleted": {"type": ["array", "null"]}, "space_reclaimed": {"type": "integer"}}}}},
-      "schema_evidence": "authorized isolated Lucky instance connected to a non-destructive mock Docker API: {} pruned dangling containers/images/networks; volumes:true additionally invoked volumes/prune; all:true removed the dangling=true filters. containers/images/networks/build_cache aliases did not alter behavior. No prune request reached the real Docker daemon"
+      "schema_evidence": "Earlier mock-Docker probing established the request fields and handler fan-out. A later GitHub-hosted real private-DinD probe called {all:true,volumes:true}: an owned stopped container, unused network, anonymous volume and dangling image were actually deleted while a running protected resource set remained. Tagged-but-unused image and BuildKit cache were not removed, so all=true must not be documented as docker image prune -a semantics. No prune request reached a production Docker daemon.",
+      "confidence": "runtime-verified",
+      "verification": "Real disposable-DinD execution returned ret=0 plus report fields containers_deleted/images_deleted/networks_deleted/volumes_deleted/space_reclaimed. The isolated probe finished with failed=[] and then destroyed the private daemon."
     },
     {
       "path": "/api/ddns/configure",

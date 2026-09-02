@@ -11,7 +11,7 @@
 - 遇到 Lucky 写频控时进行有限退避，不重复盲写。
 - 密钥、Token、证书私钥、真实 IP/域名、用户身份等敏感值不进入 evidence。
 - 本地不跑测试/构建；仓库校验、测试、文档构建统一走 GitHub Actions。
-- Docker `prune` 继续只使用 mock Docker API，不对生产 Docker daemon 执行真实 prune。
+- Docker `prune` 的真实行为只允许在 GitHub Actions 私有 disposable DinD daemon 中验证；生产 Docker daemon 永不用于覆盖测试。
 
 ## 证据等级
 
@@ -308,7 +308,7 @@ WebDAV、SMB 与 FileBrowser 已完成 localhost 完整闭环；DLNA 已在一�
 ### Prune
 
 - [x] 使用 temporary Lucky + mock Docker API 验证 handler
-- [ ] 在 GitHub Actions 的 **disposable Docker daemon** 上执行一次真实 prune：只创建 TEST container/image/network/volume/build-cache，调用 Lucky `/api/docker/prune` 后验证目标被清除、非目标基线不变
+- [x] 在 GitHub Actions 的 **disposable Docker daemon** 上执行真实 prune：Lucky 只连接私有 DinD socket；停止容器、未使用 network、anonymous volume、dangling image 被删除，运行中保护资源保持；3.0.0 的 `all=true` 不会删除 tagged-but-unused image，BuildKit cache 也未减少
 - [x] 生产 Docker daemon 永不用于 prune 覆盖验证
 
 ---
@@ -318,12 +318,12 @@ WebDAV、SMB 与 FileBrowser 已完成 localhost 完整闭环；DLNA 已在一�
 以下能力继续纳入覆盖，但**只能在 GitHub Actions 的 disposable Lucky / disposable Docker daemon / owned synthetic fixture 中执行**。生产 Lucky、生产证书、生产 Docker daemon 和真实业务设备都不参与这些验证。
 
 - [ ] Lucky 自更新：仅 fresh pinned Lucky，允许 disposable 实例自更新/重启并验证版本或失败语义；不触碰生产二进制
-- [ ] 全局配置 restore/import：仅 fresh Lucky，先导出/保存 owned baseline，再导入只改 TEST 字段的配置并验证恢复
+- [x] 全局配置 restore/import：`tools/lucky_config_restore_ci_probe.py` 在 fresh Lucky 中写入 profile A → `GET /api/configure` 导出 → 改为 profile B → multipart `POST /api/configure` → `restoreConfigureKey` → `GET /api/restoreconfigureconfirm?key=...`；恢复后 profile A 回归并可重新登录，配置 ZIP 不离开 runner
 - [x] `reboot_program`：`tools/lucky_core_admin_ci_probe.py` 在 fresh Lucky + Docker `restart=always` 中真实调用；Lucky 进程 PID 改变、HTTP challenge 恢复，并用变更后的密码重新登录成功
 - [x] 主密码修改：先 `/api/password/verify` 验旧密码，再 PUT fresh-instance `baseconfigure`；旧密码随后登录失败、新随机强密码登录成功
 - [x] 2FA enable / reset / disable：runner 内存生成 16 位 Base32 secret + RFC 6238 TOTP；启用后无验证码登录失败、正确验证码成功；换钥后旧 key 失效、新 key 成功；关闭后恢复 password-only 登录
 - [ ] 证书强制 renew/delete：仅 CI 自己签发/创建的 TEST 证书，绝不操作生产证书
-- [ ] 真实 Docker prune：仅 disposable Docker daemon，验证实际资源删除而不是 mock handler
+- [x] 真实 Docker prune：`tools/lucky_docker_prune_ci_probe.py` 仅连接 GitHub Actions 私有 DinD daemon，真实验证资源删除/保留语义；生产 Docker socket 从未挂入该 Lucky
 
 CI probe 失败时优先保留脱敏的返回码、状态机和字段形状；任何密码、2FA secret、token、证书私钥、配置备份正文都不得写入日志/evidence。
 

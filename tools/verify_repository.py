@@ -1169,6 +1169,50 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
     if not (ROOT / ".github" / "workflows" / "lucky-docker-build-ci.yml").is_file():
         fail("Docker image build CI workflow is missing")
 
+    docker_prune_evidence = model_evidence.get("docker_prune_ci_behavior")
+    if not isinstance(docker_prune_evidence, dict):
+        fail("Docker prune CI behavior evidence is missing")
+    if docker_prune_evidence.get("confidence") != "runtime-verified":
+        fail("Docker prune CI behavior evidence must remain runtime-verified")
+    docker_prune_model = docker_prune_evidence.get("model")
+    if not isinstance(docker_prune_model, dict) or set(docker_prune_model) != {
+        "isolation",
+        "pruned_resources",
+        "preserved_resources",
+        "all_image_semantics",
+        "build_cache",
+        "response",
+    }:
+        fail("Docker prune CI behavior model regressed")
+    docker_prune_observations = docker_prune_evidence.get("observations")
+    if not isinstance(docker_prune_observations, dict) or set(docker_prune_observations) != {
+        "delete_set",
+        "preserve_set",
+        "tagged_image",
+        "build_cache",
+        "cleanup",
+    }:
+        fail("Docker prune CI runtime observations regressed")
+    for field in ("verification", "security"):
+        value = docker_prune_evidence.get(field)
+        if not isinstance(value, str) or not value.strip():
+            fail(f"Docker prune CI evidence field is missing: {field}")
+    prune_text = json.dumps(docker_prune_evidence, ensure_ascii=False).lower()
+    for required_phrase in (
+        "github",
+        "private",
+        "dind",
+        "tagged-but-unused",
+        "buildkit",
+        "production",
+    ):
+        if required_phrase not in prune_text:
+            fail("Docker prune CI evidence lost safety/behavior marker: " + required_phrase)
+    if not (ROOT / "tools" / "lucky_docker_prune_ci_probe.py").is_file():
+        fail("Docker prune CI probe tool is missing")
+    if not (ROOT / ".github" / "workflows" / "lucky-docker-prune-ci.yml").is_file():
+        fail("Docker prune CI workflow is missing")
+
     security_group_evidence = model_evidence.get("security_group_webauth_behavior")
     if not isinstance(security_group_evidence, dict):
         fail("Security Group + WebAuth behavior evidence is missing")
