@@ -224,6 +224,8 @@ def main() -> int:
     network_name = f"lucky-wol-ci-{nonce}"
     target_name = f"lucky-wol-target-{nonce}"
     bridge_name = f"lwol-{nonce[:8]}"
+    subnet_octet = 20 + secrets.randbelow(200)
+    fixture_subnet = f"172.30.{subnet_octet}.0/24"
     open_token = secrets.token_hex(16)
     device_name = TEST_PREFIX + nonce
     mac_text, mac_bytes = test_mac()
@@ -276,6 +278,8 @@ def main() -> int:
                 "network",
                 "create",
                 "--internal",
+                "--subnet",
+                fixture_subnet,
                 "--opt",
                 f"com.docker.network.bridge.name={bridge_name}",
                 network_name,
