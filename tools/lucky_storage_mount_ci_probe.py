@@ -541,8 +541,17 @@ def main() -> int:
                 )
             except ProbeError as error:
                 frontend = frontend_storage_mount_snippets(base_url)
+                focused_frontend = {
+                    key: frontend.get(key, "")
+                    for key in (
+                        "storage_chunk",
+                        "storage_chunk_source",
+                        "storage_importers",
+                        "crawl_summary",
+                    )
+                }
                 raise ProbeError(
-                    f"{error}; frontend={json.dumps(frontend, ensure_ascii=False)[:50000]}"
+                    f"{error}; frontend={json.dumps(focused_frontend, ensure_ascii=False)[:50000]}"
                 ) from None
             report["storage_created"] = created.get("ret") == 0
             item = wait_for_row(
