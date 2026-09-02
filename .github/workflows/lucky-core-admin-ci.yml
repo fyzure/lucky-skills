@@ -22,7 +22,7 @@ permissions:
 
 jobs:
   inspect-core-admin:
-    name: Lucky disposable core-admin semantics
+    name: Lucky disposable core-admin behavior
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -32,5 +32,5 @@ jobs:
       - name: Show Docker runtime
         run: docker version
 
-      - name: Inspect isolated Lucky core-admin frontend semantics
+      - name: Verify isolated Lucky core-admin behavior
         run: sudo -E python3 tools/lucky_core_admin_ci_probe.py

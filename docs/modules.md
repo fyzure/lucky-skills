@@ -78,6 +78,8 @@ IPDB 在 Lucky 3.0.0 上已经完成 `behavior-runtime` 闭环。`tools/lucky_ip
 
 这些接口可暴露或修改宿主机数据。路径参数应由服务端白名单约束，不能直接接受最终用户输入。网盘授权 URL、refresh token 和挂载配置都应脱敏。
 
+高风险核心管理行为现在统一走 **CI-only fresh Lucky**。`tools/lucky_core_admin_ci_probe.py` 只允许 GitHub Actions，启动 pinned Lucky 3.0.0 并只把后台端口发布到 runner loopback。密码流程先按当前前端调用 `PUT /api/password/verify` 验证旧密码，再 PUT 保留字段的 `/api/baseconfigure` 写入 runner 内存生成的强密码；实测安全配置保存会使旧会话失效，随后默认旧密码登录失败、新密码登录成功。全局 2FA 使用 `PUT /api/2fa/setting`：probe 自己生成 16 位 Base32 secret 并用 stdlib RFC 6238 SHA-1 TOTP 生成 6 位码，真实验证 enable 后 password-only 被拒绝、正确 TOTP 可登录；再换成第二把 secret，旧 key 的 TOTP 被拒绝而新 key 成功；最后带当前码 disable 后恢复 password-only。每次认证策略变化都会使原 admin token 失效，所以 readback 必须重新登录。`GET /api/reboot_program` 也在同一 disposable 实例上真实执行：Docker `restart=always` 只作为 CI supervisor，实测 Lucky 进程 PID 改变，login challenge 恢复，并能用变更后的密码再次登录。密码、RSA 登录明文、TOTP secret/code 与 token 均不进入日志/evidence，生产 Lucky 完全不参与。
+
 StorageManagement 的 local storage 注册生命周期已在 Lucky 3.0.0 上完成隔离实践。`tools/lucky_storage_probe.py` 先通过 Lucky 自己的 `local-path-browser` 创建唯一 `/tmp/TEST-*` 目录，再验证当前前端的 GET list、POST / PUT / DELETE、`GET /api/storagemanagement/enable` 和 `litelist`。一个重要实测语义是：POST 请求即使显式带 `Enable=false`，新建 local item 首次回读仍会被 Lucky 规范化为 `Enable=true`；如需初始禁用，创建后必须再显式 disable。disabled item 会从 `litelist` 消失，重新 enable 后再次出现。
 
 `Writable` 不再只是配置字段证据：`tools/lucky_webdav_probe.py` 使用两个 TEST storage 作为 localhost WebDAV 的 `store` mount，真实验证可写 mount 的 PUT / GET / DELETE 成功，而只读 mount 的 PUT 被拒绝且 backing path 没有生成目标文件。WebDAV probe 仅在原服务为 stopped 且 `Users` 为空时运行，临时绑定 `127.0.0.1` 高位端口、关闭 TLS 和 AutoFirewall，并在恢复前重新检查唯一 TEST 用户/端口 ownership marker，避免用旧快照覆盖并发配置。

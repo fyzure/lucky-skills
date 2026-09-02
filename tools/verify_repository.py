@@ -532,6 +532,50 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
         if not (ROOT / "tools" / probe_name).is_file():
             fail(f"WebTerminal runtime probe tool is missing: {probe_name}")
 
+    core_admin_evidence = model_evidence.get("core_admin_ci_behavior")
+    if not isinstance(core_admin_evidence, dict):
+        fail("Core admin CI behavior evidence is missing")
+    if core_admin_evidence.get("confidence") != "runtime-verified":
+        fail("Core admin CI behavior evidence must remain runtime-verified")
+    core_admin_model = core_admin_evidence.get("model")
+    if not isinstance(core_admin_model, dict) or set(core_admin_model) != {
+        "password_change",
+        "twofa_lifecycle",
+        "twofa_login_gate",
+        "reboot_program",
+        "isolation",
+    }:
+        fail("Core admin CI behavior model regressed")
+    core_admin_observations = core_admin_evidence.get("observations")
+    if not isinstance(core_admin_observations, dict) or set(core_admin_observations) != {
+        "password_gate",
+        "twofa_gate",
+        "twofa_key_replacement",
+        "session_invalidation",
+        "reboot_recovery",
+    }:
+        fail("Core admin CI runtime observations regressed")
+    for field in ("verification", "security"):
+        value = core_admin_evidence.get(field)
+        if not isinstance(value, str) or not value.strip():
+            fail(f"Core admin CI evidence field is missing: {field}")
+    if not (ROOT / "tools" / "lucky_core_admin_ci_probe.py").is_file():
+        fail("Core admin CI runtime probe tool is missing")
+    if not (ROOT / ".github" / "workflows" / "lucky-core-admin-ci.yml").is_file():
+        fail("Core admin CI workflow is missing")
+    core_admin_text = json.dumps(core_admin_evidence, ensure_ascii=False).lower()
+    for required_phrase in (
+        "github",
+        "runner loopback",
+        "old password",
+        "twofa",
+        "previous key",
+        "pid",
+        "reboot_program",
+    ):
+        if required_phrase not in core_admin_text:
+            fail(f"Core admin CI behavior evidence regressed: {required_phrase}")
+
     storage_evidence = model_evidence.get("storagemanagement_local_behavior")
     if not isinstance(storage_evidence, dict):
         fail("StorageManagement local behavior evidence is missing")

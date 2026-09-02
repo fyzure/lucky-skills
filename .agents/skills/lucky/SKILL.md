@@ -111,6 +111,14 @@ WebTerminal is a high-risk capability. Runtime probes are allowed only against l
 
 Two Lucky 3.0.0 upload routes are currently verified **failures**, not supported-success claims: browser-equivalent multipart `POST /api/webterminal/sftp/{SessionId}/upload` reproducibly returns `ret=5 SSH_FX_FAILURE`, while `upload-streaming` reproducibly returns closed-pipe/BrokenPipe behavior. Preserve these as runtime defects until a later Lucky version is re-verified.
 
+## Core admin behavior (CI-only)
+
+Never behavior-test global admin credentials, global 2FA, configuration restore, program reboot/update, certificate destruction or Docker prune on production merely for coverage. `tools/lucky_core_admin_ci_probe.py` is the verified path for the account/reboot subset: it refuses non-GitHub-Actions execution, starts a fresh pinned Lucky 3.0.0 container published only on runner loopback, and performs all Lucky operations through HTTP APIs.
+
+The verified password flow is `PUT /api/password/verify` with the current password, followed by a full-object `PUT /api/baseconfigure` carrying the new `AdminPassword` and `OldPassword`. Authentication-policy writes invalidate the current admin token. On the disposable instance the old password was rejected after save and the generated strong password successfully established a new token. Global 2FA uses `PUT /api/2fa/setting` with `{TwoFAEnable,TwoFAKey,TwoFACode}`. The CI probe generates a 16-character Base32 key and six-digit RFC 6238 SHA-1 TOTP entirely in runner memory; enable makes password-only login fail, key replacement makes the previous key fail and the new key succeed, and disable with the current code restores password-only login. Re-authenticate after every password/2FA policy transition before protected readback.
+
+`GET /api/reboot_program` is also behavior-verified only on that disposable instance. Docker `restart=always` is used solely as the CI supervisor: the Lucky process PID changed, the login challenge recovered, and the changed password still logged in after restart. Never persist passwords, RSA login plaintext, TOTP secrets/codes or admin tokens in logs/evidence. The remaining restore/update/prune destructive flows must follow the same disposable-CI rule.
+
 ## StorageManagement local behavior
 
 Lucky 3.0.0 local StorageManagement has a bounded runtime probe at `tools/lucky_storage_probe.py`. The verified registry lifecycle is `GET /api/storagemanagement/list`, POST/PUT/DELETE on `/api/storagemanagement/list`, the mutating GET `/api/storagemanagement/enable`, and read-only `litelist`. A newly POSTed local item was normalized to `Enable=true` even when the candidate explicitly requested `Enable=false`; if a disabled initial state is required, explicitly disable the generated item after creation. Disabled items are absent from `litelist` and reappear after enable.

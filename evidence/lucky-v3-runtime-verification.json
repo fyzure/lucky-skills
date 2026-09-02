@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
-  "verified_at": "2026-09-01T05:36:30Z",
+  "verified_at": "2026-09-02T12:54:00Z",
   "target": {
     "product": "Lucky",
     "version": "3.0.0"
   },
   "static_snapshot_sha256": "015fda0d7286b1312a771b44127a4bc194cf2da2a57b0a2b1b4236ec5a85ae18",
-  "methodology": "Authorized runtime route and schema verification. HTTP method existence was primarily proven with unauthenticated GET/POST/PUT/DELETE/PATCH requests that stop at Lucky authentication; method discovery does not execute protected mutating handlers. Selected GET routes were additionally verified with the repository OpenToken client. Request schemas were recovered from frontend pass-through/object literals and, where applicable, cross-checked against authorized read-only GET shapes. For nested-schema enrichment, current Lucky 3.0.0 frontend bundles were inspected only in memory and authorized GET responses were reduced to field names/JSON types; live domains, identifiers, paths, addresses and secret values were not persisted. Where frontend/read-only evidence was insufficient and the instance owner explicitly authorized it, selected routes used bounded API write probes against newly created disposable resources, followed by immediate cleanup and baseline verification; each such route records its exact boundary in schema_evidence. Dangerous/global operations were not exercised against existing business resources. For the six Docker legacy wrappers that lacked current UI call sites, upgrade/build used dedicated disposable BusyBox resources, Git/ZIP/import used validation-failure paths, and prune was exercised only by a temporary Lucky instance connected to a non-destructive mock Docker API. No real Docker prune handler reached the production Docker daemon.",
+  "methodology": "Authorized runtime route and schema verification. HTTP method existence was primarily proven with unauthenticated GET/POST/PUT/DELETE/PATCH requests that stop at Lucky authentication; method discovery does not execute protected mutating handlers. Selected GET routes were additionally verified with the repository OpenToken client. Request schemas were recovered from frontend pass-through/object literals and, where applicable, cross-checked against authorized read-only GET shapes. For nested-schema enrichment, current Lucky 3.0.0 frontend bundles were inspected only in memory and authorized GET responses were reduced to field names/JSON types; live domains, identifiers, paths, addresses and secret values were not persisted. Where frontend/read-only evidence was insufficient and the instance owner explicitly authorized it, selected routes used bounded API write probes against newly created disposable resources, followed by immediate cleanup and baseline verification; each such route records its exact boundary in schema_evidence. Dangerous/global operations are never exercised against existing business resources. High-risk account-management behavior is instead verified only on GitHub-hosted fresh pinned Lucky containers: disposable password changes, global 2FA enable/key replacement/disable and reboot_program now have real login/process recovery evidence without retaining credentials or TOTP material. For the six Docker legacy wrappers that lacked current UI call sites, upgrade/build used dedicated disposable BusyBox resources, Git/ZIP/import used validation-failure paths, and prune was exercised only by a temporary Lucky instance connected to a non-destructive mock Docker API. No real Docker prune handler reached the production Docker daemon.",
   "suppress_literals": [
     "/api/cloudflared",
     "/api/ddns/manualSync",
@@ -53,6 +53,25 @@
     }
   },
   "model_evidence": {
+    "core_admin_ci_behavior": {
+      "confidence": "runtime-verified",
+      "model": {
+        "password_change": "On a fresh Lucky 3.0.0 instance, the current frontend-compatible flow verifies the existing password through PUT /api/password/verify before writing the preserved baseconfigure object with AdminPassword/OldPassword. The security-setting write invalidates the prior login session; the old password then fails and the new password establishes a fresh admin token.",
+        "twofa_lifecycle": "PUT /api/2fa/setting with {TwoFAEnable,TwoFAKey,TwoFACode} enables, replaces or disables global admin 2FA. A new 16-character Base32 key is confirmed with a six-digit RFC 6238 SHA-1 TOTP. Each authentication-policy change invalidates the current admin token and requires re-login under the new policy.",
+        "twofa_login_gate": "After enable, password-only login is rejected and password+current TOTP succeeds. After replacing the key, a code derived from the previous key is rejected while the replacement key succeeds. After disable with the current code, password-only login succeeds again.",
+        "reboot_program": "GET /api/reboot_program on the disposable instance causes the Lucky process identity to change. With Docker restart=always acting only as the CI supervisor, the HTTP login challenge becomes available again and the changed admin password successfully logs in after recovery.",
+        "isolation": "The behavior probe refuses non-GitHub-Actions execution, uses a fresh pinned Lucky container published only to runner loopback, and destroys the entire instance after the run instead of applying these account/reboot operations to production."
+      },
+      "verification": "A GitHub-hosted run of tools/lucky_core_admin_ci_probe.py started a fresh pinned Lucky 3.0.0 container, verified the default password before changing it to an in-memory random strong password, observed the default password become invalid and the new password succeed, then generated an in-memory 16-character Base32 TOTP secret. Enabling global 2FA made password-only login fail and a current six-digit TOTP succeed. The probe replaced the secret with a second independently generated secret, confirmed the old secret no longer authenticated and the replacement did, then disabled 2FA using the current replacement-code and confirmed password-only login returned. Finally it called reboot_program under Docker restart=always, observed the Lucky process PID change, waited for the login challenge to recover and logged in again with the changed password. The successful report contained failed=[]; no password, TOTP secret/code or admin token was persisted.",
+      "observations": {
+        "password_gate": "PUT /api/password/verify accepted the disposable current password; after the full baseconfigure password update, the old password was rejected and the new password succeeded.",
+        "twofa_gate": "Global 2FA enable immediately changed login requirements: password-only failed while a TOTP generated from the owned key succeeded.",
+        "twofa_key_replacement": "Replacing the enabled 2FA key invalidated authentication with the prior key and allowed authentication only with the replacement key; disabling 2FA with the current replacement-code restored password-only login.",
+        "session_invalidation": "Password/2FA policy writes invalidate existing admin sessions, so the verified probe deliberately re-authenticates after each policy transition before protected readback.",
+        "reboot_recovery": "reboot_program changed the Lucky process PID; HTTP recovered and the changed password still authenticated after restart."
+      },
+      "security": "All account credentials, RSA login plaintext, TOTP secrets/codes and admin tokens exist only in the GitHub runner process memory or root-owned temporary files needed by the existing login helper. Logs/evidence retain only booleans and generic state transitions. The container is runner-loopback-only and disposable; production Lucky is never contacted by this probe."
+    },
     "ipdb_behavior": {
       "confidence": "runtime-verified",
       "model": {

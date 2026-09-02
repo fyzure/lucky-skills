@@ -319,9 +319,9 @@ WebDAV、SMB 与 FileBrowser 已完成 localhost 完整闭环；DLNA 已在一�
 
 - [ ] Lucky 自更新：仅 fresh pinned Lucky，允许 disposable 实例自更新/重启并验证版本或失败语义；不触碰生产二进制
 - [ ] 全局配置 restore/import：仅 fresh Lucky，先导出/保存 owned baseline，再导入只改 TEST 字段的配置并验证恢复
-- [ ] `reboot_program`：仅 disposable Lucky，要求进程真实退出/恢复并重新接受 API 请求
-- [ ] 主密码修改：仅 fresh Lucky，验证旧密码失效、新密码可登录；runner 结束即销毁实例
-- [ ] 2FA enable / reset / disable：仅 fresh Lucky，使用 runner 内存中的 disposable TOTP secret/code，验证登录门禁与关闭恢复
+- [x] `reboot_program`：`tools/lucky_core_admin_ci_probe.py` 在 fresh Lucky + Docker `restart=always` 中真实调用；Lucky 进程 PID 改变、HTTP challenge 恢复，并用变更后的密码重新登录成功
+- [x] 主密码修改：先 `/api/password/verify` 验旧密码，再 PUT fresh-instance `baseconfigure`；旧密码随后登录失败、新随机强密码登录成功
+- [x] 2FA enable / reset / disable：runner 内存生成 16 位 Base32 secret + RFC 6238 TOTP；启用后无验证码登录失败、正确验证码成功；换钥后旧 key 失效、新 key 成功；关闭后恢复 password-only 登录
 - [ ] 证书强制 renew/delete：仅 CI 自己签发/创建的 TEST 证书，绝不操作生产证书
 - [ ] 真实 Docker prune：仅 disposable Docker daemon，验证实际资源删除而不是 mock handler
 
