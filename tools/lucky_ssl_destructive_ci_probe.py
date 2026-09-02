@@ -42,6 +42,7 @@ from lucky_rclone_mount_ci_probe import choose_loopback_port
 
 
 TEST_PREFIX = "TEST-lucky-skills-ssl-ci-"
+ADD_FROM_CANDIDATES = ("manual", "custom", "file", "import", "local")
 
 
 def admin_json(
@@ -137,6 +138,7 @@ def main() -> int:
         "baseline_empty": False,
         "owned_certificate_generated": False,
         "certificate_created": False,
+        "accepted_add_from": "",
         "certificate_key_present": False,
         "certificate_material_present": False,
         "flush_http_status": 0,
@@ -187,32 +189,48 @@ def main() -> int:
 
             cert_b64, key_b64 = generate_self_signed(tmp, hostname)
             report["owned_certificate_generated"] = True
-            candidate = {
-                "Key": "",
-                "Remark": remark,
-                "Enable": True,
-                "AddFrom": "upload",
-                "CertBase64": cert_b64,
-                "KeyBase64": key_b64,
-                "IssuerCertificate": "",
-                "AcmeErrorMsg": "",
-                "AddTime": "",
-                "UpdateTime": "",
-                "MappingToPath": False,
-                "MappingPath": "",
-                "MappingChangeScript": "",
-                "SyncClientList": [],
-                "AllSyncClient": False,
-                "ExtParams": {},
-            }
-            create_status, create = admin_json(
-                base_url,
-                token,
-                "/api/ssl",
-                method="POST",
-                payload=candidate,
-            )
-            require_ret_zero(create_status, create, "create disposable certificate")
+            create_status = 0
+            create: dict[str, Any] = {}
+            accepted_add_from = ""
+            for add_from in ADD_FROM_CANDIDATES:
+                candidate = {
+                    "Key": "",
+                    "Remark": remark,
+                    "Enable": True,
+                    "AddFrom": add_from,
+                    "CertBase64": cert_b64,
+                    "KeyBase64": key_b64,
+                    "IssuerCertificate": "",
+                    "AcmeErrorMsg": "",
+                    "AddTime": "",
+                    "UpdateTime": "",
+                    "MappingToPath": False,
+                    "MappingPath": "",
+                    "MappingChangeScript": "",
+                    "SyncClientList": [],
+                    "AllSyncClient": False,
+                    "ExtParams": {},
+                }
+                create_status, create = admin_json(
+                    base_url,
+                    token,
+                    "/api/ssl",
+                    method="POST",
+                    payload=candidate,
+                )
+                if create_status == 200 and create.get("ret") == 0:
+                    accepted_add_from = add_from
+                    break
+                msg = str(create.get("msg") or create.get("message") or "")
+                if create_status != 200 or "UnsupportedType" not in msg:
+                    break
+            if not accepted_add_from:
+                safe_msg = str(create.get("msg") or create.get("message") or "")[:200]
+                raise ProbeError(
+                    "create disposable certificate failed after bounded AddFrom discovery: "
+                    f"HTTP {create_status}, ret={create.get('ret')}, msg={safe_msg!r}"
+                )
+            report["accepted_add_from"] = accepted_add_from
             rows = ssl_rows(base_url, token)
             owned = find_owned(rows, remark)
             if not owned:
