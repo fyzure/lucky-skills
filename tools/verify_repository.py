@@ -567,8 +567,9 @@ def check_runtime_verification(snapshot_path: Path, snapshot: dict[str, object])
     system_mount_boundary = str(
         storage_observations.get("system_mount_linux_boundary") or ""
     )
-    for required_phrase in ("Windows", "WinFsp", "ret=4", "mountpoint format error"):
-        if required_phrase not in system_mount_model and required_phrase not in system_mount_boundary:
+    system_mount_evidence_text = (system_mount_model + "\n" + system_mount_boundary).lower()
+    for required_phrase in ("windows", "winfsp", "ret=4", "mountpoint format error"):
+        if required_phrase not in system_mount_evidence_text:
             fail(
                 "StorageManagement SystemMount Linux platform-boundary evidence regressed: "
                 + required_phrase
